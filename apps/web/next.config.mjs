@@ -51,6 +51,10 @@ const nextConfig = {
         ],
       },
       { source: "/player/:path*", headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }] },
+      {
+        source: "/player-dashboard/:path*",
+        headers: [{ key: "X-Frame-Options", value: "SAMEORIGIN" }],
+      },
     ];
   },
 };

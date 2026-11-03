@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { request as httpRequest } from "node:http";
 import { resolve } from "node:path";
@@ -9,6 +9,7 @@ import { setTimeout } from "node:timers/promises";
 import { createDatabase } from "@smartframe/database";
 import { bootstrapAdministrator } from "@smartframe/auth/bootstrap";
 import { optimizeBackground } from "@smartframe/frames";
+import { defaultOnlineDashboard } from "@smartframe/contracts";
 import sharp from "sharp";
 
 // O banco do usuário e suas credenciais nunca são usados neste teste.
@@ -37,8 +38,6 @@ const environment = {
   SMARTFRAME_ADMIN_LOGIN: noLogin ? "disabled" : "required",
   SMARTFRAME_ADMIN_EMAIL: noLogin ? "smoke@smartframe.test" : "",
   SMARTFRAME_ONLINE_HOUSEHOLD_ID: "",
-  SMARTFRAME_ONLINE_CONFIG: resolve(storage, "online-config.json"),
-  SMARTFRAME_ONLINE_PHOTOS: resolve(storage, "online-photos"),
 };
 execFileSync(
   process.execPath,
@@ -59,18 +58,6 @@ try {
   const household = await database.household.findUniqueOrThrow({
     where: { ownerId: administrator.id },
   });
-  environment.SMARTFRAME_ONLINE_HOUSEHOLD_ID = household.id;
-  await mkdir(environment.SMARTFRAME_ONLINE_PHOTOS, { recursive: true });
-  const onlinePhoto = await sharp({
-    create: { width: 12, height: 8, channels: 3, background: "#2563eb" },
-  })
-    .png()
-    .toBuffer();
-  await writeFile(resolve(environment.SMARTFRAME_ONLINE_PHOTOS, "foto.png"), onlinePhoto);
-  await writeFile(
-    environment.SMARTFRAME_ONLINE_CONFIG,
-    JSON.stringify({ widgets: { photos: { intervalSeconds: 15 } } }),
-  );
   await database.device.create({
     data: {
       householdId: household.id,
@@ -229,7 +216,7 @@ try {
   );
   const editor = await fetch(`${baseURL}/layouts`, { headers: { cookie } });
   assert.equal(editor.status, 200);
-  assert((await editor.text()).includes("Personalize seu porta-retratos"));
+  assert((await editor.text()).includes("SMARTFRAME ONLINE"));
   const preview = await fetch(`${baseURL}/player/index.html`);
   assert.equal(preview.headers.get("x-frame-options"), "SAMEORIGIN");
   const state = await (await fetch(`${baseURL}/api/frame`, { headers: { cookie } })).json();
@@ -321,6 +308,70 @@ try {
   assert.equal(redeemResponse.status, 200);
   const connection = await redeemResponse.json();
   const playerHeaders = { Authorization: `Bearer ${connection.token}` };
+  const canonicalPlayer = await fetch(`${baseURL}/player/${connection.deviceId}`, {
+    redirect: "manual",
+  });
+  assert.equal(canonicalPlayer.status, 200, "URL canônica deve abrir sem redirecionamento");
+  assert.match(await canonicalPlayer.text(), /\/player-dashboard\/js\/app\.js/);
+  assert.equal(
+    (await fetch(`${baseURL}/api/player/config`, { headers: playerHeaders })).status,
+    409,
+    "Dispositivo novo deve aguardar sua primeira publicação",
+  );
+  const onlineStateURL = `${baseURL}/api/online-frame?deviceId=${connection.deviceId}`;
+  const onlineStateResponse = await fetch(onlineStateURL, { headers: { cookie } });
+  assert.equal(onlineStateResponse.status, 200);
+  const onlineState = await onlineStateResponse.json();
+  assert.equal(onlineState.draftRevision, 0);
+  assert.equal(onlineState.publishedRevision, null);
+  const library = await fetch(`${baseURL}/api/photos`, { headers: { cookie } });
+  assert.equal(library.status, 200);
+  assert((await library.json()).photos.some((entry: { id: string }) => entry.id === photo.id));
+  const onlineSettings = {
+    ...defaultOnlineDashboard,
+    widgets: {
+      ...defaultOnlineDashboard.widgets,
+      photos: { ...defaultOnlineDashboard.widgets.photos, photoIds: [photo.id] },
+      weather: { ...defaultOnlineDashboard.widgets.weather, enabled: false },
+      currencies: { ...defaultOnlineDashboard.widgets.currencies, enabled: false },
+    },
+  };
+  assert.equal(
+    (
+      await fetch(`${baseURL}/api/online-frame`, {
+        method: "PUT",
+        headers: { ...adminHeaders, Origin: "https://origem-externa.test" },
+        body: JSON.stringify({
+          deviceId: connection.deviceId,
+          config: onlineSettings,
+          expectedRevision: 0,
+        }),
+      })
+    ).status,
+    403,
+  );
+  const onlineSaved = await fetch(`${baseURL}/api/online-frame`, {
+    method: "PUT",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      deviceId: connection.deviceId,
+      config: onlineSettings,
+      expectedRevision: 0,
+    }),
+  });
+  assert.equal(onlineSaved.status, 200);
+  const onlineDraft = await onlineSaved.json();
+  const onlinePublished = await fetch(`${baseURL}/api/online-frame/publish`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      deviceId: connection.deviceId,
+      expectedRevision: onlineDraft.draftRevision,
+    }),
+  });
+  assert.equal(onlinePublished.status, 200);
+  const onlineVersion = await onlinePublished.json();
+  assert.match(onlineVersion.revision, /^online:/);
   const onlineConfigResponse = await fetch(`${baseURL}/api/player/config`, {
     headers: playerHeaders,
   });
@@ -328,15 +379,72 @@ try {
   const onlineConfig = await onlineConfigResponse.json();
   assert.equal(onlineConfig.widgets.photos.intervalSeconds, 15);
   assert.equal(onlineConfig.widgets.photos.items.length, 1);
+  assert.equal(onlineConfig.revision, onlineVersion.revision);
+  assert.equal(
+    (await database.device.findUniqueOrThrow({ where: { id: connection.deviceId } }))
+      .appliedRevision,
+    null,
+    "Entregar configuração não comprova aplicação no tablet",
+  );
+  assert.equal(
+    (await fetch(`${baseURL}/api/player/config?deviceId=outro-tablet`, { headers: playerHeaders }))
+      .status,
+    403,
+  );
   const photoUrl = `${baseURL}${onlineConfig.widgets.photos.items[0].src}`;
   assert.equal((await fetch(photoUrl)).status, 401);
   const onlinePhotoResponse = await fetch(photoUrl, { headers: playerHeaders });
   assert.equal(onlinePhotoResponse.status, 200);
-  assert.deepEqual(Buffer.from(await onlinePhotoResponse.arrayBuffer()), onlinePhoto);
-  await writeFile(
-    environment.SMARTFRAME_ONLINE_CONFIG,
-    JSON.stringify({ widgets: { photos: { intervalSeconds: 25 } } }),
+  assert.equal(
+    createHash("sha256")
+      .update(Buffer.from(await onlinePhotoResponse.arrayBuffer()))
+      .digest("hex"),
+    (await database.media.findUniqueOrThrow({ where: { id: photo.id } })).sha256,
   );
+  const onlineChangedSettings = {
+    ...onlineSettings,
+    widgets: {
+      ...onlineSettings.widgets,
+      photos: { ...onlineSettings.widgets.photos, intervalSeconds: 25 },
+    },
+  };
+  const saveNextOnline = await fetch(`${baseURL}/api/online-frame`, {
+    method: "PUT",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      deviceId: connection.deviceId,
+      config: onlineChangedSettings,
+      expectedRevision: onlineDraft.draftRevision,
+    }),
+  });
+  assert.equal(saveNextOnline.status, 200);
+  const onlineNextDraft = await saveNextOnline.json();
+  const stillPublished = await (
+    await fetch(`${baseURL}/api/player/config`, { headers: playerHeaders })
+  ).json();
+  assert.equal(
+    stillPublished.widgets.photos.intervalSeconds,
+    15,
+    "Rascunho não deve alterar tablet",
+  );
+  const acknowledgeOnline = await fetch(
+    `${baseURL}/api/player/config?appliedRevision=${encodeURIComponent(onlineVersion.revision)}`,
+    { headers: playerHeaders },
+  );
+  assert.equal(acknowledgeOnline.status, 200);
+  assert.equal(
+    (await (await fetch(onlineStateURL, { headers: { cookie } })).json()).appliedRevision,
+    onlineVersion.revision,
+  );
+  const publishNextOnline = await fetch(`${baseURL}/api/online-frame/publish`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      deviceId: connection.deviceId,
+      expectedRevision: onlineNextDraft.draftRevision,
+    }),
+  });
+  assert.equal(publishNextOnline.status, 200);
   const changedOnline = await (
     await fetch(`${baseURL}/api/player/config`, { headers: playerHeaders })
   ).json();

@@ -64,6 +64,8 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
+        revision: "online:browser-test",
+        layout: "photo-dashboard",
         refreshSeconds: 60,
         widgetData,
         widgets: {

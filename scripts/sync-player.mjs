@@ -16,5 +16,5 @@ for (const name of ["index.html", "css", "js", "assets"]) {
   await cp(resolve(dashboardSource, name), resolve(dashboardTarget, name), { recursive: true });
 }
 console.log(
-  "Players web sincronizados. O Gradle usa a fonte existente para gerar os assets Android.",
+  "Player online e prévia legada sincronizados para a web. O APK carrega o dashboard remoto.",
 );
