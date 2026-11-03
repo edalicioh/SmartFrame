@@ -1,5 +1,27 @@
 # Operação e limites atuais
 
+## Fluxo v0.4 e atualização segura
+
+O fluxo padrão é editor online por dispositivo e APK pareado conectado ao servidor.
+Não há funcionamento offline, download/cache persistente de fotos ou cópia automática
+de layout v0.3 prometidos pelo APK novo. O histórico em `docs/PERSONALIZATION.md` e
+`docs/ANDROID-VALIDATION.md` refere-se a builds anteriores, não é aceite de hardware
+para v0.4.
+
+Antes de atualizar, faça backup consistente do banco SQLite, diretório de mídia e
+arquivos auxiliares; preserve `.env` separadamente. Não remova volume, conta, mídia
+ou pareamento e não desinstale o APK como passo de migração. A configuração por
+dispositivo usa os modelos existentes `Layout`/`LayoutVersion`; não se prevê migration
+de schema para esse recurso. Só pare web/worker se uma alteração real de schema exigir
+migration ou se a operação do backup consistente pedir parada. Após instalar o APK,
+publique explicitamente o layout de cada dispositivo: não há conversão garantida do
+conteúdo offline antigo. Faça teste funcional no dispositivo real; build e testes de
+software não comprovam hardware.
+
+Use HTTPS confiável para produção/LAN. HTTP debug só em loopback com `adb reverse`
+por USB; não exponha HTTP à rede. Um id de dispositivo não é credencial. Fullscreen
+não equivale ao modo kiosk/lock-task do Android.
+
 ## Persistência
 
 - Desenvolvimento: `.data/smartframe.db` e `.data/media`, relativos à raiz do projeto.
@@ -15,7 +37,7 @@
 - Handlers: `maintenance.sessions`, `background.optimize` e `widgets.refresh` (clima/cotações).
 - Uma manutenção é agendada por hora; a consulta normal da fila ocorre a cada 5 segundos.
 - O processamento é pelo menos uma vez: handlers precisam ser idempotentes, mesmo com renovação da lease.
-- O processamento de fotos usa Sharp, com limite de entrada de 12 MB/24 MP e saída de até 1600 × 1600/4 MB. O original é descartado após sucesso; falhas mantêm o arquivo privado para retentativas.
+- O processamento legado de fotos usa Sharp, com limite de entrada de 12 MB/24 MP e saída de até 1600 × 1600/4 MB. O fluxo online v0.4 usa a biblioteca de fotos e ajuste para caber em 1024×600 preservando proporção; confirmar limites exatos na API implantada.
 
 ## Segurança
 
@@ -49,7 +71,7 @@ No Docker, mantenha o volume; não use `down -v`. Um procedimento automatizado d
 
 ## Pendências de validação
 
-- Assinatura Android de release e desempenho prolongado no PRITOM. O protótipo de debug já foi compilado e executado no dispositivo de 32 bits; veja [a validação inicial](ANDROID-VALIDATION.md).
-- Estabilidade de 72 horas e cache de carrossel com várias fotos. A foto única já usa cache local, hash e gravação atômica; veja [a personalização](PERSONALIZATION.md).
+- Build de distribuição/assinatura compatível e validação v0.4 no PRITOM. A execução antiga de debug em dispositivo de 32 bits está registrada como histórico em [ANDROID-VALIDATION.md](ANDROID-VALIDATION.md), não valida o APK atual.
+- Teste em hardware de conectividade, autorização, rotação, atualização e estabilidade prolongada. Nenhum teste real-device v0.4 é alegado.
 - TLS de produção, restauração automatizada e expansão da auditoria.
-- Editor visual, agendamentos e integrações.
+- Agendamentos e integrações futuras.

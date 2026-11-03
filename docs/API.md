@@ -1,9 +1,8 @@
 # API — modo Foto 0.3.0
 
-> **Integração online v0.4 — contrato-alvo, ainda sujeito à verificação da implementação.**
-> A API abaixo descreve o fluxo novo por dispositivo e não substitui os endpoints
-> legados documentados adiante. Confirme rotas, códigos de erro e payloads contra o
-> servidor integrado antes de tratar esta seção como inventário de API implementada.
+> **Integração online por dispositivo v0.4.** As rotas abaixo correspondem à
+> implementação integrada atualmente disponível; endpoints do player offline mais
+> adiante são legado/compatibilidade e não o fluxo primário do APK.
 
 ## Dashboard online por dispositivo (novo fluxo)
 
@@ -21,8 +20,8 @@ dispositivo identifica o destino, não é uma credencial nem autoriza chamadas B
 
 Estado esperado: `{deviceId,config,draftRevision,publishedRevision,appliedRevision,lastSeenAt}`.
 Configuração compartilhada e defaults estão em `packages/contracts/src/online-dashboard.ts`.
-O endpoint de upload deve gerar imagem ajustada para caber em 1024×600 preservando
-proporção, via Sharp. Isso não implica validação operacional até a integração ser testada.
+O endpoint de upload gera imagem ajustada para caber em 1024×600 preservando
+proporção, via Sharp. Testes automatizados não substituem validação em aparelho real.
 
 ## Player online pareado (contrato-alvo)
 

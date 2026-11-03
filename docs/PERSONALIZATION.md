@@ -1,65 +1,53 @@
-# Personalizar o aplicativo — modo Foto 0.3
+# Personalização — fluxo online v0.4
 
-## Uso no ambiente de teste atual
+O fluxo principal é o editor administrativo por dispositivo em `/layouts`. Selecione
+um tablet, ajuste o dashboard e publique. O editor salva rascunho e publicação como
+revisões distintas; `appliedRevision` só deve refletir a revisão online depois que o
+APK confirmar aplicação bem-sucedida. Contrato de campos e endpoints: [API](API.md).
 
-1. Abra **http://localhost:8080/layouts** no computador. O ambiente atual abre sem login; instalações com autenticação obrigatória pedem a conta administrativa.
-2. Escolha sua foto de fundo. JPEG, PNG e WebP estático são aceitos, até 12 MB e 24 megapixels.
-3. Aguarde o processamento no servidor. O worker cria um WebP sem metadados, com até 1600 × 1600 e 4 MB.
-4. Ajuste enquadramento, cor, degradê, escurecimento, relógio, data, posição, tamanho, fonte, mensagem, orientação e fuso horário.
-   Ative também os cartões de temperatura e moedas, com busca de cidade e escolha de posição. Veja [as fontes e o cache](WIDGETS.md).
-5. A prévia acompanha as alterações. Ela usa o mesmo HTML/CSS/JavaScript do APK.
-6. **Salvar rascunho** persiste no servidor sem alterar a tela do tablet.
-7. **Publicar no tablet** salva e cria uma revisão imutável, disponível aos dispositivos vinculados à conta.
-8. Consulte o estado de cada tablet no editor: publicação no servidor e aplicação confirmada são eventos diferentes.
+## Atualizar instalação existente
 
-O PRITOM de teste foi conectado à instalação Docker na porta **8080**, com uma imagem ilustrativa identificada como demonstração. Substitua essa imagem pela sua no editor. O servidor local na porta 3030 usa outro banco; editar nele não altera os dispositivos conectados ao Docker.
+1. Faça backup consistente de `.data` (banco SQLite, mídias e arquivos auxiliares) e
+   preserve `.env` separadamente. Restauração de cópia deve ser verificada antes de
+   qualquer atualização. Não use `docker compose down -v`.
+2. Preserve os registros de dispositivos/credenciais existentes; não exclua banco,
+   mídia, conta ou pareamento para migrar. A atualização normal não exige pareamento
+   novo nem migração de schema esperada para layouts por dispositivo.
+3. Instale o APK v0.4 somente se sua assinatura for compatível com o APK instalado.
+   Não desinstale automaticamente: isso pode apagar dados e credenciais locais.
+4. No editor, escolha cada dispositivo, crie/ajuste a configuração, selecione fotos
+   da biblioteca e publique intencionalmente. Não há promessa de conversão automática
+   do conteúdo offline v0.3 em layout online.
+5. Confirme no painel que a publicação foi aplicada pelo APK. O APK v0.4 carrega
+   somente o player online: sem rede/servidor, a tela não tem fallback offline
+   garantido. Faça validação real no tablet antes de considerar a atualização aceita.
 
-## Conectar outro tablet
+## Acesso e segurança
 
-1. Instale o APK de debug atualizado.
-2. No editor, clique em **Conectar tablet**.
-3. No aplicativo, toque em **Conectar** ou no botão **⋮**.
-4. Informe o endereço do servidor, o código de dez caracteres e o nome do tablet.
-5. O código expira em dez minutos e só pode ser usado uma vez.
+O administrador usa a sessão configurada para a instalação. Pareamento continua
+identificando o dispositivo e guardando sua credencial com segurança nativa. O ID em
+uma URL não autoriza APIs Bearer; abrir a página em browser comum não concede acesso.
+Não copie token para query string, JavaScript, logs ou armazenamento web.
 
-Nesta primeira implementação, o painel gera o código e o aplicativo o resgata. O código e a credencial não são guardados em texto no servidor. A credencial recebida é criptografada pelo Android Keystore, sem acesso pelo JavaScript.
+Em produção, use HTTPS e certificado confiável alcançável pelo tablet. Para debug
+USB, `http://localhost:3000` aponta para o próprio tablet até configurar `adb reverse`
+(`adb -s SERIAL reverse tcp:3000 tcp:3000`); mantenha USB conectado. Para acesso em
+LAN use hostname/IP do servidor e HTTPS, não localhost nem HTTP exposto. Tela cheia
+imersiva não é modo Android lock-task/kiosk.
 
-### Teste por USB com HTTP local
+O upload pela biblioteca é processado pelo servidor com Sharp, ajustado para caber
+em 1024×600 preservando proporção. A escolha e a publicação são explícitas. Os
+endpoints novos e limites estão descritos em [API](API.md); confirme-os na versão
+implantada e mantenha backups antes de alterações operacionais.
 
-```powershell
-adb -s SERIAL_DO_TABLET reverse tcp:8080 tcp:8080
-```
+## Registro histórico do modo Foto v0.3
 
-No APK de debug, informe `http://localhost:8080`. Mantenha o USB conectado para receber novas publicações. O APK de debug só permite HTTP nas origens locais explicitamente autorizadas; builds de produção exigem HTTPS.
+Os passos de upload, cache local, publicação offline e verificações abaixo pertencem
+à versão anterior; não descrevem o comportamento do APK v0.4. Foram registrados em
+30/10/2026: pareamento, foto publicada, relógio e confirmação de revisão no PRITOM,
+além de reabertura offline do APK antigo. A amostra de publicação levou cerca de
+18,5 segundos. Esses fatos históricos não validam o fluxo v0.4.
 
-Sem USB, o último layout recebido continua aparecendo, mas novas mudanças não chegam por esse endereço. Para uso remoto ou pela rede, configure uma origem HTTPS com certificado confiável e acessível ao tablet.
-
-## Offline e recuperação
-
-- Polling normal de 30 segundos enquanto o aplicativo está ativo.
-- A imagem é baixada pela camada Kotlin com autorização do dispositivo, nunca pelo JavaScript.
-- Tamanho, SHA-256, dimensões e contrato são verificados antes da aplicação.
-- Manifesto e foto são gravados atomicamente em arquivos internos.
-- A versão anterior e suas imagens são preservadas; falha de rede ou download não apaga a versão ativa.
-- O relógio funciona localmente no fuso publicado. Foto e layout persistem após encerrar e reabrir o aplicativo.
-- O cache desta etapa mantém somente a foto ativa e a anterior, com limite de 4 MB por imagem. Não é ainda o cache genérico de carrossel de 2 GB do PRD.
-- Desvincular bloqueia novos acessos, mas não apaga conteúdo de um tablet offline.
-
-## Limites desta etapa
-
-- Um layout Foto por conta, aplicado aos seus tablets vinculados.
-- Uma foto estática de fundo; ainda não há álbuns, favoritos, ordenação ou carrossel de múltiplas fotos.
-- Posições predefinidas para informações e clima/moedas; ainda não há arrastar/redimensionar livremente, camadas, desfazer/refazer ou calendário.
-- Atribuição independente por dispositivo e agendamentos serão acrescentados depois.
-- A criação inicial do administrador e o acesso remoto HTTPS continuam seguindo o README.
-
-## Verificação realizada
-
-- 33 testes automatizados de contratos, banco, autenticação, fila, versões, códigos, revogação e isolamento.
-- Smoke HTTP: foto, processamento, rascunho, publicação imutável, pareamento, manifesto, download com hash, heartbeat e revogação.
-- Formulário React, prévia, salvamento e viewport móvel de 390 px verificados no navegador.
-- APK conectado pelo formulário nativo no PRITOM; foto e relógio renderizados com revisão confirmada pelo servidor.
-- Nova publicação confirmada pelo tablet em aproximadamente 18,5 segundos nesta execução, sem intervenção no APK.
-- Servidor tornado inacessível ao tablet pela remoção temporária do encaminhamento USB: foto, mensagem e relógio locais preservados após encerrar e reabrir o APK.
-
-Esses testes são iniciais. Não substituem estabilidade por 72 horas, teste de 100 fotos, release assinado ou validação em outros dispositivos.
+Não se afirma teste real-device v0.4, estabilidade de 72 horas, build de distribuição
+assinado ou validação em outros modelos. Consulte também o [registro histórico do
+protótipo 0.1](ANDROID-VALIDATION.md).

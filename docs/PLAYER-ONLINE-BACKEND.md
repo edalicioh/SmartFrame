@@ -1,6 +1,13 @@
 # Backend do player online
 
-Esta modalidade é independente do player offline e usa a mesma API Next.js. Fotos e configuração são globais para **um único household explicitamente selecionado**, não para todas as contas. Ela não cria painel, upload, autenticação nova nem cache offline.
+> **LEGADO / compatibilidade v0.3.** Este documento descreve o dashboard standalone
+> baseado em pasta JSON/fotos e `SMARTFRAME_ONLINE_HOUSEHOLD_ID`. Não é o fluxo ativo
+> padrão v0.4 e não deve ser usado para configurar a nova edição por dispositivo.
+> O fluxo principal atual usa o editor administrativo e biblioteca de fotos; veja
+> [personalização v0.4](PERSONALIZATION.md) e [contrato de API](API.md). Não remova
+> configurações/arquivos antigos durante atualização sem backup e decisão explícita.
+
+Esta modalidade legada é independente do player offline e usa a mesma API Next.js. Fotos e configuração são globais para **um único household explicitamente selecionado**, não para todas as contas. Ela não cria painel, upload, autenticação nova nem cache offline.
 
 ## Ativação e arquivos
 
@@ -52,4 +59,4 @@ Aceitam-se arquivos regulares `.jpg`, `.jpeg`, `.png` e `.webp`, sem distinção
 
 Para o Android online, use o token já guardado no armazenamento nativo seguro, sem alterá-lo. O WebView precisa abrir a página somente da origem HTTPS confiável configurada e interceptar nativamente os GETs exatamente de `/api/player/config` e `/api/player/online-photos/{id}` **na mesma origem**; o código nativo encaminha cada requisição com o bearer e devolve status, tipo e corpo ao WebView. Não adicionar o cabeçalho globalmente, a domínios externos ou a redirecionamentos; não seguir redirects autenticados; bloquear navegação para fora da origem, mixed content e requisições não permitidas. Impor limites de resposta e timeouts. Isso é necessário também para imagens `<img>`, que não recebem automaticamente o header de um `fetch`. Usar TLS com certificado confiável e endereço alcançável pelo tablet, nunca `localhost` do servidor. Revogação passa a valer na próxima requisição; pixels já exibidos não podem ser apagados remotamente.
 
-O APK atualizado oferece o dashboard online como modo opcional, selecionado explicitamente após o pareamento; o modo offline permanece padrão. Consulte [as instruções Android](../apps/android/README.md#dashboard-online-opcional). Simplesmente abrir a página em um navegador não autentica fotos ou configuração: o endpoint não aceita sessão do painel nem modo local sem login como alternativa ao bearer. A resposta inclui `widgetData` com clima e cotações reais em cache de 30 minutos; veja [fontes e atualização](WIDGETS.md#dashboard-online). Esse payload varia independentemente da revisão do layout; não se usa ETag da configuração para validar os dados dos widgets.
+Na versão antiga, o APK oferecia esse dashboard como modalidade opcional. Isso não descreve o v0.4, cujo APK tem o dashboard online por dispositivo como fluxo principal e não promete renderer/cache offline. As rotas e arquivos desta seção podem permanecer somente para compatibilidade; o editor por dispositivo não depende do gate household descrito acima.

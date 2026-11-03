@@ -6,13 +6,14 @@ Porta-retratos digital auto-hospedável, com editor administrativo por dispositi
 
 ## v0.4 — fluxo online por dispositivo
 
-O fluxo principal previsto para v0.4 é administrar e publicar um dashboard online por dispositivo. O APK é um WebView fino pareado; o servidor fornece configuração e mídia. O renderer offline, cache/download de manifesto e polling legado não são parte do fluxo principal novo. APIs antigas podem continuar disponíveis para compatibilidade, mas não se promete funcionamento offline no v0.4. Os contratos de API novos estão marcados como alvo ainda não verificado em [API](docs/API.md).
+O fluxo principal é administrar e publicar um dashboard online por dispositivo. O APK é um WebView fino pareado; o servidor fornece configuração e mídia. O renderer offline, cache/download de manifesto e polling legado não fazem parte do fluxo novo. APIs antigas podem continuar disponíveis para compatibilidade, mas não se promete funcionamento offline no v0.4. As rotas e o estado esperado estão descritos em [API](docs/API.md).
 
 As configurações usam `Layout`/`LayoutVersion` no SQLite existente, sem migração de schema prevista. Antes de atualizar, faça backup consistente do banco, mídia e `.env`; não apague dados nem force novo pareamento. Só pare processos se uma migração realmente for necessária. O identificador visível do dispositivo não é uma credencial.
 
 ## Histórico — modo Foto com widgets, versão 0.3.0
 
-Já é possível **personalizar uma foto de fundo, relógio, data, cores e mensagem pelo painel e publicar no APK**. Veja [como personalizar](docs/PERSONALIZATION.md).
+O texto e as capacidades desta seção descrevem o v0.3 histórico, não o APK v0.4.
+O procedimento atualizado está em [personalização](docs/PERSONALIZATION.md).
 
 Há também cartões de **temperatura e moedas**. O ambiente atual está configurado para **acesso local sem login**; veja [os cuidados desse modo](docs/LOCAL-ACCESS.md).
 
@@ -204,6 +205,10 @@ O APK de debug fica em `apps/android/app/build/outputs/apk/debug/app-debug.apk`.
 - [Clima e moedas](docs/WIDGETS.md)
 - [Painel local sem login](docs/LOCAL-ACCESS.md)
 
-## Próximo marco
+## Migração v0.4
 
-Ampliar o fluxo já funcional **upload → publicar → tablet baixar → exibir offline** com biblioteca, álbuns e carrossel de múltiplas fotos; depois, evoluir para widgets livres e integrações.
+Faça backup do banco, mídia e `.env`; preserve dados e pareamentos. Instale o APK
+compatível com a assinatura existente, selecione cada dispositivo no editor e publique
+um layout online intencionalmente. Não há conversão silenciosa de conteúdo offline
+antigo. O APK novo depende da rede e não tem fallback offline garantido. Consulte
+[Android](apps/android/README.md) para USB via loopback/`adb reverse` versus LAN/HTTPS.
