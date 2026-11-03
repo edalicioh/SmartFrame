@@ -44,3 +44,23 @@ A amostra inicial do **processo principal** registrou 56.597 KiB de PSS (aproxim
 - Não foram validados: execução por 72 horas, orientação retrato, inicialização no boot, instalação de release ou comportamento em outros tablets/WebViews.
 - Fotos, carrossel, pareamento, cache de mídias, atualização atômica e sincronização ainda não estão implementados.
 - O teste não desligou Wi-Fi ou dados do usuário. A independência da tela inicial foi verificada pelo conteúdo embarcado, ausência de permissão de internet e bloqueio da rede no renderizador.
+
+## Verificação básica adicional — v0.4.0, 03/11/2026
+
+Esta seção não altera o registro histórico acima. No mesmo PRITOM P7_A1, Android
+11/API 30 e WebView 150.0.7871.181:
+
+- APK v0.4.0 instalado por atualização `adb install -r`, após comparar as assinaturas,
+  sem desinstalar ou limpar os dados do aplicativo.
+- Abertura da Activity, tela de conexão e diálogo de configuração verificados.
+- Captura confirmou área de 1024 × 600 sem barras do sistema após estabilizar a tela.
+  O sistema também confirmou a janela mantendo a tela ligada.
+- Não foram encontrados crashes/ANRs nos logs do processo durante essa amostra curta.
+- O APK gerado não contém `assets/player/`, e o código não utiliza `FrameSync`.
+- Build, lint, 17 testes unitários Android, 76 testes Vitest e 11 testes do player
+  aprovados. Os smokes HTTP com login e no modo local também passaram em bancos isolados.
+
+**Limite importante:** o aplicativo estava sem conexão cadastrada e o painel local
+não tinha dispositivos vinculados. Portanto, dashboard autenticado no aparelho,
+carrossel real, publicação remota e reconexão de dados ainda não foram validados
+nesse teste físico. Não é aceite funcional completo nem teste prolongado.

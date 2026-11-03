@@ -48,6 +48,7 @@ Os passos de upload, cache local, publicação offline e verificações abaixo p
 além de reabertura offline do APK antigo. A amostra de publicação levou cerca de
 18,5 segundos. Esses fatos históricos não validam o fluxo v0.4.
 
-Não se afirma teste real-device v0.4, estabilidade de 72 horas, build de distribuição
-assinado ou validação em outros modelos. Consulte também o [registro histórico do
-protótipo 0.1](ANDROID-VALIDATION.md).
+Houve uma verificação básica da v0.4 no aparelho: instalação por atualização,
+abertura, diálogo de conexão e tela cheia. O teste do dashboard pareado e da
+estabilidade de 72 horas segue pendente, assim como build de distribuição assinado
+e outros modelos. Consulte o [registro de validação](ANDROID-VALIDATION.md).

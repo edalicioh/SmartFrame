@@ -161,13 +161,28 @@ class MainActivity : Activity() {
             }
     }
 
-    override fun onResume() { super.onResume(); resumed = true; webView?.onResume(); if (credentials.read() != null) { if (webView == null) openDashboard() else load?.let { updateLoad(webView!!, it) } } }
+    override fun onResume() { super.onResume(); resumed = true; webView?.onResume(); window.decorView.post { hideBars() }; if (credentials.read() != null) { if (webView == null) openDashboard() else load?.let { updateLoad(webView!!, it) } } }
     override fun onPause() { resumed = false; cancelTimers(); webView?.onPause(); super.onPause() }
     @Deprecated("Compatibilidade com Android anterior à API 33")
     @SuppressLint("GestureBackNavigation")
     override fun onBackPressed() { showConnection() }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) hideBars() }
-    private fun hideBars() { if (Build.VERSION.SDK_INT >= 30) window.insetsController?.apply { hide(WindowInsets.Type.systemBars()); systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else @Suppress("DEPRECATION") run { window.decorView.systemUiVisibility = 5894 or 512 or 1024 } }
+    @Suppress("DEPRECATION")
+    private fun hideBars() {
+        // Alguns firmwares Android 11 do P7 não ocultam a navegação só com InsetsController.
+        // O modo sticky legado também deve ser aplicado e restaurado após retomar o app.
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.setDecorFitsSystemWindows(false)
+            window.insetsController?.apply {
+                systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                hide(WindowInsets.Type.systemBars())
+            }
+        }
+    }
     override fun onDestroy() { closed = true; cancelTimers(); handler.removeCallbacksAndMessages(null); executor.shutdownNow(); webView?.destroy(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
 }
 
