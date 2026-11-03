@@ -5,6 +5,11 @@ describe("contrato do dashboard online", () => {
   it("define defaults de layout e atualização", () => {
     expect(defaultOnlineDashboard.layoutOptions.photoWidthPercent).toBe(62);
     expect(defaultOnlineDashboard.refreshSeconds).toBe(15);
+    expect(defaultOnlineDashboard.widgets.clock.showDate).toBe(false);
+    expect(
+      onlineDashboardSchema.parse({ widgets: { clock: { showDate: true } } }).widgets.clock
+        .showDate,
+    ).toBe(false);
   });
 
   it("aceita no máximo 100 IDs de foto únicos", () => {

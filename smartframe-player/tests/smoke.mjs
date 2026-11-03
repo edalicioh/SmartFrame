@@ -233,7 +233,7 @@ try {
     await sleep(100);
     for (let percent = 40; percent <= 75; percent++) {
       await evaluate(
-        `applyConfig({layoutOptions:{photoWidthPercent:${percent}},widgets:{photos:{enabled:true},clock:{enabled:true,size:'large',format:'12h',showDate:true},weather:{enabled:true,city:'Cidade '.repeat(11).trim()},currencies:{enabled:true},calendar:{enabled:true}}}); document.querySelector('#clock-time').textContent='11:59 AM'; document.querySelector('#clock-date').textContent='quarta-feira, 30 de setembro de 2026, uma data extraordinariamente longa'`,
+        `applyConfig({layoutOptions:{photoWidthPercent:${percent}},widgets:{photos:{enabled:true},clock:{enabled:true,size:'large',format:'12h',showDate:true},weather:{enabled:true,city:'Cidade '.repeat(11).trim()},currencies:{enabled:true},calendar:{enabled:true}}}); document.querySelector('#clock-time').textContent='11:59 AM'`,
       );
       const result = await evaluate(`(() => {
       const cards = [...document.querySelectorAll('.photo-panel, .widget-stack .card')].filter(x => !x.hidden);
@@ -286,7 +286,7 @@ try {
         applyConfig({widgets:{clock:{showDate:false}}});
         const card = document.querySelector('#clock').getBoundingClientRect();
         const time = document.querySelector('#clock-time').getBoundingClientRect();
-        return document.querySelector('#clock-date').hidden &&
+        return !document.querySelector('#clock-date') &&
           Math.abs((time.left + time.right) / 2 - (card.left + card.right) / 2) < 1 &&
           Math.abs((time.top + time.bottom) / 2 - (card.top + card.bottom) / 2) < 1;
       })()`),
@@ -296,17 +296,19 @@ try {
     assert.equal(
       await evaluate(`(() => {
         applyConfig({widgets:{clock:{showDate:true}}});
-        return !document.querySelector('#clock-date').hidden &&
-          !document.querySelector('#clock').classList.contains('clock-time-only');
+        return !document.querySelector('#clock-date') &&
+          document.querySelector('#clock').children.length === 1 &&
+          document.querySelector('#clock').classList.contains('clock-time-only') &&
+          SmartFrame.normalizeConfig({widgets:{clock:{showDate:true}}}).widgets.clock.showDate === false;
       })()`),
       true,
-      "data pode ser reativada sem manter o alinhamento exclusivo do horário",
+      "configurações antigas não podem reintroduzir a data no relógio",
     );
     console.log(`Layout ${width}x${height}: OK`);
   }
   assert.equal(
     await evaluate(
-      `(() => { applyConfig({widgets:{clock:{format:'12h',showDate:false},photos:{intervalSeconds:30}}}); applyConfig({widgets:{weather:{enabled:false}}}); return document.querySelector('#weather').hidden && document.querySelector('#clock-date').hidden && SmartFrame.normalizeConfig({}).widgets.photos.intervalSeconds === 15; })()`,
+      `(() => { applyConfig({widgets:{clock:{format:'12h',showDate:false},photos:{intervalSeconds:30}}}); applyConfig({widgets:{weather:{enabled:false}}}); return document.querySelector('#weather').hidden && !document.querySelector('#clock-date') && SmartFrame.normalizeConfig({}).widgets.photos.intervalSeconds === 15; })()`,
     ),
     true,
   );

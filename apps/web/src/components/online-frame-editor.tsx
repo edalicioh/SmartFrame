@@ -682,22 +682,6 @@ export function OnlineFrameEditor() {
                   <option value="large">Grande</option>
                 </select>
               </label>
-              <label className="online-toggle">
-                <input
-                  type="checkbox"
-                  checked={config.widgets.clock.showDate}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        clock: { ...config.widgets.clock, showDate: event.target.checked },
-                      },
-                    })
-                  }
-                />
-                Mostrar data
-              </label>
               <label>
                 Cor do relógio
                 <input

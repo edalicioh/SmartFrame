@@ -83,8 +83,6 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-.clock-card.clock-time-only {
   align-items: center;
   text-align: center;
 }
@@ -102,12 +100,7 @@
   font-size: clamp(20px, var(--clock-large, 7vw), min(64px, 7vh));
 }
 .clock-date {
-  margin-top: 3px;
-  font-size: clamp(10px, 1.25vw, 15px);
-  color: #c8d8e9;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: none !important;
 }
 .weather-card {
   background: var(--weather-bg);

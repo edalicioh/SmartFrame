@@ -57,7 +57,11 @@ export const onlineDashboardSchema = z
           .object({
             enabled: z.boolean().default(true),
             format: z.enum(["12h", "24h"]).default("24h"),
-            showDate: z.boolean().default(true),
+            // Accept the legacy flag, but never let older editors re-enable the date.
+            showDate: z
+              .boolean()
+              .default(false)
+              .transform((): boolean => false),
             size: z.enum(["small", "normal", "large"]).default("normal"),
             color: z.union([z.literal(""), color]).default(""),
           })

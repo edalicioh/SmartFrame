@@ -11,7 +11,7 @@
     layoutOptions: { photoPosition: "left", photoWidthPercent: 62 },
     widgets: {
       photos: { enabled: true, intervalSeconds: 15, fit: "cover", items: [] },
-      clock: { enabled: true, format: "24h", showDate: true, size: "normal", color: "" },
+      clock: { enabled: true, format: "24h", showDate: false, size: "normal", color: "" },
       weather: { enabled: true, city: "Camboriú" },
       currencies: { enabled: true, symbols: ["USD", "EUR", "BTC"], intervalSeconds: 10 },
       calendar: { enabled: true, highlightToday: true },
@@ -75,10 +75,21 @@
         : w.currencies.symbols;
     var appearance = object(data.appearance);
     function color(value, fallback) {
-      return typeof value === "string" && /^(|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/.test(value) ? value : fallback;
+      return typeof value === "string" && /^(|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/.test(value)
+        ? value
+        : fallback;
     }
-    var timezone = typeof data.timezone === "string" && data.timezone.length <= 80 ? data.timezone : old.timezone;
-    if (timezone) { try { new Intl.DateTimeFormat("en", { timeZone: timezone }); } catch { timezone = old.timezone; } }
+    var timezone =
+      typeof data.timezone === "string" && data.timezone.length <= 80
+        ? data.timezone
+        : old.timezone;
+    if (timezone) {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: timezone });
+      } catch {
+        timezone = old.timezone;
+      }
+    }
     return {
       revision: typeof data.revision === "string" ? data.revision : old.revision,
       layout: choice(data.layout, ["photo-dashboard"], old.layout),
@@ -114,7 +125,8 @@
         clock: {
           enabled: bool(c.enabled, w.clock.enabled),
           format: choice(c.format, ["12h", "24h"], w.clock.format),
-          showDate: bool(c.showDate, w.clock.showDate),
+          // Retain the legacy field for compatibility, but this player shows time only.
+          showDate: false,
           size: choice(c.size, ["small", "normal", "large"], w.clock.size),
           color:
             typeof c.color === "string" && /^(|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/.test(c.color)
