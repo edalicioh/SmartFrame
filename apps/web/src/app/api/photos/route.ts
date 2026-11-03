@@ -1,8 +1,17 @@
 import { getDatabase } from "@smartframe/database";
-import { FrameError, uploadBackground } from "@smartframe/frames";
+import { FrameError, listBackgrounds, uploadBackground } from "@smartframe/frames";
 import { administrator, frameResponse, limitedBody, privateHeaders } from "@/lib/frame-api";
 
 export const runtime = "nodejs";
+export async function GET(request: Request) {
+  return frameResponse(async () => {
+    const owner = await administrator(request);
+    return Response.json(
+      { photos: await listBackgrounds(getDatabase(), owner.householdId) },
+      { headers: privateHeaders },
+    );
+  });
+}
 export async function POST(request: Request) {
   return frameResponse(async () => {
     const owner = await administrator(request, true);

@@ -154,6 +154,15 @@ export async function uploadBackground(
   return { id: photo.id, status: photo.status, filename: photo.filename };
 }
 
+export async function listBackgrounds(db: PrismaClient, householdId: string) {
+  return db.media.findMany({
+    where: { householdId },
+    select: { id: true, filename: true, status: true, width: true, height: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+}
+
 export async function optimizeBackground(db: PrismaClient, jobId: string) {
   const id = jobId.replace(/^background:/, "");
   const photo = await db.media.findUnique({ where: { id } });
@@ -172,7 +181,7 @@ export async function optimizeBackground(db: PrismaClient, jobId: string) {
       throw new Error("Formato não suportado.");
     const { data, info } = await sharp(source, { limitInputPixels: 24_000_000, animated: false })
       .rotate()
-      .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
+      .resize({ width: 1024, height: 600, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 82 })
       .toBuffer({ resolveWithObject: true });
     if (data.length > 4 * 1024 ** 2) throw new Error("Imagem otimizada excede o limite.");

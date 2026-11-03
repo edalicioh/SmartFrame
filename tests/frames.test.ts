@@ -8,6 +8,7 @@ import {
   authorizePlayer,
   frameState,
   issuePairingCode,
+  listBackgrounds,
   limitPairing,
   optimizeBackground,
   playerManifest,
@@ -139,8 +140,10 @@ describe("Personalização do modo Foto", () => {
     await expect(publishFrame(db, owner, users[0], 3)).rejects.toMatchObject({ status: 409 });
     await optimizeBackground(db, `background:${photoId}`);
     const processed = await db.media.findUniqueOrThrow({ where: { id: photoId } });
-    expect(processed.width).toBe(1600);
-    expect(processed.height).toBe(800);
+    expect(processed.width).toBe(1024);
+    expect(processed.height).toBe(512);
+    expect((await listBackgrounds(db, owner)).map(({ id }) => id)).toContain(photoId);
+    expect((await listBackgrounds(db, other)).map(({ id }) => id)).not.toContain(photoId);
     expect(processed.sha256).toMatch(/^[a-f0-9]{64}$/);
     expect((await readBackground(photoId)).length).toBe(processed.bytes);
     await publishFrame(db, owner, users[0], 3);
