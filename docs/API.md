@@ -1,5 +1,50 @@
 # API — modo Foto 0.3.0
 
+> **Integração online v0.4 — contrato-alvo, ainda sujeito à verificação da implementação.**
+> A API abaixo descreve o fluxo novo por dispositivo e não substitui os endpoints
+> legados documentados adiante. Confirme rotas, códigos de erro e payloads contra o
+> servidor integrado antes de tratar esta seção como inventário de API implementada.
+
+## Dashboard online por dispositivo (novo fluxo)
+
+O editor administrativo trabalha por dispositivo. `GET` e alterações usam a sessão
+administrativa existente; não exigem `SMARTFRAME_ONLINE_HOUSEHOLD_ID`. Um ID de
+dispositivo identifica o destino, não é uma credencial nem autoriza chamadas Bearer.
+
+| Método | Endpoint | Contrato-alvo |
+| --- | --- | --- |
+| GET | `/api/online-frame?deviceId=ID` | Estado do rascunho e revisões do dispositivo |
+| PUT | `/api/online-frame` | `{deviceId,config,expectedRevision}`; grava rascunho com controle de concorrência |
+| POST | `/api/online-frame/publish` | `{deviceId,expectedRevision}`; retorna `{revision}` imutável |
+| GET | `/api/photos` | Biblioteca de fotos disponível ao editor autenticado |
+| POST | `/api/photos` | Multipart `photo`; processamento otimizado no recebimento |
+
+Estado esperado: `{deviceId,config,draftRevision,publishedRevision,appliedRevision,lastSeenAt}`.
+Configuração compartilhada e defaults estão em `packages/contracts/src/online-dashboard.ts`.
+O endpoint de upload deve gerar imagem ajustada para caber em 1024×600 preservando
+proporção, via Sharp. Isso não implica validação operacional até a integração ser testada.
+
+## Player online pareado (contrato-alvo)
+
+- `GET /player/{deviceId}` serve a página pareada. O ID na URL não é segredo.
+- `GET /api/player/config?deviceId=ID` retorna somente a configuração publicada do
+  dispositivo. A consulta periódica é a cada 15 segundos por padrão.
+- `POST /api/player/heartbeat` confirma `online:VERSION` somente após a aplicação
+  bem-sucedida da configuração; não confirmar ao apenas receber a resposta.
+- `GET /api/player/online-media/{id}?v=sha256` entrega mídia da publicação autorizada.
+- A prévia administrativa usa `/player-dashboard/index.html?preview=1` e `postMessage`
+  limitado à mesma origem.
+
+Uma página aberta em navegador comum não ganha autorização para APIs Bearer por
+conhecer o ID. O alvo primário é o APK pareado, cuja camada nativa mantém a credencial
+fora do JavaScript. Produção exige HTTPS; HTTP de debug somente via loopback e
+`adb reverse`. Tela cheia imersiva não equivale a Android lock-task/kiosk.
+
+O armazenamento de configurações por dispositivo deve reutilizar `Layout` e
+`LayoutVersion` no SQLite existente; não se planeja migração de schema para este fluxo.
+Rotas offline antigas podem permanecer para compatibilidade, mas não são o caminho
+principal do editor ou do APK v0.4.
+
 Somente os endpoints descritos nesta página estão implementados. A lista mais ampla do PRD é o alvo futuro.
 
 ## Saúde

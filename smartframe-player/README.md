@@ -1,12 +1,14 @@
 # SmartFrame Player online
 
-Dashboard leve, independente do player offline, sem frameworks, service worker ou armazenamento persistente de fotos. O servidor fornece a configuração, as URLs das imagens e dados reais de clima e cotações, com cache de **30 minutos**. As referências cambiais são diárias; não é um feed financeiro em tempo real.
+Player online v0.4: dashboard servido para o dispositivo pareado, sem renderer offline, cache persistente de fotos, service worker ou credencial exposta ao JavaScript. A configuração e mídia vêm do servidor. Os endpoints descritos nesta página são contratos de integração ainda sujeitos à confirmação no servidor integrado; não os trate como validação de execução.
 
 ## Publicar e abrir
 
-1. Configure o projeto e pareie o tablet conforme o README principal. Habilite a modalidade para o household correto com `SMARTFRAME_ONLINE_HOUSEHOLD_ID`; veja [`docs/PLAYER-ONLINE-BACKEND.md`](../docs/PLAYER-ONLINE-BACKEND.md) para obter o ID, configurar caminhos, permissões, Docker e segurança.
-2. Na raiz do projeto, execute `npm run dev` para desenvolvimento ou `npm run build` seguido de `npm start` para produção. O passo `player:sync` copia esta pasta para `/player-dashboard/`; após editar o frontend, execute `npm run player:sync` novamente (e faça novo build quando necessário). Alterações no JSON ou nas fotos não exigem rebuild.
-3. No Android pareado, selecione a modalidade online. O dispositivo deve acessar `https://ENDEREÇO-DO-SERVIDOR/player-dashboard/` pela rede, com certificado confiável; `localhost` no tablet significa o próprio tablet. Não exponha uma instalação insegura à rede pública. O Android envia a credencial nativamente apenas às rotas autorizadas; ela não deve ser colocada no código, URL, armazenamento web ou logs.
+1. Configure o projeto e pareie o tablet conforme o README principal. O fluxo v0.4 é por dispositivo e não requer `SMARTFRAME_ONLINE_HOUSEHOLD_ID`; confirme as rotas no [contrato da API](../docs/API.md).
+2. Na raiz do projeto, execute `npm run dev` para desenvolvimento ou `npm run build` seguido de `npm start` para produção. O fluxo alvo serve `/player/{deviceId}`; a rota standalone abaixo é apenas prévia/compatibilidade até confirmação da integração.
+3. No Android pareado, abra a página do dispositivo. HTTPS é obrigatório em produção; HTTP debug somente loopback via `adb reverse`. Não exponha instalação insegura à rede pública. Credenciais ficam na camada nativa, nunca no código web, URL, armazenamento ou logs.
+
+O endpoint de publicação esperado é `POST /api/online-frame/publish`; o player consulta `GET /api/player/config?deviceId=ID` e confirma `online:VERSION` somente após aplicar com sucesso. Media utiliza `/api/player/online-media/{id}?v=sha256`. A página preview administrativa é `/player-dashboard/index.html?preview=1` e usa `postMessage` same-origin. O ID não concede acesso: navegador sem pareamento não pode autorizar APIs Bearer. Fullscreen imersivo não é Android lock-task/kiosk.
 
 Abrir a página em um navegador comum não autentica as rotas de configuração e de imagens: elas exigem o Bearer do dispositivo pareado. A sessão administrativa não o substitui. Na indisponibilidade da API, o dashboard exibe um aviso discreto e mantém o que já estiver carregado, quando possível. Isso não garante funcionamento após fechar ou reabrir a página.
 

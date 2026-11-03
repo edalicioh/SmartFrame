@@ -1,10 +1,16 @@
 # SmartFrame
 
-Porta-retratos digital auto-hospedável, com administração remota e player Android offline-first.
+Porta-retratos digital auto-hospedável, com editor administrativo por dispositivo e player Android online.
 
 **Stack aprovada:** Next.js + React + TypeScript, Prisma + SQLite, worker Node.js e aplicativo Kotlin/WebView. Sharp será integrado na etapa de processamento de fotos.
 
-## Estado atual — modo Foto com widgets, versão 0.3.0
+## v0.4 — fluxo online por dispositivo
+
+O fluxo principal previsto para v0.4 é administrar e publicar um dashboard online por dispositivo. O APK é um WebView fino pareado; o servidor fornece configuração e mídia. O renderer offline, cache/download de manifesto e polling legado não são parte do fluxo principal novo. APIs antigas podem continuar disponíveis para compatibilidade, mas não se promete funcionamento offline no v0.4. Os contratos de API novos estão marcados como alvo ainda não verificado em [API](docs/API.md).
+
+As configurações usam `Layout`/`LayoutVersion` no SQLite existente, sem migração de schema prevista. Antes de atualizar, faça backup consistente do banco, mídia e `.env`; não apague dados nem force novo pareamento. Só pare processos se uma migração realmente for necessária. O identificador visível do dispositivo não é uma credencial.
+
+## Histórico — modo Foto com widgets, versão 0.3.0
 
 Já é possível **personalizar uma foto de fundo, relógio, data, cores e mensagem pelo painel e publicar no APK**. Veja [como personalizar](docs/PERSONALIZATION.md).
 
@@ -51,9 +57,7 @@ docs/                 PRD e documentação técnica
 smartframe-player/    Novo dashboard online, independente do modo Foto existente
 ```
 
-O dashboard online usa fotos disponibilizadas pelo servidor e recebe dele o intervalo
-do carrossel. Não possui cache persistente nem substitui o modo Foto offline existente.
-Consulte [o README do dashboard](smartframe-player/README.md) para configuração e uso.
+O dashboard standalone anterior e o renderer offline histórico não descrevem o fluxo principal v0.4; veja [o README do player](smartframe-player/README.md) para o contrato-alvo.
 
 ## Desenvolvimento local
 
