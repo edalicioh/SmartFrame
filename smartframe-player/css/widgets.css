@@ -1,0 +1,299 @@
+.photo-panel {
+  position: relative;
+  border-radius: 18px;
+  background: #26384b;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.photo-stage,
+.photo-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.photo-image {
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.photo-panel.fit-contain .photo-image {
+  object-fit: contain;
+}
+.photo-image.is-current {
+  opacity: 1;
+}
+.photo-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #e2e8f0;
+  text-align: center;
+}
+.photo-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  background: rgba(16, 42, 67, 0.55);
+  color: white;
+  font-size: 28px;
+  line-height: 1;
+}
+.photo-previous {
+  left: 12px;
+}
+.photo-next {
+  right: 12px;
+}
+.photo-indicators {
+  position: absolute;
+  bottom: 12px;
+  left: 45px;
+  right: 45px;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.photo-indicators button {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+.photo-indicators button.active {
+  background: white;
+}
+.card {
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: clamp(8px, 1.3vw, 16px);
+}
+.clock-card {
+  background: var(--clock-bg);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.clock-time {
+  font-size: clamp(18px, var(--clock-normal, 6vw), min(58px, 7vh));
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+.clock-time.clock-small {
+  font-size: clamp(16px, var(--clock-small, 5vw), min(42px, 6vh));
+}
+.clock-time.clock-large {
+  font-size: clamp(20px, var(--clock-large, 7vw), min(64px, 7vh));
+}
+.clock-date {
+  margin-top: 3px;
+  font-size: clamp(10px, 1.25vw, 15px);
+  color: #c8d8e9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weather-card {
+  background: var(--weather-bg);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  line-height: 1.15;
+}
+.card-label {
+  font-size: clamp(9px, 1vw, 12px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.demo {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.8;
+  margin-left: 4px;
+}
+.weather-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.weather-main > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.weather-city {
+  font-size: clamp(12px, 1.45vw, 18px);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weather-condition,
+.weather-range {
+  font-size: clamp(10px, 1.05vw, 13px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.weather-range {
+  opacity: 0.85;
+}
+.weather-icon {
+  width: clamp(24px, 4vw, 46px);
+  height: auto;
+  flex-shrink: 1;
+  min-width: 0;
+}
+.weather-temperature {
+  font-size: clamp(21px, 3vw, 38px);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.currencies-card {
+  background: var(--currency-bg);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+.currency-list {
+  display: flex;
+  gap: 6px;
+  min-height: 0;
+}
+.currency-item {
+  flex: 1;
+  min-width: 0;
+}
+.currency-code {
+  font-size: clamp(10px, 1.05vw, 13px);
+  color: #c8d8e9;
+}
+.currency-value {
+  font-size: clamp(11px, 1.3vw, 16px);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.currency-change {
+  font-size: clamp(9px, 0.9vw, 11px);
+  color: #86efac;
+}
+.currency-code,
+.currency-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-card {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+}
+.calendar-header button {
+  border: 0;
+  background: none;
+  padding: 0 5px;
+  font-size: clamp(18px, 2vw, 24px);
+  line-height: 1;
+}
+.calendar-header .calendar-title {
+  font-size: clamp(12px, 1.5vw, 18px);
+  font-weight: 700;
+  text-transform: capitalize;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  text-align: center;
+  align-items: center;
+}
+.calendar-weekdays {
+  color: var(--muted);
+  font-size: clamp(8px, 0.9vw, 11px);
+  font-weight: 700;
+}
+.calendar-days {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  font-size: clamp(10px, 1.2vw, 15px);
+}
+.calendar-day {
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  width: min(100%, 1.9em);
+  height: min(100%, 1.9em);
+  aspect-ratio: 1;
+  border-radius: 50%;
+}
+.calendar-day.adjacent {
+  color: var(--muted);
+  opacity: 0.55;
+}
+.calendar-day.today {
+  background: var(--primary);
+  color: white;
+  font-weight: 700;
+  opacity: 1;
+}
+.connection-status {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(16, 42, 67, 0.88);
+  color: white;
+  font-size: 11px;
+}
+@media (orientation: portrait) {
+  .dashboard {
+    --clock-normal: 10vw !important;
+    --clock-small: 8vw !important;
+    --clock-large: 12vw !important;
+  }
+  .card {
+    padding: 8px 14px;
+  }
+}
+.dashboard.no-photos {
+  --clock-normal: 10vw !important;
+  --clock-small: 8vw !important;
+  --clock-large: 12vw !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-image {
+    transition: none;
+  }
+}

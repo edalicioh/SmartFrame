@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+**/.next
+.env
+.env.*
+.data
+.git
+coverage
+**/generated
+apps/android
+*.log

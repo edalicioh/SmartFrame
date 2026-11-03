@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>SmartFrame · Modo Foto</title>
+    <link rel="stylesheet" href="player.css" />
+  </head>
+  <body>
+    <main id="frame">
+      <img id="photo" alt="Foto do porta-retratos" hidden />
+      <div id="shade"></div>
+      <aside id="widgets" class="widget-top-left" hidden>
+        <section id="weather-card" class="data-card" hidden>
+          <h2>🌡️ Temperatura</h2>
+          <div id="weather-city" class="widget-subtitle"></div>
+          <p id="weather-now">Aguardando dados…</p>
+          <p id="weather-range"></p>
+          <p id="weather-condition"></p>
+          <small id="weather-updated"></small>
+        </section>
+        <section id="currencies-card" class="data-card" hidden>
+          <h2>💰 Moedas</h2>
+          <p id="usd-brl">💵 USD/BRL: —</p>
+          <p id="eur-brl">💶 EUR/BRL: —</p>
+          <p id="btc-usd">₿ BTC/USD: —</p>
+          <small id="currencies-updated"></small>
+        </section>
+      </aside>
+      <section id="information" class="bottom-left">
+        <div id="clock"></div>
+        <div id="date"></div>
+        <p id="caption">Suas memórias, sempre por perto.</p>
+      </section>
+    </main>
+    <script src="player.js"></script>
+  </body>
+</html>

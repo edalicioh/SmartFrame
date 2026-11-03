@@ -1,0 +1,21 @@
+:root {
+  --background: #e8eef5;
+  --surface: #fff;
+  --text: #172033;
+  --muted: #64748b;
+  --primary: #2563eb;
+  --clock-bg: #102a43;
+  --weather-bg: #2563eb;
+  --currency-bg: #17365c;
+  --shadow: 0 3px 12px rgba(16, 42, 67, 0.12);
+}
+body.theme-dark {
+  --background: #101c2b;
+  --surface: #1d3045;
+  --text: #f1f5f9;
+  --muted: #adbed0;
+  --clock-bg: #0b1d30;
+  --weather-bg: #1d4ca6;
+  --currency-bg: #102a43;
+  --shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+}

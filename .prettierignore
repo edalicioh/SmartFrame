@@ -1,0 +1,13 @@
+node_modules/
+**/.next/
+.data/
+packages/database/generated/
+package-lock.json
+apps/web/next-env.d.ts
+apps/android/.gradle/
+apps/android/.kotlin/
+apps/android/**/build/
+infra/nginx/
+apps/android/app/src/main/assets/player/
+apps/web/public/player/
+apps/web/public/player-dashboard/

@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  household     Household?
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Account é a identidade de autenticação do Better Auth, não a conta familiar.
+model Account {
+  id                     String    @id
+  accountId              String
+  providerId             String
+  userId                 String
+  accessToken            String?
+  refreshToken           String?
+  idToken                String?
+  accessTokenExpiresAt   DateTime?
+  refreshTokenExpiresAt  DateTime?
+  scope                  String?
+  password               String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+// A chave única também impede dois bootstraps concorrentes.
+model Installation {
+  id        String   @id
+  createdAt DateTime @default(now())
+}
+
+model Household {
+  id        String   @id @default(cuid())
+  name      String
+  ownerId   String   @unique
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  devices   Device[]
+  albums    Album[]
+  media     Media[]
+  layouts   Layout[]
+  auditLogs AuditLog[]
+  pairingCodes PairingCode[]
+}
+
+model Device {
+  id              String    @id @default(cuid())
+  householdId     String
+  household       Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name            String
+  tokenHash       String?   @unique
+  timezone        String    @default("America/Sao_Paulo")
+  cacheLimitBytes BigInt    @default(2147483648)
+  lastSeenAt      DateTime?
+  appliedRevision String?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([householdId, createdAt])
+}
+
+model Album {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  createdAt   DateTime  @default(now())
+
+  @@index([householdId])
+}
+
+model Media {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  filename    String
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now())
+  sha256      String?
+  bytes       Int?
+  width       Int?
+  height      Int?
+
+  @@index([householdId, status])
+}
+
+model Layout {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  createdAt   DateTime  @default(now())
+  key         String?   @unique
+  draft       Json?
+  draftRevision Int     @default(0)
+  versions    LayoutVersion[] @relation("LayoutVersions")
+  publishedVersionId String?
+  publishedVersion LayoutVersion? @relation("PublishedLayout", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+
+  @@index([householdId])
+}
+
+model LayoutVersion {
+  id        String @id @default(cuid())
+  layoutId  String
+  layout    Layout @relation("LayoutVersions", fields: [layoutId], references: [id], onDelete: Cascade)
+  config    Json
+  createdAt DateTime @default(now())
+  publishedFor Layout[] @relation("PublishedLayout")
+
+  @@index([layoutId, createdAt])
+}
+
+model PairingCode {
+  id          String @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  codeHash    String @unique
+  expiresAt   DateTime
+  redeemedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model RequestLimit {
+  key         String @id
+  windowStart DateTime
+  count       Int @default(1)
+}
+
+model WidgetSnapshot {
+  key       String @id
+  payload   Json
+  updatedAt DateTime
+  expiresAt DateTime
+  failedAt  DateTime?
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  actorId     String
+  action      String
+  createdAt   DateTime  @default(now())
+
+  @@index([householdId, createdAt])
+}
+
+model Job {
+  id          String    @id
+  type        String
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(now())
+  leaseUntil  DateTime?
+  lockedBy    String?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+
+  @@index([status, availableAt])
+}

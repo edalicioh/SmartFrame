@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>SmartFrame · Player online</title>
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/widgets.css" />
+    <link rel="stylesheet" href="css/themes.css" />
+    <script defer src="js/config.js"></script>
+    <script defer src="js/carousel.js"></script>
+    <script defer src="js/clock.js"></script>
+    <script defer src="js/calendar.js"></script>
+    <script defer src="js/weather.js"></script>
+    <script defer src="js/currencies.js"></script>
+    <script defer src="js/app.js"></script>
+  </head>
+  <body>
+    <main class="dashboard" id="dashboard" aria-label="SmartFrame">
+      <section class="photo-panel" id="photos" aria-label="Fotos">
+        <div class="photo-stage">
+          <img class="photo-image is-current" alt="" />
+          <img class="photo-image" alt="" />
+          <div class="photo-empty" id="photo-message">Aguardando fotos…</div>
+        </div>
+        <button
+          class="photo-arrow photo-previous"
+          id="photo-previous"
+          type="button"
+          aria-label="Foto anterior"
+        >
+          ‹
+        </button>
+        <button
+          class="photo-arrow photo-next"
+          id="photo-next"
+          type="button"
+          aria-label="Próxima foto"
+        >
+          ›
+        </button>
+        <div class="photo-indicators" id="photo-indicators" aria-label="Escolher foto"></div>
+      </section>
+      <div class="widget-stack" id="widget-stack">
+        <section class="card clock-card" id="clock" aria-label="Relógio">
+          <div class="clock-time" id="clock-time">--:--</div>
+          <div class="clock-date" id="clock-date"></div>
+        </section>
+        <section class="card weather-card" id="weather" aria-label="Clima">
+          <div class="weather-main">
+            <div>
+              <div class="card-label">
+                CLIMA <span class="demo" id="weather-status">Sem dados</span>
+              </div>
+              <div class="weather-city" id="weather-city"></div>
+              <div class="weather-condition" id="weather-condition"></div>
+            </div>
+            <img class="weather-icon" src="assets/icons/weather.svg" alt="" />
+            <div class="weather-temperature" id="weather-temperature"></div>
+          </div>
+          <div class="weather-range" id="weather-range"></div>
+        </section>
+        <section class="card currencies-card" id="currencies" aria-label="Cotações de moedas">
+          <div class="card-label">
+            COTAÇÕES <span class="demo" id="currencies-status">Atualiza a cada 30 min</span>
+          </div>
+          <div class="currency-list" id="currency-list"></div>
+        </section>
+        <section class="card calendar-card" id="calendar" aria-label="Calendário">
+          <header class="calendar-header">
+            <button id="calendar-previous" type="button" aria-label="Mês anterior">‹</button
+            ><button
+              class="calendar-title"
+              id="calendar-today"
+              type="button"
+              title="Voltar ao mês atual"
+            ></button
+            ><button id="calendar-next" type="button" aria-label="Próximo mês">›</button>
+          </header>
+          <div class="calendar-grid calendar-weekdays" aria-hidden="true">
+            <span>DOM</span><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span
+            ><span>SEX</span><span>SÁB</span>
+          </div>
+          <div class="calendar-grid calendar-days" id="calendar-days"></div>
+        </section>
+      </div>
+      <div class="connection-status" id="connection-status" role="status" hidden>
+        Conexão indisponível
+      </div>
+    </main>
+  </body>
+</html>

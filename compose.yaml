@@ -1,0 +1,68 @@
+name: smartframe
+
+x-server: &server
+  image: smartframe:local
+  build: .
+  environment:
+    DATABASE_URL: file:/app/.data/smartframe.db
+    STORAGE_PATH: /app/.data/media
+    BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Execute npm run setup:env antes de iniciar}
+    BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Defina o endereço público do painel}
+    SMARTFRAME_ADMIN_LOGIN: ${SMARTFRAME_ADMIN_LOGIN:-required}
+    SMARTFRAME_ADMIN_EMAIL: ${SMARTFRAME_ADMIN_EMAIL:-}
+    # Diretório e configuração padrão ficam no volume persistente /app/.data.
+    SMARTFRAME_ONLINE_HOUSEHOLD_ID: ${SMARTFRAME_ONLINE_HOUSEHOLD_ID:-}
+  volumes:
+    - smartframe_data:/app/.data
+
+services:
+  migrate:
+    <<: *server
+    command: ["npm", "run", "db:migrate"]
+    restart: "no"
+
+  web:
+    <<: *server
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  worker:
+    <<: *server
+    command: ["node", "--import", "tsx", "apps/worker/src/index.ts"]
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  nginx:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    ports:
+      - "${SMARTFRAME_BIND:-127.0.0.1}:${SMARTFRAME_PORT:-8080}:80"
+    volumes:
+      - ./infra/nginx:/etc/nginx/conf.d:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+
+volumes:
+  smartframe_data:

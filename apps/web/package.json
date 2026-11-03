@@ -1,0 +1,30 @@
+{
+  "name": "@smartframe/web",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smartframe/widgets": "*",
+    "@smartframe/frames": "*",
+    "@smartframe/auth": "*",
+    "@smartframe/contracts": "*",
+    "@smartframe/database": "*",
+    "better-auth": "1.7.14",
+    "dotenv": "17.4.2",
+    "lucide-react": "1.65.0",
+    "next": "16.4.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}

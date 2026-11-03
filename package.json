@@ -1,0 +1,55 @@
+{
+  "name": "smartframe",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/worker",
+    "packages/*"
+  ],
+  "scripts": {
+    "android:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-android.ps1",
+    "android:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1",
+    "tablet:usb": "node scripts/tablet-usb.mjs",
+    "dev": "npm run player:sync && npm run dev --workspace=@smartframe/web",
+    "dev:worker": "node --env-file-if-exists=.env --import tsx apps/worker/src/index.ts",
+    "build": "npm run player:sync && npm run db:generate && npm run build --workspace=@smartframe/web",
+    "player:sync": "node scripts/sync-player.mjs",
+    "start": "npm run start --workspace=@smartframe/web",
+    "worker": "node --env-file-if-exists=.env --import tsx apps/worker/src/index.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:dev": "prisma migrate dev",
+    "admin:create": "node --env-file-if-exists=.env --import tsx scripts/create-admin.ts",
+    "setup:env": "node scripts/setup-env.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspace=@smartframe/web",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:player": "node --test smartframe-player/tests/carousel.test.mjs",
+    "test:smoke": "node --import tsx scripts/smoke.ts",
+    "test:smoke:local": "node --import tsx scripts/smoke.ts --no-login",
+    "check": "npm run lint && npm run typecheck && npm test && npm run test:player"
+  },
+  "dependencies": {
+    "better-auth": "1.7.14",
+    "dotenv": "17.4.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.3",
+    "prisma": "7.10.1",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
+    "typescript": "^6.0.0",
+    "vitest": "5.0.5"
+  }
+}

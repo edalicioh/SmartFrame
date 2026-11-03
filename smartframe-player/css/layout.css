@@ -1,0 +1,68 @@
+.dashboard {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, var(--photo-width, 62fr)) minmax(0, var(--widget-width, 38fr));
+  gap: 8px;
+}
+.dashboard.photo-right:not(.no-photos):not(.no-widgets) {
+  grid-template-columns: minmax(0, var(--widget-width, 38fr)) minmax(0, var(--photo-width, 62fr));
+}
+.dashboard.photo-right .photo-panel {
+  order: 1;
+}
+.dashboard.no-photos,
+.dashboard.no-widgets {
+  grid-template-columns: minmax(0, 1fr);
+}
+.photo-panel,
+.widget-stack,
+.card {
+  min-width: 0;
+  min-height: 0;
+}
+/* Proportional implicit tracks let disabled cards release their space. */
+.widget-stack {
+  display: grid;
+  grid-auto-flow: row;
+  grid-auto-rows: minmax(0, 1fr);
+  row-gap: 0;
+}
+.widget-stack > #clock:not([hidden]) {
+  grid-row: auto / span 18;
+}
+.widget-stack > #weather:not([hidden]) {
+  grid-row: auto / span 16;
+}
+.widget-stack > #currencies:not([hidden]) {
+  grid-row: auto / span 19;
+}
+.widget-stack > #calendar:not([hidden]) {
+  grid-row: auto / span 47;
+}
+.widget-stack > .card:not([hidden]) {
+  margin-bottom: 8px;
+}
+.widget-stack > .card:last-child,
+.widget-stack > .card.last-visible {
+  margin-bottom: 0;
+}
+@media (orientation: portrait) {
+  .dashboard {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 45fr) minmax(0, 55fr);
+  }
+  .dashboard.photo-right:not(.no-photos):not(.no-widgets) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dashboard.photo-right .photo-panel {
+    order: 0;
+  }
+  .dashboard.no-photos,
+  .dashboard.no-widgets {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}

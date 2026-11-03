@@ -1,0 +1,10 @@
+{
+  "name": "@smartframe/worker",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@smartframe/database": "*",
+    "@smartframe/jobs": "*"
+  }
+}
