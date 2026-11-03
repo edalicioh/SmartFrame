@@ -37,7 +37,7 @@ não equivale ao modo kiosk/lock-task do Android.
 - Handlers: `maintenance.sessions`, `background.optimize` e `widgets.refresh` (clima/cotações).
 - Uma manutenção é agendada por hora; a consulta normal da fila ocorre a cada 5 segundos.
 - O processamento é pelo menos uma vez: handlers precisam ser idempotentes, mesmo com renovação da lease.
-- O processamento legado de fotos usa Sharp, com limite de entrada de 12 MB/24 MP e saída de até 1600 × 1600/4 MB. O fluxo online v0.4 usa a biblioteca de fotos e ajuste para caber em 1024×600 preservando proporção; confirmar limites exatos na API implantada.
+- O processamento de novas fotos usa Sharp: entrada de até 12 MB/24 MP, rotação EXIF e saída WebP de até 1024 × 600/4 MB, preservando proporção e sem ampliar imagens pequenas. Mídias previamente processadas não são apagadas nem reprocessadas automaticamente.
 
 ## Segurança
 

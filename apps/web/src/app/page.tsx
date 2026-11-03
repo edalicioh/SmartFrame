@@ -14,7 +14,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
-  WifiOff,
+  Wifi,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { SignOut } from "@/components/sign-out";
@@ -28,7 +28,7 @@ const stages = [
   "Fundação do projeto",
   "Player Android",
   "Fotos e dispositivos",
-  "Sincronização remota",
+  "Publicação online",
   "Widgets e editor visual",
   "Integrações e agendamentos",
   "Testes e entrega",
@@ -70,14 +70,14 @@ export default async function DashboardPage() {
         </nav>
         <div className="sidebar-note">
           <div className="note-icon">
-            <WifiOff size={20} />
+            <Wifi size={20} />
           </div>
-          <strong>Memórias que ficam.</strong>
+          <strong>Seu painel, sempre conectado.</strong>
           <p>
-            O último layout publicado e sua foto permanecem disponíveis no tablet mesmo sem
-            servidor.
+            Fotos e widgets vêm do servidor. Personalize pelo celular e mantenha o tablet conectado
+            para receber suas publicações.
           </p>
-          <span>OFFLINE-FIRST</span>
+          <span>ONLINE PLAYER</span>
         </div>
         <div className="sidebar-bottom">
           <div className="account-avatar">{firstName.slice(0, 1).toUpperCase()}</div>
@@ -99,7 +99,7 @@ export default async function DashboardPage() {
           <div className="topbar-actions">
             <div className="environment">
               <span /> {isAdminLoginDisabled() ? "Acesso local sem login" : "Instalação própria"}{" "}
-              <span className="version">v0.3.0</span>
+              <span className="version">v0.4.0</span>
             </div>
             <div className="mobile-sign-out">{!isAdminLoginDisabled() && <SignOut />}</div>
           </div>
@@ -115,7 +115,7 @@ export default async function DashboardPage() {
               <p>Um lugar para suas fotos. Uma nova vida para seu tablet.</p>
             </div>
             <span className="phase-label">
-              <Code2 size={15} /> Modo Foto · Personalização
+              <Code2 size={15} /> Online Player · WebView
             </span>
           </section>
           <section className="welcome-banner">
@@ -128,7 +128,7 @@ export default async function DashboardPage() {
                 <br />
                 <em>Sempre em cena.</em>
               </h2>
-              <p>Escolha sua foto, ajuste o relógio e publique suas mudanças para o tablet.</p>
+              <p>Escolha suas fotos, personalize os cinco widgets e publique para cada tablet.</p>
               <a className="button button-light" href="/layouts">
                 Personalizar meu porta-retratos <ArrowRight size={16} />
               </a>
@@ -191,8 +191,8 @@ export default async function DashboardPage() {
                 </div>
                 <h3>Seu tablet, do seu jeito.</h3>
                 <p>
-                  Abra o editor para escolher uma foto, ajustar o relógio e conectar seu tablet por
-                  código.
+                  Abra o editor para organizar suas fotos, personalizar os widgets e conectar seu
+                  tablet por código.
                 </p>
                 <a className="button button-primary" href="/layouts">
                   <Clock3 size={14} /> Abrir personalização
@@ -219,8 +219,8 @@ export default async function DashboardPage() {
                 ))}
               </ol>
               <div className="roadmap-notice">
-                O modo Foto já permite personalização e publicação. Álbuns, carrossel e widgets
-                livres continuam nas próximas etapas.
+                O player online oferece carrossel, relógio, clima, moedas e calendário. Integrações,
+                agendamentos e widgets livres continuam nas próximas etapas.
               </div>
             </section>
           </div>
@@ -232,13 +232,13 @@ export default async function DashboardPage() {
             <div>
               <h2>Uma biblioteca cheia de significado.</h2>
               <p>
-                A foto de fundo já pode ser enviada pelo editor. Biblioteca com álbuns e carrossel
-                de várias fotos chegará nas próximas etapas.
+                Envie várias fotos pelo editor, escolha sua ordem e publique o carrossel. O servidor
+                otimiza as imagens para o tablet.
               </p>
             </div>
-            <span className="planned-label">
-              <ArrowDownToLine size={14} /> Em desenvolvimento
-            </span>
+            <a className="planned-label" href="/layouts">
+              <ArrowDownToLine size={14} /> Abrir biblioteca no editor
+            </a>
           </section>
           <footer className="dashboard-footer">
             <span>SmartFrame · Feito para guardar o que importa.</span>

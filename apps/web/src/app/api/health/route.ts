@@ -7,7 +7,7 @@ export async function GET() {
   try {
     await getDatabase().installation.count();
     return Response.json(
-      { status: "ok", service: "smartframe", version: "0.3.0" },
+      { status: "ok", service: "smartframe", version: "0.4.0" },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {

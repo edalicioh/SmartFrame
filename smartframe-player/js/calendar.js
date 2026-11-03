@@ -86,7 +86,7 @@
     render();
   });
   title.addEventListener("click", function () {
-    var now = new Date();
+    var now = zonedToday();
     view = new Date(now.getFullYear(), now.getMonth(), 1);
     render();
   });

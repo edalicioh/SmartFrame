@@ -1,4 +1,4 @@
-# API — modo Foto 0.3.0
+# API — SmartFrame Online 0.4.0
 
 > **Integração online por dispositivo v0.4.** As rotas abaixo correspondem à
 > implementação integrada atualmente disponível; endpoints do player offline mais
@@ -10,26 +10,29 @@ O editor administrativo trabalha por dispositivo. `GET` e alterações usam a se
 administrativa existente; não exigem `SMARTFRAME_ONLINE_HOUSEHOLD_ID`. Um ID de
 dispositivo identifica o destino, não é uma credencial nem autoriza chamadas Bearer.
 
-| Método | Endpoint | Contrato-alvo |
-| --- | --- | --- |
-| GET | `/api/online-frame?deviceId=ID` | Estado do rascunho e revisões do dispositivo |
-| PUT | `/api/online-frame` | `{deviceId,config,expectedRevision}`; grava rascunho com controle de concorrência |
-| POST | `/api/online-frame/publish` | `{deviceId,expectedRevision}`; retorna `{revision}` imutável |
-| GET | `/api/photos` | Biblioteca de fotos disponível ao editor autenticado |
-| POST | `/api/photos` | Multipart `photo`; processamento otimizado no recebimento |
+| Método | Endpoint                        | Contrato-alvo                                                                     |
+| ------ | ------------------------------- | --------------------------------------------------------------------------------- |
+| GET    | `/api/online-frame?deviceId=ID` | Estado do rascunho e revisões do dispositivo                                      |
+| PUT    | `/api/online-frame`             | `{deviceId,config,expectedRevision}`; grava rascunho com controle de concorrência |
+| POST   | `/api/online-frame/publish`     | `{deviceId,expectedRevision}`; retorna `{revision}` imutável                      |
+| GET    | `/api/photos`                   | Biblioteca de fotos disponível ao editor autenticado                              |
+| POST   | `/api/photos`                   | Multipart `photo`; processamento otimizado no recebimento                         |
 
 Estado esperado: `{deviceId,config,draftRevision,publishedRevision,appliedRevision,lastSeenAt}`.
 Configuração compartilhada e defaults estão em `packages/contracts/src/online-dashboard.ts`.
 O endpoint de upload gera imagem ajustada para caber em 1024×600 preservando
 proporção, via Sharp. Testes automatizados não substituem validação em aparelho real.
 
-## Player online pareado (contrato-alvo)
+## Player online pareado
 
 - `GET /player/{deviceId}` serve a página pareada. O ID na URL não é segredo.
 - `GET /api/player/config?deviceId=ID` retorna somente a configuração publicada do
   dispositivo. A consulta periódica é a cada 15 segundos por padrão.
-- `POST /api/player/heartbeat` confirma `online:VERSION` somente após a aplicação
-  bem-sucedida da configuração; não confirmar ao apenas receber a resposta.
+- Na consulta seguinte, o player envia `appliedRevision=online%3AVERSION` em
+  `GET /api/player/config`, somente após aplicar a configuração com sucesso. O
+  servidor só registra a confirmação se ela corresponder à publicação atual.
+  Receber a resposta não confirma aplicação. `POST /api/player/heartbeat` permanece
+  exclusivo do protocolo legado, não é utilizado pelo APK v0.4.
 - `GET /api/player/online-media/{id}?v=sha256` entrega mídia da publicação autorizada.
 - A prévia administrativa usa `/player-dashboard/index.html?preview=1` e `postMessage`
   limitado à mesma origem.
@@ -39,8 +42,8 @@ conhecer o ID. O alvo primário é o APK pareado, cuja camada nativa mantém a c
 fora do JavaScript. Produção exige HTTPS; HTTP de debug somente via loopback e
 `adb reverse`. Tela cheia imersiva não equivale a Android lock-task/kiosk.
 
-O armazenamento de configurações por dispositivo deve reutilizar `Layout` e
-`LayoutVersion` no SQLite existente; não se planeja migração de schema para este fluxo.
+O armazenamento de configurações por dispositivo reutiliza `Layout` e
+`LayoutVersion` no SQLite existente; esta atualização não adiciona migration de schema.
 Rotas offline antigas podem permanecer para compatibilidade, mas não são o caminho
 principal do editor ou do APK v0.4.
 

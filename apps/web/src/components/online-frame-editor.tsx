@@ -214,6 +214,10 @@ export function OnlineFrameEditor() {
           );
       } finally {
         inFlight = false;
+        if (attempts >= 36 && active) {
+          setPhotoPollExpired(true);
+          window.clearInterval(timer);
+        }
       }
     }, 2500);
     return () => {
@@ -226,6 +230,18 @@ export function OnlineFrameEditor() {
     setConfig(next);
     setDirty(true);
     setNotice("");
+  }
+  function changeTheme(theme: OnlineDashboard["theme"]) {
+    const palettes = {
+      light: { backgroundColor: "#E8EEF5", accentColor: "#2563EB", textColor: "#172033" },
+      dark: { backgroundColor: "#101C2B", accentColor: "#2563EB", textColor: "#F1F5F9" },
+    };
+    const previous = palettes[config.theme];
+    const next = { ...config.appearance };
+    for (const key of ["backgroundColor", "accentColor", "textColor"] as const) {
+      if (next[key].toUpperCase() === previous[key]) next[key] = palettes[theme][key];
+    }
+    change({ ...config, theme, appearance: next });
   }
   function chooseDevice(nextId: string) {
     if (operation.current || loading) return;
@@ -787,9 +803,7 @@ export function OnlineFrameEditor() {
                 Tema
                 <select
                   value={config.theme}
-                  onChange={(event) =>
-                    change({ ...config, theme: event.target.value as "light" | "dark" })
-                  }
+                  onChange={(event) => changeTheme(event.target.value as "light" | "dark")}
                 >
                   <option value="light">Claro</option>
                   <option value="dark">Escuro</option>

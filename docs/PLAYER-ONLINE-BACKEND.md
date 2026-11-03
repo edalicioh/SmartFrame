@@ -1,11 +1,13 @@
 # Backend do player online
 
-> **LEGADO / compatibilidade v0.3.** Este documento descreve o dashboard standalone
+> **REGISTRO HISTÓRICO v0.3.** Este documento descreve o dashboard standalone
 > baseado em pasta JSON/fotos e `SMARTFRAME_ONLINE_HOUSEHOLD_ID`. Não é o fluxo ativo
 > padrão v0.4 e não deve ser usado para configurar a nova edição por dispositivo.
 > O fluxo principal atual usa o editor administrativo e biblioteca de fotos; veja
 > [personalização v0.4](PERSONALIZATION.md) e [contrato de API](API.md). Não remova
 > configurações/arquivos antigos durante atualização sem backup e decisão explícita.
+> Na v0.4, `/api/player/config` lê a publicação do dispositivo no banco, não este
+> JSON. Alterar a pasta/JSON abaixo não publica conteúdo no player atual.
 
 Esta modalidade legada é independente do player offline e usa a mesma API Next.js. Fotos e configuração são globais para **um único household explicitamente selecionado**, não para todas as contas. Ela não cria painel, upload, autenticação nova nem cache offline.
 

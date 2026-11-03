@@ -85,7 +85,7 @@ function setup(
   const document = {
     hidden: false,
     documentElement: element(),
-    body: { classList: classes() },
+    body: element(),
     getElementById: (id) => elements[id],
     addEventListener: (name, fn) => {
       documentListeners[name] = fn;

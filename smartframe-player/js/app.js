@@ -29,8 +29,8 @@
       ["--weather-bg", appearance.accentColor],
       ["--text", appearance.textColor],
     ].forEach(function (entry) {
-      if (entry[1]) document.documentElement.style.setProperty(entry[0], entry[1]);
-      else document.documentElement.style.removeProperty(entry[0]);
+      if (entry[1]) document.body.style.setProperty(entry[0], entry[1]);
+      else document.body.style.removeProperty(entry[0]);
     });
     if (!old || old.theme !== next.theme)
       document.body.classList.toggle("theme-dark", next.theme === "dark");

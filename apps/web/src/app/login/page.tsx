@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { Heart, ShieldCheck, WifiOff } from "lucide-react";
+import { Heart, ShieldCheck, Wifi } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { LoginForm } from "@/components/login-form";
 import { getAuth } from "@/lib/auth";
@@ -58,7 +58,7 @@ export default async function LoginPage() {
               <ShieldCheck size={16} /> Suas fotos, sob seu controle
             </span>
             <span>
-              <WifiOff size={16} /> Player offline-first
+              <Wifi size={16} /> Player online com atualização remota
             </span>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 Porta-retratos digital auto-hospedável, com editor administrativo por dispositivo e player Android online.
 
-**Stack aprovada:** Next.js + React + TypeScript, Prisma + SQLite, worker Node.js e aplicativo Kotlin/WebView. Sharp será integrado na etapa de processamento de fotos.
+**Stack:** Next.js + React + TypeScript, Prisma + SQLite, worker Node.js, Sharp e aplicativo Kotlin/WebView.
 
 ## v0.4 — fluxo online por dispositivo
 
@@ -42,23 +42,23 @@ Implementado:
 apps/
   web/                Painel e API Next.js
   worker/             Processo de tarefas assíncronas
-  android/            Protótipo Kotlin/WebView
+  android/            APK thin client Kotlin/WebView
 packages/
   auth/               Better Auth e bootstrap administrativo
   contracts/          Manifesto e validação dos widgets iniciais
   database/           Prisma, schema e migrations
   jobs/               Fila persistida e manutenção
   frames/             Fotos, pareamento, versões e publicação
-  player/             HTML/CSS/JS usado na prévia e no APK
+  player/             Renderizador legado, não embarcado no APK v0.4
   widgets/            Clima, cotações, cidades e snapshots
 infra/nginx/          Proxy local
 scripts/              Configuração e criação do administrador
 tests/                Contratos, autenticação e fila
 docs/                 PRD e documentação técnica
-smartframe-player/    Novo dashboard online, independente do modo Foto existente
+smartframe-player/    Dashboard online usado pelo APK e pela prévia administrativa
 ```
 
-O dashboard standalone anterior e o renderer offline histórico não descrevem o fluxo principal v0.4; veja [o README do player](smartframe-player/README.md) para o contrato-alvo.
+O dashboard standalone anterior e o renderer offline histórico não descrevem o fluxo principal v0.4; veja [o README do player](smartframe-player/README.md) para publicar e testar o player atual.
 
 ## Desenvolvimento local
 

@@ -1,53 +1,65 @@
 # SmartFrame Player online
 
-Player online v0.4: dashboard servido para o dispositivo pareado, sem renderer offline, cache persistente de fotos, service worker ou credencial exposta ao JavaScript. A configuração e mídia vêm do servidor. Os endpoints descritos nesta página são contratos de integração ainda sujeitos à confirmação no servidor integrado; não os trate como validação de execução.
+Dashboard leve da v0.4, sem frameworks, service worker, armazenamento persistente
+de fotos ou credenciais no JavaScript. O APK pareado abre `/player/{deviceId}` e
+mantém a credencial no Android Keystore.
 
 ## Publicar e abrir
 
-1. Configure o projeto e pareie o tablet conforme o README principal. O fluxo v0.4 é por dispositivo e não requer `SMARTFRAME_ONLINE_HOUSEHOLD_ID`; confirme as rotas no [contrato da API](../docs/API.md).
-2. Na raiz do projeto, execute `npm run dev` para desenvolvimento ou `npm run build` seguido de `npm start` para produção. O fluxo alvo serve `/player/{deviceId}`; a rota standalone abaixo é apenas prévia/compatibilidade até confirmação da integração.
-3. No Android pareado, abra a página do dispositivo. HTTPS é obrigatório em produção; HTTP debug somente loopback via `adb reverse`. Não exponha instalação insegura à rede pública. Credenciais ficam na camada nativa, nunca no código web, URL, armazenamento ou logs.
+1. Inicie o servidor e o worker conforme o README principal.
+2. Em `/layouts`, gere um código e pareie o APK. Uma atualização com assinatura
+   compatível preserva o pareamento existente; não desinstale para atualizar.
+3. Selecione o dispositivo no editor, envie fotos, aguarde o processamento e escolha
+   a ordem do carrossel. Ajuste cores, widgets e intervalos na prévia.
+4. Salve o rascunho e publique. O player recebe a nova publicação na próxima consulta,
+   normalmente em até 15 segundos, sem recarregar a página.
 
-O endpoint de publicação esperado é `POST /api/online-frame/publish`; o player consulta `GET /api/player/config?deviceId=ID` e confirma `online:VERSION` somente após aplicar com sucesso. Media utiliza `/api/player/online-media/{id}?v=sha256`. A página preview administrativa é `/player-dashboard/index.html?preview=1` e usa `postMessage` same-origin. O ID não concede acesso: navegador sem pareamento não pode autorizar APIs Bearer. Fullscreen imersivo não é Android lock-task/kiosk.
+O novo fluxo usa `Layout`/`LayoutVersion` e a biblioteca do banco existente. Não
+requer `SMARTFRAME_ONLINE_HOUSEHOLD_ID` nem edição de JSON/pastas. O modo anterior
+está documentado apenas como [histórico](../docs/PLAYER-ONLINE-BACKEND.md).
 
-Abrir a página em um navegador comum não autentica as rotas de configuração e de imagens: elas exigem o Bearer do dispositivo pareado. A sessão administrativa não o substitui. Na indisponibilidade da API, o dashboard exibe um aviso discreto e mantém o que já estiver carregado, quando possível. Isso não garante funcionamento após fechar ou reabrir a página.
+O ID identifica o dispositivo, mas não autoriza acesso. Um navegador comum sem o
+Bearer não consegue consultar a configuração ou as fotos. A prévia administrativa
+usa sessão do painel e `/player-dashboard/index.html?preview=1`, sem polling ou
+confirmações de revisão.
 
-## Fotos e configuração
+## Fotos, widgets e atualização
 
-Por padrão, coloque os arquivos diretamente em `.data/player-online/photos/` no servidor, não em `public/`. Use JPEG (`.jpg`/`.jpeg`), PNG ou WebP, até 16 MiB por arquivo, 4096 pixels em cada eixo e 2.097.152 pixels no total, preferencialmente otimizados próximos à resolução da tela (por exemplo, 1024 × 600). Fotos acima desses limites, arquivos inválidos, links e subpastas são ignorados; nomes são ordenados por bytes UTF-8. Há também limites de tamanho para o álbum, descritos na documentação do backend. O servidor permite sobrescrever os caminhos por `SMARTFRAME_ONLINE_PHOTOS` e `SMARTFRAME_ONLINE_CONFIG`; no Docker, a pasta padrão está no volume do serviço, não necessariamente no diretório local. Todas as fotos ficam acessíveis aos dispositivos autorizados do household selecionado.
+- Upload: JPEG, PNG ou WebP, até 12 MB e 24 MP de entrada. O worker aplica rotação
+  EXIF e otimiza com Sharp para caber em **1024 × 600**, preservando proporção.
+- Até 100 fotos distintas por publicação. Só fotos prontas da mesma conta podem
+  ser publicadas. O dispositivo acessa apenas fotos da sua publicação atual.
+- Layout horizontal padrão: **62% fotos / 38% widgets**. Em retrato, a foto fica
+  acima dos widgets. A orientação acompanha a tela; não há bloqueio remoto de rotação.
+- Intervalo de fotos e alternância de moedas: 5–3600 s. Polling: 10–3600 s,
+  padrão 15 s. São intervalos independentes.
+- Clima e cotações são consultados pelo servidor, com cache de 30 minutos. Valores
+  anteriores são sinalizados; dados ausentes não são substituídos por valores fictícios.
+- Carrossel usa dois elementos de imagem, sem pré-carregar o álbum inteiro.
+- A configuração aplicada é confirmada na consulta seguinte por `appliedRevision`;
+  isso confirma aplicação do layout, não prova que todos os pixels foram exibidos.
 
-Edite `.data/player-online/config.json` no servidor. Exemplo mínimo:
+Sem conexão, o player conserva o que já estiver carregado quando possível e mostra
+um aviso. Não há promessa de funcionamento após fechar ou reabrir sem o servidor.
+Reconexão usa timeout e espera progressiva, sem consultas sobrepostas. Ao voltar à
+página ou recuperar a rede, a consulta é imediata.
 
-```json
-{
-  "refreshSeconds": 60,
-  "widgets": {
-    "photos": { "intervalSeconds": 15, "fit": "cover" },
-    "clock": { "format": "24h", "showDate": true },
-    "weather": { "city": "Camboriú" }
-  }
-}
-```
+## Segurança e acesso
 
-O intervalo das fotos é independente da consulta: `photos.intervalSeconds` aceita 5–3600 segundos; `refreshSeconds`, 10–3600; o intervalo das moedas aceita 5–3600. Os valores devem ser inteiros. Tema (`light`/`dark`), visibilidade, posição e largura da foto, relógio, moedas e calendário também podem ser configurados; consulte os campos e limites completos na documentação do backend. Grave o JSON atomicamente para evitar leituras parciais: uma configuração inválida é rejeitada pelo servidor e o player conserva a última válida.
+Use HTTPS com certificado confiável em produção/LAN. HTTP no APK debug é restrito
+a loopback; `localhost` no tablet só alcança o computador com `adb reverse` ativo.
+Fullscreen e tela ligada não equivalem ao modo kiosk/lock-task completo do Android.
+Credenciais não devem aparecer em URL, logs, mensagens da prévia ou armazenamento web.
 
-Uma alteração aparece na próxima consulta bem-sucedida, normalmente em até o **intervalo de consulta anterior**, mais o tempo da requisição; falhas causam novas tentativas progressivas e não há prazo garantido sem conexão. Fotos e carrosséis são pausados quando a página está oculta; ao voltar, a consulta é imediata. O layout segue a orientação efetiva da tela: em retrato a foto fica acima dos widgets.
-
-O carrossel pré-carrega a próxima foto no segundo elemento de imagem, reutilizado após a transição. Se ela estiver pronta, a troca ocorre no intervalo configurado; caso contrário, a foto atual é mantida até o carregamento terminar. Em caso de erro, são feitas no máximo três tentativas por ciclo, espaçadas por 250 ms, antes de aguardar outro intervalo. A lista continua a partir do próximo item, sem varrer todo o álbum em sequência rápida.
-
-O backend renova clima e cotações após 30 minutos de cache, independentemente do intervalo das fotos ou da alternância visual das moedas. O polling recebe os novos dados sem recarregar a página. A primeira carga e a renovação podem precisar de uma consulta adicional enquanto os provedores respondem. Valores anteriores são sinalizados em caso de falha; sem cache, aparece indisponibilidade, nunca dados inventados. Veja [fontes e limites](../docs/WIDGETS.md#dashboard-online).
-
-## API JavaScript e testes
-
-`window.applyConfig(objeto)` aceita alterações parciais sobre a configuração atual; propriedades inválidas preservam o valor anterior. Fotos são preservadas quando seu ID e URL continuam na lista. Não chame com credenciais. A consulta usa `GET /api/player/config` na mesma origem, sem requisições sobrepostas, com timeout de 10 segundos e espera progressiva até 5 minutos em caso de erro. Os dados não são gravados no navegador.
-
-Para uma verificação automatizada local com Node 24 e Chrome instalado, execute na raiz:
+## Testes
 
 ```sh
-node --test smartframe-player/tests/carousel.test.mjs
+npm run test:player
 node smartframe-player/tests/smoke.mjs
 ```
 
-Use `CHROME_BIN` para apontar para outro Chrome/Chromium ou Edge. O teste usa um servidor local com configuração e imagens simuladas; verifica quatro tamanhos, limites e sobreposição, opções de layout, configuração parcial, calendário e carrossel. Não substitui o teste da integração autenticada real.
-
-Para inspeção manual, abra o player autenticado e use as ferramentas de desenvolvimento do navegador para simular **1024 × 600**, **800 × 480**, **1280 × 800** e **600 × 1024**. Confira navegação e gestos, meses com seis semanas, nomes e datas longos, widgets desativados, fotos removidas/ilegíveis e reconexão. Teste também em segundo plano e no aparelho real. A compatibilidade e o desempenho no PRITOM P7_A1 dependem da versão instalada do Android System WebView e ainda precisam de validação no dispositivo.
+O teste visual usa Chrome/Chromium ou `CHROME_BIN` e verifica **1024 × 600**,
+**800 × 480**, **1280 × 800** e **600 × 1024**, com configurações e fotos simuladas.
+O smoke HTTP do projeto verifica a integração autenticada com banco isolado.
+Esses testes não substituem validação do APK no PRITOM P7, da versão efetiva do
+Android System WebView, da reconexão e da estabilidade prolongada.
