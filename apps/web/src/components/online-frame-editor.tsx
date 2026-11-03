@@ -6,6 +6,7 @@ import {
   onlineDashboardSchema,
   type OnlineDashboard,
   type OnlineDashboardState,
+  currencyCodes,
 } from "@smartframe/contracts";
 
 type Device = {
@@ -22,6 +23,7 @@ type Photo = {
   height?: number | null;
 };
 type Pairing = { code: string; expiresAt: string; serverURL: string };
+type WidgetData = Awaited<ReturnType<typeof import("@smartframe/widgets").onlineWidgetData>>;
 
 async function api(path: string, options?: RequestInit) {
   const response = await fetch(path, { ...options, cache: "no-store" });
@@ -46,6 +48,9 @@ export function OnlineFrameEditor() {
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [photoPollExpired, setPhotoPollExpired] = useState(false);
   const [photoPollRetry, setPhotoPollRetry] = useState(0);
+  const [widgetData, setWidgetData] = useState<WidgetData | null>(null);
+  const [currencyBase, setCurrencyBase] = useState("USD");
+  const [currencyTarget, setCurrencyTarget] = useState("BRL");
   const frame = useRef<HTMLIFrameElement>(null);
   const operation = useRef(false);
   const selectedId = useRef(deviceId);
@@ -56,6 +61,7 @@ export function OnlineFrameEditor() {
     const byId = new Map(readyPhotos.map((photo) => [photo.id, photo]));
     return {
       ...config,
+      widgetData,
       widgets: {
         ...config.widgets,
         photos: {
@@ -67,7 +73,50 @@ export function OnlineFrameEditor() {
         },
       },
     };
-  }, [config, readyPhotos]);
+  }, [config, readyPhotos, widgetData]);
+
+  // The preview iframe never polls or receives device credentials. Its parent uses
+  // the authenticated, shared server cache, including for unsaved pair selections.
+  const widgetSettings = JSON.stringify({
+    weather: config.widgets.weather,
+    currencies: config.widgets.currencies,
+  });
+  useEffect(() => {
+    if (!deviceId) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    let controller: AbortController | null = null;
+    async function load() {
+      let delay = 60000;
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), 12000);
+      try {
+        const response = await fetch("/api/online-frame/widgets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ widgets: JSON.parse(widgetSettings) }),
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          const data: WidgetData = await response.json();
+          if (data.currenciesPending) delay = 2000;
+          if (active) setWidgetData(data);
+        }
+      } catch {
+        // Preserve the last quote; the player marks it as old by its timestamp.
+      } finally {
+        clearTimeout(timeout);
+        if (active) timer = setTimeout(load, delay);
+      }
+    }
+    timer = setTimeout(load, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      controller?.abort();
+    };
+  }, [deviceId, widgetSettings]);
 
   const sendPreview = useCallback(() => {
     frame.current?.contentWindow?.postMessage(
@@ -714,34 +763,126 @@ export function OnlineFrameEditor() {
                   }
                 />
               </label>
-              <label>
-                Moedas
-                <select
-                  multiple
-                  value={config.widgets.currencies.symbols}
-                  onChange={(event) => {
-                    const symbols = Array.from(
-                      event.target.selectedOptions,
-                      (option) => option.value as "USD" | "EUR" | "BTC",
-                    );
-                    if (symbols.length)
-                      change({
-                        ...config,
-                        widgets: {
-                          ...config.widgets,
-                          currencies: { ...config.widgets.currencies, symbols },
+              <fieldset>
+                <legend>Pares de moedas ({config.widgets.currencies.pairs.length}/20)</legend>
+                <label>
+                  Moeda de origem
+                  <select
+                    value={currencyBase}
+                    onChange={(event) => {
+                      setCurrencyBase(event.target.value);
+                      if (event.target.value === currencyTarget) setCurrencyTarget(currencyBase);
+                    }}
+                  >
+                    {currencyCodes.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Moeda de destino
+                  <select
+                    value={currencyTarget}
+                    onChange={(event) => setCurrencyTarget(event.target.value)}
+                  >
+                    {currencyCodes
+                      .filter((code) => code !== currencyBase)
+                      .map((code) => (
+                        <option key={code} value={code}>
+                          {code}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={
+                    currencyBase === currencyTarget ||
+                    config.widgets.currencies.pairs.length >= 20 ||
+                    config.widgets.currencies.pairs.includes(`${currencyBase}/${currencyTarget}`)
+                  }
+                  onClick={() =>
+                    change({
+                      ...config,
+                      widgets: {
+                        ...config.widgets,
+                        currencies: {
+                          ...config.widgets.currencies,
+                          pairs: [
+                            ...config.widgets.currencies.pairs,
+                            `${currencyBase}/${currencyTarget}`,
+                          ],
                         },
-                      });
-                  }}
+                      },
+                    })
+                  }
                 >
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="BTC">BTC</option>
+                  Adicionar par
+                </button>
+                <ul className="currency-pairs">
+                  {config.widgets.currencies.pairs.map((pair) => (
+                    <li key={pair}>
+                      <span>{pair}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remover ${pair}`}
+                        disabled={config.widgets.currencies.pairs.length === 1}
+                        onClick={() =>
+                          change({
+                            ...config,
+                            widgets: {
+                              ...config.widgets,
+                              currencies: {
+                                ...config.widgets.currencies,
+                                pairs: config.widgets.currencies.pairs.filter(
+                                  (value) => value !== pair,
+                                ),
+                              },
+                            },
+                          })
+                        }
+                      >
+                        Remover
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <small>
+                  Selecione de 1 a 20 pares. Cotações indicativas da Coinbase, consultadas a cada 30
+                  minutos; não são preços de execução.
+                </small>
+              </fieldset>
+              <label>
+                Cotações por vez
+                <select
+                  value={config.widgets.currencies.displayCount}
+                  onChange={(event) =>
+                    change({
+                      ...config,
+                      widgets: {
+                        ...config.widgets,
+                        currencies: {
+                          ...config.widgets.currencies,
+                          displayCount: Number(event.target.value),
+                        },
+                      },
+                    })
+                  }
+                >
+                  {[1, 2, 3, 4].map((count) => (
+                    <option key={count} value={count}>
+                      {count}
+                    </option>
+                  ))}
                 </select>
-                <small>Use Ctrl/Cmd para selecionar várias (mínimo uma).</small>
+                <small>
+                  Em telas pequenas, a quantidade se adapta ao espaço e os demais pares alternam.
+                </small>
               </label>
               <label>
-                Intervalo das moedas (segundos)
+                Alternar pares a cada (segundos)
                 <input
                   type="number"
                   min="5"

@@ -13,7 +13,12 @@
       photos: { enabled: true, intervalSeconds: 15, fit: "cover", items: [] },
       clock: { enabled: true, format: "24h", showDate: false, size: "normal", color: "" },
       weather: { enabled: true, city: "Camboriú" },
-      currencies: { enabled: true, symbols: ["USD", "EUR", "BTC"], intervalSeconds: 10 },
+      currencies: {
+        enabled: true,
+        pairs: ["USD/BRL", "EUR/BRL", "BTC/BRL"],
+        displayCount: 2,
+        intervalSeconds: 10,
+      },
       calendar: { enabled: true, highlightToday: true },
     },
   };
@@ -64,15 +69,36 @@
       money = object(widgets.currencies),
       cal = object(widgets.calendar),
       layout = object(data.layoutOptions);
-    var symbols =
+    var codes = ["USD", "BRL", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "BTC", "ETH"];
+    var incomingPairs = money.pairs;
+    if (
+      !incomingPairs &&
       Array.isArray(money.symbols) &&
-      money.symbols.length > 0 &&
       money.symbols.length <= 3 &&
-      money.symbols.every(function (s, i, arr) {
-        return ["USD", "EUR", "BTC"].indexOf(s) >= 0 && arr.indexOf(s) === i;
+      money.symbols.every(function (code) {
+        return ["USD", "EUR", "BTC"].indexOf(code) >= 0;
       })
-        ? money.symbols.slice()
-        : w.currencies.symbols;
+    )
+      incomingPairs = money.symbols.map(function (code) {
+        return code + "/BRL";
+      });
+    var pairs =
+      Array.isArray(incomingPairs) &&
+      incomingPairs.length > 0 &&
+      incomingPairs.length <= 20 &&
+      incomingPairs.every(function (pair, i, arr) {
+        if (typeof pair !== "string") return false;
+        var parts = pair.split("/");
+        return (
+          parts.length === 2 &&
+          parts[0] !== parts[1] &&
+          codes.indexOf(parts[0]) >= 0 &&
+          codes.indexOf(parts[1]) >= 0 &&
+          arr.indexOf(pair) === i
+        );
+      })
+        ? incomingPairs.slice()
+        : w.currencies.pairs;
     var appearance = object(data.appearance);
     function color(value, fallback) {
       return typeof value === "string" && /^(|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/.test(value)
@@ -139,7 +165,13 @@
         },
         currencies: {
           enabled: bool(money.enabled, w.currencies.enabled),
-          symbols: symbols,
+          pairs: pairs,
+          displayCount:
+            Number.isInteger(money.displayCount) &&
+            money.displayCount >= 1 &&
+            money.displayCount <= 4
+              ? money.displayCount
+              : w.currencies.displayCount,
           intervalSeconds: seconds(money.intervalSeconds, w.currencies.intervalSeconds, 5),
         },
         calendar: {

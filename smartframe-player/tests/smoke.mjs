@@ -34,21 +34,19 @@ const widgetData = {
     stale: false,
   },
   currencies: {
-    USD: {
+    "USD/BRL": {
       value: 5.4,
-      source: "Frankfurter / BCE",
-      referenceDate: "2026-10-30",
+      source: "Coinbase",
       updatedAt: new Date().toISOString(),
       stale: false,
     },
-    EUR: {
+    "EUR/BRL": {
       value: 6,
-      source: "Frankfurter / BCE",
-      referenceDate: "2026-10-30",
+      source: "Coinbase",
       updatedAt: new Date().toISOString(),
       stale: false,
     },
-    BTC: {
+    "BTC/BRL": {
       value: 350000,
       source: "Coinbase",
       referenceDate: null,
@@ -200,8 +198,35 @@ try {
     "cotação recebida do backend",
   );
   assert.equal(
-    await evaluate(`document.querySelector('#currencies-status').textContent.includes('30 min')`),
+    await evaluate(
+      `!document.querySelector('#currencies-status') && !document.querySelector('#currencies .card-label') && !document.querySelector('#currencies .currency-change') && [...document.querySelectorAll('.currency-item')].every(item => item.children.length === 2)`,
+    ),
     true,
+    "cartão mostra somente os pares e os valores",
+  );
+  assert.equal(
+    await evaluate(`(() => {
+      const item = document.querySelector('.currency-item');
+      const card = document.querySelector('#currencies').getBoundingClientRect();
+      const list = document.querySelector('#currency-list').getBoundingClientRect();
+      return getComputedStyle(item).textAlign === 'center' &&
+        Math.abs((list.top + list.bottom) / 2 - (card.top + card.bottom) / 2) < 1;
+    })()`),
+    true,
+    "par e valor centralizados no cartão",
+  );
+  assert.equal(
+    await evaluate(`(() => {
+      applyConfig({widgets:{currencies:{pairs:['BTC/USD'],displayCount:1}},widgetData:{currencies:{'BTC/USD':{value:65000,source:'Coinbase',updatedAt:new Date().toISOString(),stale:false}}}});
+      return document.querySelector('.currency-code').textContent === 'BTC/USD' &&
+        document.querySelector('.currency-value').textContent.replace(/\u00a0/g,' ') === 'US$ 65.000,00' &&
+        document.querySelector('.currency-item').children.length === 2;
+    })()`),
+    true,
+    "par BTC/USD exibe dólares, sem forçar BRL",
+  );
+  await evaluate(
+    `applyConfig({widgets:{currencies:{pairs:['USD/BRL','EUR/BRL','BTC/BRL'],displayCount:2}},widgetData:${JSON.stringify(widgetData)}})`,
   );
   assert.equal(
     await evaluate(
@@ -241,6 +266,12 @@ try {
       const escaped = [...document.querySelectorAll('.widget-stack .card:not([hidden])')].flatMap(card => { const outer = card.getBoundingClientRect(); return [...card.querySelectorAll('*')].filter(el => { if (!el.getClientRects().length) return false; const r=el.getBoundingClientRect(); return r.left < outer.left - 1 || r.right > outer.right + 1 || r.top < outer.top - 1 || r.bottom > outer.bottom + 1; }).map(el => ({card:card.id, element:el.id || el.className || el.tagName, rect:el.getBoundingClientRect().toJSON(), outer:outer.toJSON()})); });
       return { documentScroll: document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth, weatherChildren: [...document.querySelector('#weather').children].map(x => x.id), boxes, escaped };
     })()`);
+      assert.ok(
+        await evaluate(
+          `parseFloat(getComputedStyle(document.querySelector('.currency-value')).fontSize) >= 22`,
+        ),
+        "cotação com fonte ampliada para leitura",
+      );
       assert.deepEqual(
         result.weatherChildren,
         ["weather-temperature", "weather-range"],

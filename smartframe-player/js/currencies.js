@@ -6,49 +6,61 @@
     rates = {},
     index = 0,
     paused = false;
-  var symbolsText = { USD: "$", EUR: "€", BTC: "₿" };
-  var formatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+  function visibleCount() {
+    return Math.min(
+      config.displayCount || 2,
+      Math.max(1, Math.floor(list.clientWidth / 190)),
+      config.pairs.length,
+    );
+  }
+  function format(value, currency) {
+    var crypto = currency === "BTC" || currency === "ETH";
+    return (
+      new Intl.NumberFormat(
+        "pt-BR",
+        crypto
+          ? {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 8,
+            }
+          : { style: "currency", currency: currency },
+      ).format(value) + (crypto ? " " + currency : "")
+    );
+  }
   function render() {
     list.textContent = "";
     if (!config || !config.enabled) return;
-    var count = list.clientWidth < 260 ? 1 : 2,
-      symbols = config.symbols;
-    for (var i = 0; i < Math.min(count, symbols.length); i++) {
-      var code = symbols[(index + i) % symbols.length],
-        rate = rates[code],
+    var count = visibleCount(),
+      pairs = config.pairs;
+    for (var i = 0; i < count; i++) {
+      var pair = pairs[(index + i) % pairs.length],
+        rate = rates[pair],
         item = document.createElement("div");
       item.className = "currency-item";
       var label = document.createElement("div"),
-        value = document.createElement("div"),
-        change = document.createElement("div");
+        value = document.createElement("div");
       label.className = "currency-code";
-      label.textContent = symbolsText[code] + " " + code + "/BRL";
+      label.textContent = pair;
       value.className = "currency-value";
-      value.textContent = rate ? formatter.format(rate.value) : "—";
-      change.className = "currency-change";
-      change.textContent = !rate
-        ? "Sem dados"
-        : rate.stale
-          ? "Dados anteriores"
-          : rate.referenceDate
-            ? "BCE · " + rate.referenceDate.split("-").reverse().join("/")
-            : "Coinbase";
-      change.style.color = rate && rate.stale ? "#fbbf24" : "";
+      value.textContent = rate ? format(rate.value, pair.split("/")[1]) : "—";
+      var stale = rate && (rate.stale || Date.now() - Date.parse(rate.updatedAt) >= 30 * 60000);
       item.title = rate
-        ? rate.source + " · consultado em " + new Date(rate.updatedAt).toLocaleString("pt-BR")
-        : "Aguardando atualização do servidor";
+        ? (stale ? "Dados anteriores · " : "") +
+          rate.source +
+          " · consultado em " +
+          new Date(rate.updatedAt).toLocaleString("pt-BR")
+        : "Cotação indisponível";
       item.appendChild(label);
       item.appendChild(value);
-      item.appendChild(change);
       list.appendChild(item);
     }
-    document.getElementById("currencies-status").textContent = "Atualiza a cada 30 min";
   }
   function schedule() {
     clearTimeout(timer);
-    if (!paused && config && config.enabled && config.symbols.length > 1)
+    if (!paused && config && config.enabled)
       timer = setTimeout(function () {
-        index = (index + 1) % config.symbols.length;
+        if (config.pairs.length > visibleCount())
+          index = (index + visibleCount()) % config.pairs.length;
         render();
         schedule();
       }, config.intervalSeconds * 1000);
@@ -64,9 +76,10 @@
     relayout: render,
     setData: function (value) {
       var next = {};
-      ["USD", "EUR", "BTC"].forEach(function (code) {
+      Object.keys(value || {}).forEach(function (code) {
         var rate = value && value[code];
         if (
+          /^[A-Z]{3}\/[A-Z]{3}$/.test(code) &&
           rate &&
           typeof rate.value === "number" &&
           isFinite(rate.value) &&
@@ -76,10 +89,8 @@
         )
           next[code] = rate;
       });
-      if (JSON.stringify(rates) !== JSON.stringify(next)) {
-        rates = next;
-        render();
-      }
+      rates = next;
+      render();
     },
     pause: function () {
       paused = true;

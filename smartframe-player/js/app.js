@@ -8,7 +8,8 @@
     controller = null,
     inFlight = false,
     refreshRequested = false,
-    failures = 0;
+    failures = 0,
+    currenciesPending = false;
   var preview = new URLSearchParams(location.search).get("preview") === "1",
     deviceMatch = location.pathname.match(/^\/player\/([A-Za-z0-9_-]+)$/),
     appliedRevision = "";
@@ -89,6 +90,7 @@
     if (old && old.refreshSeconds !== next.refreshSeconds && !inFlight)
       schedule(next.refreshSeconds * 1000);
     if (input.widgetData && typeof input.widgetData === "object") {
+      currenciesPending = input.widgetData.currenciesPending === true;
       app.weather.setData(input.widgetData.weather);
       app.currencies.setData(input.widgetData.currencies);
     }
@@ -164,7 +166,10 @@
           schedule(
             failures
               ? Math.min(300000, 5000 * Math.pow(2, Math.min(failures - 1, 6)))
-              : config.refreshSeconds * 1000,
+              : config.widgets.currencies.enabled && currenciesPending
+                ? 2000
+                : Math.min(config.refreshSeconds, config.widgets.currencies.enabled ? 1800 : 3600) *
+                  1000,
           );
       }
     }

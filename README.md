@@ -32,7 +32,7 @@ Implementado:
 - Pareamento por código temporário, revogação e confirmação da revisão aplicada.
 - APK Kotlin/WebView com modo imersivo, sincronização a cada 30 segundos, credencial no Keystore, verificação de hash, persistência local e recuperação.
 - Clima por cidade, USD/BRL, EUR/BRL e BTC/USD, com cache, atualização em segundo plano e indicação de dados antigos no modo Foto existente.
-- Dashboard online opcional, com carrossel configurado no servidor e clima e cotações reais em cache de 30 minutos.
+- Dashboard online com carrossel configurado no servidor, clima e pares de moedas configuráveis com cotações indicativas em cache de 30 minutos.
 
 **Ainda não implementado no modo Foto existente:** álbuns e carrossel offline de múltiplas fotos. Também estão pendentes widgets livres com drag-and-drop, layouts independentes por tablet, integrações e agendamentos. O editor atual oferece um layout Foto por conta; não é o editor livre completo da V1. O painel usa contagens reais.
 

@@ -31,10 +31,15 @@ confirmações de revisão.
   ser publicadas. O dispositivo acessa apenas fotos da sua publicação atual.
 - Layout horizontal padrão: **62% fotos / 38% widgets**. Em retrato, a foto fica
   acima dos widgets. A orientação acompanha a tela; não há bloqueio remoto de rotação.
-- Intervalo de fotos e alternância de moedas: 5–3600 s. Polling: 10–3600 s,
-  padrão 15 s. São intervalos independentes.
-- Clima e cotações são consultados pelo servidor, com cache de 30 minutos. Valores
-  anteriores são sinalizados; dados ausentes não são substituídos por valores fictícios.
+- Intervalo de fotos e alternância de moedas: 5–3600 s. Polling do layout: 10–3600 s,
+  padrão 15 s (limitado a 30 min com moedas habilitadas). São intervalos independentes.
+- Clima é consultado pelo servidor com cache de 30 minutos. Cotações indicativas da
+  Coinbase usam cache de **30 minutos**, compartilhado entre dispositivos e prévia.
+  Escolha de 1 a 20 pares (USD, BRL, EUR, GBP, JPY, CAD, AUD, CHF, BTC e ETH), como
+  USD/BRL ou BTC/USD, e até quatro cotações por vez. O cartão se adapta ao espaço e
+  alterna os demais pares. O cartão mostra apenas o par e o valor centralizados; fonte, horário e
+  indicação de dados anteriores ficam na dica ao passar o mouse. Sem cotação, mostra
+  um traço, nunca valores fictícios. Não é um feed financeiro por segundo.
 - Carrossel usa dois elementos de imagem, sem pré-carregar o álbum inteiro.
 - A configuração aplicada é confirmada na consulta seguinte por `appliedRevision`;
   isso confirma aplicação do layout, não prova que todos os pixels foram exibidos.

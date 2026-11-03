@@ -106,7 +106,8 @@ function setup(
       return Promise.resolve({ ok: true, json: async () => responseData });
     },
     AbortController,
-    setTimeout: (fn) => {
+    setTimeout: (fn, delay) => {
+      fn.delay = delay;
       timers.push(fn);
       return timers.length;
     },
@@ -159,4 +160,28 @@ test("malformed server payload is not acknowledged", async () => {
   h.listeners.online();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(h.fetches[1][0], "/api/player/config?deviceId=id");
+});
+
+test("first uncached quotes are polled soon without waiting for the layout interval", async () => {
+  const h = setup(false, {
+    layout: "photo-dashboard",
+    revision: "online:quotes",
+    refreshSeconds: 3600,
+    widgets: { photos: { items: [] } },
+    widgetData: { currenciesPending: true, currencies: {} },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.timers.at(-1).delay, 2000);
+});
+
+test("quote polling is capped at thirty minutes even when layout polling is slower", async () => {
+  const h = setup(false, {
+    layout: "photo-dashboard",
+    revision: "online:quotes",
+    refreshSeconds: 3600,
+    widgets: { photos: { items: [] } },
+    widgetData: { currenciesPending: false, currencies: {} },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.timers.at(-1).delay, 1800000);
 });

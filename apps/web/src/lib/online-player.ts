@@ -6,6 +6,7 @@ import { FrameError } from "@smartframe/frames";
 import sharp from "sharp";
 import type { Metadata } from "sharp";
 import { z } from "zod";
+import { onlineCurrenciesSchema, defaultOnlineDashboard } from "@smartframe/contracts";
 
 const seconds = (min: number, max: number, value: number) =>
   z.number().int().min(min).max(max).default(value);
@@ -51,19 +52,7 @@ const configSchema = z
           })
           .strict()
           .default({ enabled: true, city: "Camboriú" }),
-        currencies: z
-          .object({
-            enabled: z.boolean().default(true),
-            symbols: z
-              .array(z.enum(["USD", "EUR", "BTC"]))
-              .min(1)
-              .max(3)
-              .refine((items) => new Set(items).size === items.length)
-              .default(["USD", "EUR", "BTC"]),
-            intervalSeconds: seconds(5, 3600, 10),
-          })
-          .strict()
-          .default({ enabled: true, symbols: ["USD", "EUR", "BTC"], intervalSeconds: 10 }),
+        currencies: onlineCurrenciesSchema.prefault({}),
         calendar: z
           .object({ enabled: z.boolean().default(true), highlightToday: z.boolean().default(true) })
           .strict()
@@ -74,7 +63,7 @@ const configSchema = z
         photos: { enabled: true, intervalSeconds: 15, fit: "cover" },
         clock: { enabled: true, format: "24h", showDate: true, size: "normal", color: "" },
         weather: { enabled: true, city: "Camboriú" },
-        currencies: { enabled: true, symbols: ["USD", "EUR", "BTC"], intervalSeconds: 10 },
+        currencies: defaultOnlineDashboard.widgets.currencies,
         calendar: { enabled: true, highlightToday: true },
       }),
   })

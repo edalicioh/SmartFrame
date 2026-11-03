@@ -6,6 +6,12 @@ export { widgetDataSchema, defaultWidgetSettings } from "./photo-frame";
 export type { WidgetData } from "./photo-frame";
 export { onlineDashboardSchema, defaultOnlineDashboard } from "./online-dashboard";
 export type { OnlineDashboard, OnlineDashboardState } from "./online-dashboard";
+export {
+  currencyCodes,
+  defaultCurrencyPairs,
+  currencyPairSchema,
+  onlineCurrenciesSchema,
+} from "./currencies";
 
 export const carouselSchema = z
   .object({

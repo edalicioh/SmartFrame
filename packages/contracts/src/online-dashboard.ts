@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { onlineCurrenciesSchema } from "./currencies";
 
 const color = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
 const interval = (min: number, fallback: number) =>
@@ -74,19 +75,7 @@ export const onlineDashboardSchema = z
           })
           .strict()
           .prefault({}),
-        currencies: z
-          .object({
-            enabled: z.boolean().default(true),
-            symbols: z
-              .array(z.enum(["USD", "EUR", "BTC"]))
-              .min(1)
-              .max(3)
-              .refine((symbols) => new Set(symbols).size === symbols.length)
-              .default(["USD", "EUR", "BTC"]),
-            intervalSeconds: interval(5, 10),
-          })
-          .strict()
-          .prefault({}),
+        currencies: onlineCurrenciesSchema.prefault({}),
         calendar: z
           .object({
             enabled: z.boolean().default(true),

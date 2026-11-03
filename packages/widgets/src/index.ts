@@ -4,10 +4,14 @@ import {
   widgetDataSchema,
   type PhotoFrame,
   type WidgetData,
+  currencyCodes,
+  currencyPairSchema,
+  defaultCurrencyPairs,
 } from "@smartframe/contracts";
 import type { PrismaClient } from "@smartframe/database";
 
 export const WIDGET_REFRESH_SECONDS = 30 * 60;
+export const CURRENCY_REFRESH_SECONDS = 30 * 60;
 const TTL = WIDGET_REFRESH_SECONDS * 1000;
 const STALE_AFTER = 30 * 60_000;
 const weatherPayload = z.object({
@@ -97,8 +101,9 @@ async function externalJson(url: URL | string) {
 async function refresh(
   db: PrismaClient,
   key: string,
-  load: () => Promise<Record<string, string | number>>,
+  load: () => Promise<Record<string, string | number | Record<string, number>>>,
   force: boolean,
+  ttl = TTL,
 ) {
   const cached = await db.widgetSnapshot.findUnique({ where: { key } });
   if (!force && cached && cached.expiresAt > new Date()) return;
@@ -108,13 +113,13 @@ async function refresh(
     const data = {
       payload,
       updatedAt,
-      expiresAt: new Date(updatedAt.getTime() + TTL),
+      expiresAt: new Date(updatedAt.getTime() + ttl),
       failedAt: null,
     };
     await db.widgetSnapshot.upsert({ where: { key }, create: { key, ...data }, update: data });
   } catch {
     const failedAt = new Date();
-    const expiresAt = new Date(failedAt.getTime() + 120_000);
+    const expiresAt = new Date(failedAt.getTime() + Math.min(ttl, 120_000));
     await db.widgetSnapshot.upsert({
       where: { key },
       create: { key, payload: {}, updatedAt: new Date(0), failedAt, expiresAt },
@@ -211,68 +216,54 @@ export async function cachedWidgetData(db: PrismaClient, frame: PhotoFrame): Pro
 
 type OnlineSettings = {
   weather: { enabled: boolean; city: string };
-  currencies: { enabled: boolean };
+  currencies: { enabled: boolean; pairs?: string[] };
 };
 const onlineWeatherKey = (city: string) =>
   `online:weather:${city.trim().toLocaleLowerCase("pt-BR")}`;
 const onlineRefreshes = new WeakMap<PrismaClient, Map<string, Promise<void>>>();
-const btcBrlPayload = z.object({ btcBrl: z.number().positive().max(1e10) });
+const spotPayload = z.object({ rates: z.record(z.string(), z.number().positive().max(1e20)) });
+const spotKey = (base: string) => `online:currencies:spot:${base}`;
+const selectedPairs = (settings: OnlineSettings) =>
+  settings.currencies.enabled
+    ? [...new Set(settings.currencies.pairs ?? defaultCurrencyPairs)]
+        .filter((pair) => currencyPairSchema.safeParse(pair).success)
+        .slice(0, 20)
+    : [];
 
-/** Persisted cache, shared by devices; never run a provider request per photo/config poll. */
-export function refreshOnlineWidgets(db: PrismaClient, settings: OnlineSettings): Promise<void> {
+async function loadSpot(base: string) {
+  const url = new URL("https://api.coinbase.com/v2/exchange-rates");
+  url.searchParams.set("currency", base);
+  const result = z
+    .object({
+      data: z.object({ currency: z.literal(base), rates: z.record(z.string(), z.string()) }),
+    })
+    .parse(await externalJson(url));
+  const rates: Record<string, number> = {};
+  for (const code of currencyCodes) {
+    if (result.data.rates[code] === undefined) continue;
+    const value = Number(result.data.rates[code]);
+    if (!Number.isFinite(value) || value <= 0 || value > 1e20) throw new Error("Cotação inválida.");
+    rates[code] = value;
+  }
+  if (!Object.keys(rates).length) throw new Error("Cotações indisponíveis.");
+  return spotPayload.parse({ rates });
+}
+
+/** Single flight per source, even when different devices select overlapping pairs. */
+function refreshOnlineSource(
+  db: PrismaClient,
+  key: string,
+  load: () => Promise<Record<string, string | number | Record<string, number>>>,
+  ttl = TTL,
+): Promise<void> {
   let jobs = onlineRefreshes.get(db);
   if (!jobs) {
     jobs = new Map();
     onlineRefreshes.set(db, jobs);
   }
-  const key = JSON.stringify([
-    settings.weather.enabled,
-    settings.weather.city,
-    settings.currencies.enabled,
-  ]);
   const existing = jobs.get(key);
   if (existing) return existing;
-  const job = (async () => {
-    const tasks: Promise<void>[] = [];
-    if (settings.weather.enabled)
-      tasks.push(
-        refresh(
-          db,
-          onlineWeatherKey(settings.weather.city),
-          async () => {
-            const cities = await searchCities(settings.weather.city);
-            const city =
-              cities.find((item) => /^(Brasil|Brazil)$/i.test(item.country ?? "")) ?? cities[0];
-            if (!city) throw new Error("Cidade não encontrada.");
-            return loadWeather(city.latitude, city.longitude, city.timezone ?? "America/Sao_Paulo");
-          },
-          false,
-        ),
-      );
-    if (settings.currencies.enabled) {
-      tasks.push(refresh(db, "online:currencies:fiat", loadFiat, false));
-      tasks.push(
-        refresh(
-          db,
-          "online:currencies:btc-brl",
-          async () => {
-            const result = z
-              .object({
-                data: z.object({
-                  amount: z.string(),
-                  base: z.literal("BTC"),
-                  currency: z.literal("BRL"),
-                }),
-              })
-              .parse(await externalJson("https://api.coinbase.com/v2/prices/BTC-BRL/spot"));
-            return btcBrlPayload.parse({ btcBrl: Number(result.data.amount) });
-          },
-          false,
-        ),
-      );
-    }
-    await Promise.all(tasks);
-  })();
+  const job = refresh(db, key, load, false, ttl);
   jobs.set(key, job);
   void job
     .finally(() => {
@@ -282,43 +273,79 @@ export function refreshOnlineWidgets(db: PrismaClient, settings: OnlineSettings)
   return job;
 }
 
+/** Persisted cache shared by devices; currencies refresh independently of weather. */
+export async function refreshOnlineWidgets(
+  db: PrismaClient,
+  settings: OnlineSettings,
+): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  if (settings.weather.enabled)
+    tasks.push(
+      refreshOnlineSource(db, onlineWeatherKey(settings.weather.city), async () => {
+        const cities = await searchCities(settings.weather.city);
+        const city =
+          cities.find((item) => /^(Brasil|Brazil)$/i.test(item.country ?? "")) ?? cities[0];
+        if (!city) throw new Error("Cidade não encontrada.");
+        return loadWeather(city.latitude, city.longitude, city.timezone ?? "America/Sao_Paulo");
+      }),
+    );
+  for (const base of new Set(selectedPairs(settings).map((pair) => pair.split("/")[0])))
+    tasks.push(
+      refreshOnlineSource(db, spotKey(base), () => loadSpot(base), CURRENCY_REFRESH_SECONDS * 1000),
+    );
+  await Promise.all(tasks);
+}
+
 export async function onlineWidgetData(db: PrismaClient, settings: OnlineSettings) {
-  const [weather, fiat, btc] = await Promise.all([
+  const pairs = selectedPairs(settings);
+  const bases = [...new Set(pairs.map((pair) => pair.split("/")[0]))];
+  const [weather, records] = await Promise.all([
     settings.weather.enabled
       ? db.widgetSnapshot.findUnique({ where: { key: onlineWeatherKey(settings.weather.city) } })
       : null,
-    settings.currencies.enabled
-      ? db.widgetSnapshot.findUnique({ where: { key: "online:currencies:fiat" } })
-      : null,
-    settings.currencies.enabled
-      ? db.widgetSnapshot.findUnique({ where: { key: "online:currencies:btc-brl" } })
-      : null,
+    Promise.all(
+      bases.map((base) => db.widgetSnapshot.findUnique({ where: { key: spotKey(base) } })),
+    ),
   ]);
   // Providers may take longer than the tablet's HTTP deadline. Return the last cache
   // immediately and refresh in the background; the next normal poll receives new data.
   void refreshOnlineWidgets(db, settings).catch(() => {
     console.warn("SmartFrame: atualização dos widgets online indisponível.");
   });
-  const old = (record: { updatedAt: Date; failedAt: Date | null }) =>
-    Date.now() - record.updatedAt.getTime() >= TTL ||
+  const old = (record: { updatedAt: Date; failedAt: Date | null }, ttl = TTL) =>
+    Date.now() - record.updatedAt.getTime() >= ttl ||
     (!!record.failedAt && record.failedAt >= record.updatedAt);
   const parsedWeather = weatherPayload.safeParse(weather?.payload);
-  const rates = fiatPayload.safeParse(fiat?.payload);
-  const crypto = btcBrlPayload.safeParse(btc?.payload);
-  const quote = (
-    value: number,
-    record: NonNullable<typeof fiat>,
-    source: string,
-    referenceDate: string | null = null,
-  ) => ({
-    value,
-    source,
-    referenceDate,
-    updatedAt: record.updatedAt.toISOString(),
-    stale: old(record),
-  });
+  const currencies: Record<
+    string,
+    {
+      value: number;
+      source: string;
+      updatedAt: string;
+      stale: boolean;
+    } | null
+  > = {};
+  for (const pair of pairs) {
+    const [base, target] = pair.split("/");
+    const record = records[bases.indexOf(base)];
+    const parsed = spotPayload.safeParse(record?.payload);
+    const value = parsed.success ? parsed.data.rates[target] : null;
+    currencies[pair] =
+      record && value
+        ? {
+            value,
+            source: "Coinbase",
+            updatedAt: record.updatedAt.toISOString(),
+            stale: old(record, CURRENCY_REFRESH_SECONDS * 1000),
+          }
+        : null;
+  }
   return {
     refreshSeconds: WIDGET_REFRESH_SECONDS,
+    currencyRefreshSeconds: CURRENCY_REFRESH_SECONDS,
+    currenciesPending: records.some(
+      (record) => !record || record.expiresAt.getTime() <= Date.now(),
+    ),
     weather:
       weather && parsedWeather.success
         ? {
@@ -329,17 +356,7 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
             stale: old(weather),
           }
         : null,
-    currencies: {
-      USD:
-        fiat && rates.success
-          ? quote(rates.data.usdBrl, fiat, "Frankfurter / BCE", rates.data.date)
-          : null,
-      EUR:
-        fiat && rates.success
-          ? quote(rates.data.eurBrl, fiat, "Frankfurter / BCE", rates.data.date)
-          : null,
-      BTC: btc && crypto.success ? quote(crypto.data.btcBrl, btc, "Coinbase") : null,
-    },
+    currencies,
   };
 }
 

@@ -18,6 +18,7 @@ import {
   PUT as putOnlineFrame,
 } from "../apps/web/src/app/api/online-frame/route";
 import { POST as publishOnlineFrame } from "../apps/web/src/app/api/online-frame/publish/route";
+import { POST as previewWidgets } from "../apps/web/src/app/api/online-frame/widgets/route";
 
 const db = getDatabase();
 const userId = randomUUID();
@@ -148,4 +149,25 @@ it("rejects stale draft writes and impossible media selections", async () => {
     }),
   );
   expect(rejected.status).toBe(400);
+});
+
+it("preview widgets require a panel session, same origin and validated pairs", async () => {
+  const request = (config: unknown, origin = "https://example.test") =>
+    new Request("https://example.test/api/online-frame/widgets", {
+      method: "POST",
+      headers: { origin, "content-type": "application/json" },
+      body: JSON.stringify(config),
+    });
+  expect((await previewWidgets(request({}, "https://other.test"))).status).toBe(403);
+  panelAccess.mockResolvedValueOnce(null);
+  expect((await previewWidgets(request({}))).status).toBe(401);
+  expect(
+    (await previewWidgets(request({ widgets: { currencies: { pairs: ["BAD/USD"] } } }))).status,
+  ).toBe(400);
+  const response = await previewWidgets(
+    request({ widgets: { currencies: { pairs: ["BTC/USD"] } } }),
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect(await response.json()).toHaveProperty("currencies");
 });
