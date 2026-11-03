@@ -22,7 +22,7 @@ class DownloadDeadlineTest {
 
     @Test fun dataRoutesExpireBeforeTheirJavascriptWatchdogs() {
         assertTrue(onlineDownloadTimeout("/api/player/config") < 10_000L)
-        assertTrue(onlineDownloadTimeout("/api/player/online-photos/photo") < 8_000L)
+        assertTrue(onlineDownloadTimeout("/api/player/online-media/photo") < 8_000L)
         assertEquals(30_000L, onlineDownloadTimeout("/player-dashboard/js/app.js"))
     }
 

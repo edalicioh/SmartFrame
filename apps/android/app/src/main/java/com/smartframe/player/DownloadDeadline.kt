@@ -27,6 +27,6 @@ internal object DownloadDeadline {
 /** Data requests must finish before the corresponding JavaScript watchdog expires. */
 internal fun onlineDownloadTimeout(path: String): Long = when {
     path == "/api/player/config" -> 9_000L
-    path.startsWith("/api/player/online-photos/") -> 7_500L
+    path.startsWith("/api/player/online-media/") -> 7_500L
     else -> 30_000L
 }

@@ -13,12 +13,14 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.*
+import android.webkit.ServiceWorkerController
 import android.widget.*
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class MainActivity : Activity() {
     private lateinit var credentials: DeviceCredentials
@@ -31,7 +33,9 @@ class MainActivity : Activity() {
     @Volatile private var closed = false
     private var retryMs = 2_000L
     private var retry: Runnable? = null
-    private val watchdog = Runnable { if (resumed && credentials.read() != null) openDashboard() }
+    private var load: DashboardLoad? = null
+    private var watchdog: Runnable? = null
+    private var stable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +45,9 @@ class MainActivity : Activity() {
         statusView = TextView(this).apply { textSize = 18f; gravity = android.view.Gravity.CENTER; setPadding(32, 32, 32, 32) }
         root.addView(statusView, FrameLayout.LayoutParams(-1, -1))
         statusView.setOnClickListener { showConnection() }
+        val menu = Button(this).apply { text = "⚙"; contentDescription = "Configuração da conexão"; setOnClickListener { showConnection() } }
+        root.addView(menu, FrameLayout.LayoutParams(56, 56, android.view.Gravity.TOP or android.view.Gravity.END))
+        ServiceWorkerController.getInstance().serviceWorkerWebSettings.blockNetworkLoads = true
         setContentView(root)
         showStatus("Conecte este tablet pelo código do painel.")
         if (credentials.read() != null) openDashboard()
@@ -54,11 +61,13 @@ class MainActivity : Activity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun openDashboard() {
-        val c = credentials.read() ?: return showStatus("Dispositivo desconectado. Toque para conectar novamente.")
+        val stored = credentials.read() ?: return showStatus("Dispositivo desconectado. Toque para conectar novamente.")
+        val c = try { stored.copy(server = PairingClient.normalizeServer(stored.server, BuildConfig.DEBUG)) } catch (_: Exception) { credentials.clear(); return showStatus("Endereço salvo inválido. Conecte novamente.") }
         if (!resumed || closed) return
-        retry?.let(handler::removeCallbacks); retry = null
+        cancelTimers()
         webView?.let { root.removeView(it); it.stopLoading(); it.destroy() }
         val client = OnlinePlayer(c.server, c.token, c.deviceId)
+        val dashboardLoad = DashboardLoad(); load = dashboardLoad
         val view = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.allowFileAccess = false; settings.allowContentAccess = false
@@ -67,8 +76,16 @@ class MainActivity : Activity() {
             settings.safeBrowsingEnabled = true
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest) = true
-                override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse = client.intercept(request)
-                override fun onPageFinished(v: WebView, url: String) { if (v === webView) { handler.removeCallbacks(watchdog); retryMs = 2_000L } }
+                override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse {
+                    val path = request.url.encodedPath.orEmpty()
+                    val tracked = v === webView && client.allowed(request) && (request.isForMainFrame || DashboardLoad.critical(path))
+                    if (tracked) dashboardLoad.begin()
+                    return client.intercept(request, { message, _ -> handler.post { if (v === webView && credentials.read()?.deviceId == c.deviceId) scheduleRetry(message) } }, { success ->
+                        if (tracked) { dashboardLoad.complete(path, request.isForMainFrame, success); handler.post { if (v === webView && load === dashboardLoad) updateLoad(v, dashboardLoad) } }
+                    })
+                }
+                override fun onPageFinished(v: WebView, url: String) { if (v === webView && client.dashboardFinished(url)) { dashboardLoad.finish(); updateLoad(v, dashboardLoad) } }
+                override fun onReceivedHttpError(v: WebView, request: WebResourceRequest, error: WebResourceResponse) { if (v === webView && (request.isForMainFrame || DashboardLoad.critical(request.url.encodedPath.orEmpty()))) scheduleRetry("Dashboard ou recurso essencial indisponível (HTTP ${error.statusCode}). Tentando novamente…") }
                 override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
                     if (request.isForMainFrame) scheduleRetry("Falha na conexão com o dashboard. Tentando novamente…")
                 }
@@ -77,7 +94,18 @@ class MainActivity : Activity() {
         webView = view
         root.addView(view, 0, FrameLayout.LayoutParams(-1, -1)); statusView.visibility = View.GONE
         view.loadUrl(client.dashboardUrl)
-        handler.removeCallbacks(watchdog); handler.postDelayed(watchdog, 60_000L)
+        armWatchdog(view, dashboardLoad)
+    }
+
+    private fun cancelTimers() { retry?.let(handler::removeCallbacks); retry = null; watchdog?.let(handler::removeCallbacks); watchdog = null; stable?.let(handler::removeCallbacks); stable = null }
+    private fun armWatchdog(view: WebView, state: DashboardLoad) { watchdog?.let(handler::removeCallbacks); watchdog = Runnable { watchdog = null; if (resumed && view === webView && load === state && state.timeout()) updateLoad(view, state) }; handler.postDelayed(watchdog!!, 60_000L) }
+    private fun updateLoad(view: WebView, state: DashboardLoad) {
+        if (!resumed || view !== webView || load !== state) return
+        when (state.state()) {
+            DashboardLoad.State.LOADING -> if (watchdog == null) armWatchdog(view, state)
+            DashboardLoad.State.FAILED -> scheduleRetry("Falha ao carregar recursos essenciais do dashboard. Tentando novamente…")
+            DashboardLoad.State.SUCCEEDED -> { watchdog?.let(handler::removeCallbacks); watchdog = null; if (stable == null) { stable = Runnable { if (resumed && view === webView && load === state && state.state() == DashboardLoad.State.SUCCEEDED) retryMs = 2_000L; stable = null }; handler.postDelayed(stable!!, 60_000L) } }
+        }
     }
 
     private fun scheduleRetry(message: String) {
@@ -98,7 +126,7 @@ class MainActivity : Activity() {
         val name = field("Nome deste tablet", Build.MODEL, InputType.TYPE_CLASS_TEXT)
         AlertDialog.Builder(this).setTitle("Conectar ao SmartFrame").setView(box)
             .setNegativeButton("Fechar", null).setPositiveButton("Conectar", null)
-            .apply { if (current != null) setNeutralButton("Desconectar") { _, _ -> credentials.clear(); showStatus("Credencial revogada ou desconectada. Conecte novamente pelo painel.") } }
+            .apply { if (current != null) setNeutralButton("Desconectar") { _, _ -> credentials.clear(); cancelTimers(); webView?.let { root.removeView(it); it.stopLoading(); it.destroy() }; webView = null; load = null; showStatus("Credencial revogada ou desconectada. Conecte novamente pelo painel.") } }
             .create().also { dialog ->
                 dialog.setOnShowListener {
                     dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -119,12 +147,12 @@ class MainActivity : Activity() {
             }
     }
 
-    override fun onResume() { super.onResume(); resumed = true; if (credentials.read() != null && webView == null) openDashboard() }
-    override fun onPause() { resumed = false; retry?.let(handler::removeCallbacks); retry = null; super.onPause() }
+    override fun onResume() { super.onResume(); resumed = true; webView?.onResume(); if (credentials.read() != null) { if (webView == null) openDashboard() else load?.let { updateLoad(webView!!, it) } } }
+    override fun onPause() { resumed = false; cancelTimers(); webView?.onPause(); super.onPause() }
     override fun onBackPressed() { showConnection() }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) hideBars() }
-    private fun hideBars() { if (Build.VERSION.SDK_INT >= 30) window.insetsController?.hide(WindowInsets.Type.systemBars()) else @Suppress("DEPRECATION") run { window.decorView.systemUiVisibility = 5894 or 512 or 1024 } }
-    override fun onDestroy() { closed = true; handler.removeCallbacksAndMessages(null); executor.shutdownNow(); webView?.destroy(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
+    private fun hideBars() { if (Build.VERSION.SDK_INT >= 30) window.insetsController?.apply { hide(WindowInsets.Type.systemBars()); systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else @Suppress("DEPRECATION") run { window.decorView.systemUiVisibility = 5894 or 512 or 1024 } }
+    override fun onDestroy() { closed = true; cancelTimers(); handler.removeCallbacksAndMessages(null); executor.shutdownNow(); webView?.destroy(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
 }
 
 internal object PairingClient {
@@ -136,16 +164,22 @@ internal object PairingClient {
     }
     fun pair(server: String, code: String, name: String): DeviceConnection {
         val conn = URL("$server/api/player/pair").openConnection() as HttpURLConnection
-        try {
+        val active = AtomicReference<HttpURLConnection?>(conn)
+        try { return DownloadDeadline.run(20_000, { active.getAndSet(null)?.disconnect() }) {
             conn.connectTimeout = 10_000; conn.readTimeout = 15_000; conn.instanceFollowRedirects = false
             conn.requestMethod = "POST"; conn.doOutput = true; conn.setRequestProperty("Content-Type", "application/json")
             conn.outputStream.use { it.write(JSONObject().put("code", code).put("name", name).toString().toByteArray()) }
             check(conn.responseCode == 200)
-            check(conn.contentLengthLong in 0..32768)
-            val bytes = conn.inputStream.use { it.readBytes() }; require(bytes.size <= 32768)
+            require(conn.contentType?.substringBefore(';')?.trim()?.equals("application/json", true) == true)
+            require(conn.contentLengthLong <= 32768)
+            val bytes = conn.inputStream.use { input ->
+                val out = java.io.ByteArrayOutputStream(); val buf = ByteArray(4096)
+                while (true) { val n = input.read(buf); if (n < 0) break; require(out.size() + n <= 32768); out.write(buf, 0, n) }
+                out.toByteArray()
+            }
             val json = JSONObject(String(bytes, Charsets.UTF_8)); val id = json.getString("deviceId"); val token = json.getString("token")
             require(id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && token.matches(Regex("[A-Za-z0-9_-]{43}")))
-            return DeviceConnection(server, id, token)
-        } finally { conn.disconnect() }
+            DeviceConnection(server, id, token)
+        } } finally { active.getAndSet(null)?.disconnect() }
     }
 }

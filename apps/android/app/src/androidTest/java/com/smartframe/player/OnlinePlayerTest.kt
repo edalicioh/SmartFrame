@@ -66,14 +66,14 @@ class OnlinePlayerTest {
     @Test fun testOnlySameOriginAndContract() {
         assertTrue(player.allowed(request("https://frame.example:8443/player-dashboard/js/app.js")))
         assertTrue(player.allowed(request("https://frame.example:8443/api/player/config")))
-        assertTrue(player.allowed(request("https://frame.example:8443/api/player/online-photos/YWJj?v=${"a".repeat(64)}")))
+        assertTrue(player.allowed(request("https://frame.example:8443/api/player/online-media/YWJj?v=${"a".repeat(64)}")))
         for (url in listOf(
             "http://frame.example:8443/api/player/config",
             "https://frame.example/api/player/config",
             "https://frame.example.evil:8443/api/player/config",
             "https://user@frame.example:8443/api/player/config",
             "https://frame.example:8443/api/player/manifest",
-            "https://frame.example:8443/api/player/online-photos/x?token=secret",
+            "https://frame.example:8443/api/player/online-media/x?token=secret",
             "https://frame.example:8443/player-dashboard/../other.js",
             "https://frame.example:8443/player-dashboard/%2e%2e/other.js",
             "https://frame.example:8443/player-dashboard/nested.html"
@@ -111,6 +111,6 @@ class OnlinePlayerTest {
         check("/player-dashboard/js/config.js", 200, "application/javascript", "// ok", null, true)
         check("/player-dashboard/css/base.css", 200, "text/css", "body {}", null, true)
         check("/api/player/config", 403, "application/json", "{}", false, false)
-        check("/api/player/online-photos/abc", 404, "image/png", "", null, false)
+        check("/api/player/online-media/abc", 404, "image/png", "", null, false)
     }
 }

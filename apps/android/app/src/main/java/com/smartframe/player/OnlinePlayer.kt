@@ -28,23 +28,29 @@ class OnlinePlayer(private val server: String, private val token: String, privat
         // Não aceitar codificações, barras invertidas ou segmentos relativos ambíguos.
         if (!path.matches(Regex("/[A-Za-z0-9_./-]*")) || path.split('/').any { it == "." || it == ".." }) return false
         if (request.isForMainFrame) return url.encodedQuery == null && path == "/player/$deviceId"
-        if (path == "/api/player/config") return validConfigQuery(url.encodedQuery)
+        if (path == "/api/player/config") return ConfigQuery.valid(url.encodedQuery, deviceId)
         if (photoPath(path)) return url.encodedQuery?.matches(Regex("v=[a-f0-9]{64}")) == true
         if (url.encodedQuery != null) return false
         return path.startsWith("/player-dashboard/") && path != "/player-dashboard/" && !path.endsWith(".html")
     }
 
-    private fun validConfigQuery(query: String?): Boolean {
+    internal fun validConfigQuery(query: String?): Boolean = ConfigQuery.valid(query, deviceId)
+
+    internal object ConfigQuery {
+      fun valid(query: String?, deviceId: String): Boolean {
         if (query == null) return true
+        if (query.length > 180) return false
         val parts = query.split('&')
-        if (parts.size !in 1..2 || parts.toSet().size != parts.size) return false
+        val keys = parts.map { it.substringBefore('=') }
+        if (parts.size !in 1..2 || keys.toSet().size != keys.size || parts.any { '=' !in it }) return false
         return parts.all { part ->
             when {
                 part.startsWith("deviceId=") -> part.substringAfter('=').matches(Regex("[A-Za-z0-9_-]{1,128}")) && part.substringAfter('=') == deviceId
-                part.startsWith("appliedRevision=") -> part.substringAfter('=').matches(Regex("online%3A[A-Za-z0-9_-]{1,128}"))
+                part.startsWith("appliedRevision=") -> part.substringAfter('=').matches(Regex("online%3[Aa][A-Za-z0-9_-]{1,128}"))
                 else -> false
             }
         }
+      }
     }
 
     private fun effectivePort(uri: Uri): Int = if (uri.port != -1) uri.port else if (uri.scheme == "https") 443 else 80
@@ -150,6 +156,7 @@ class OnlinePlayer(private val server: String, private val token: String, privat
         }
     }
 
+    internal fun forbiddenResponse() = forbidden()
     private fun forbidden() = WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden", mapOf("Cache-Control" to "no-store"), ByteArrayInputStream(ByteArray(0)))
 }
 
