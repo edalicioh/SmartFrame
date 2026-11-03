@@ -1,6 +1,8 @@
 package com.smartframe.player
 
 import java.util.concurrent.Callable
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -10,7 +12,13 @@ internal object DownloadDeadline {
     private val workers = ThreadPoolExecutor(0, 16, 30, TimeUnit.SECONDS, SynchronousQueue(), { task ->
         Thread(task, "dashboard-download").apply { isDaemon = true }
     })
+    // Disconnect can block in platform networking code. Never run cancellation cleanup on
+    // the waiting/caller thread; both worker count and queued cleanup are deliberately bounded.
+    private val cleanup = ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS, ArrayBlockingQueue(32), { task ->
+        Thread(task, "dashboard-download-cleanup").apply { isDaemon = true }
+    })
 
+    /** onCancel is invoked asynchronously after a timeout; it must be safe to run later. */
     fun <T> run(timeoutMillis: Long, onCancel: () -> Unit = {}, block: () -> T): T {
         val future = workers.submit(Callable { block() })
         try {
@@ -18,7 +26,10 @@ internal object DownloadDeadline {
         } finally {
             if (!future.isDone) {
                 future.cancel(true)
-                onCancel()
+                try { cleanup.execute(onCancel) } catch (_: RejectedExecutionException) {
+                    // Cleanup is best-effort if its bounded queue is saturated; the worker
+                    // interruption above still happens synchronously with the deadline.
+                }
             }
         }
     }

@@ -37,12 +37,12 @@ class DownloadDeadlineTest {
                             val input = socket.getInputStream().bufferedReader()
                             while (!input.readLine().isNullOrEmpty()) { }
                             val out = socket.getOutputStream()
-                            val headers = "HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n"
+                            val headers = "HTTP/1.1 200 OK\r\nContent-Length: 200\r\nConnection: close\r\n\r\n"
                             if (slowHeaders) {
                                 for (byte in headers.toByteArray()) { out.write(byte.toInt()); out.flush(); Thread.sleep(30) }
                             } else {
                                 out.write(headers.toByteArray()); out.flush()
-                                repeat(1000) { out.write(65); out.flush(); Thread.sleep(30) }
+                                repeat(200) { out.write(65); out.flush(); Thread.sleep(30) }
                             }
                         }
                     } catch (_: Exception) { /* Cliente encerrou a conexão. */ }
@@ -50,10 +50,10 @@ class DownloadDeadlineTest {
                 val start = System.nanoTime()
                 val connection = AtomicReference<HttpURLConnection?>()
                 val finished = CountDownLatch(1)
-                var cancelled = false
+                val cancelled = CountDownLatch(1)
                 try {
                     DownloadDeadline.run(500, onCancel = {
-                        cancelled = true
+                        cancelled.countDown()
                         connection.get()?.disconnect()
                     }) {
                         val client = URL("http://127.0.0.1:${server.localPort}/").openConnection() as HttpURLConnection
@@ -66,13 +66,33 @@ class DownloadDeadlineTest {
                     }
                     throw AssertionError("Download deveria expirar")
                 } catch (_: TimeoutException) { }
-                assertTrue(connected.await(1, TimeUnit.SECONDS))
                 assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) < 2500)
-                assertTrue(cancelled)
+                assertTrue(connected.await(1, TimeUnit.SECONDS))
+                assertTrue(cancelled.await(2, TimeUnit.SECONDS))
                 assertTrue(finished.await(2, TimeUnit.SECONDS))
                 worker.interrupt()
                 worker.join(2000)
             }
+        }
+    }
+
+    @Test fun blockingCancellationCleanupDoesNotExtendCallerDeadline() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val start = System.nanoTime()
+        try {
+            DownloadDeadline.run(150, onCancel = { entered.countDown(); release.await() }) {
+                Thread.sleep(TimeUnit.SECONDS.toMillis(5))
+                "unexpected"
+            }
+            throw AssertionError("Download should time out")
+        } catch (_: TimeoutException) { }
+        val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)
+        try {
+            assertTrue("deadline unexpectedly extended: ${elapsed}ms", elapsed < 1000)
+            assertTrue("cleanup callback did not start", entered.await(1, TimeUnit.SECONDS))
+        } finally {
+            release.countDown()
         }
     }
 }
