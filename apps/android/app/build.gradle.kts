@@ -5,11 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val syncPlayerAssets by tasks.registering(Sync::class) {
-    from(rootProject.layout.projectDirectory.dir("../../packages/player/src"))
-    into(layout.buildDirectory.dir("generated/playerAssets/player"))
-}
-
 android {
     namespace = "com.smartframe.player"
     compileSdk = 36
@@ -18,8 +13,8 @@ android {
         applicationId = "com.smartframe.player"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -28,12 +23,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { buildConfig = true }
-    sourceSets.getByName("main").assets.setSrcDirs(listOf(layout.buildDirectory.dir("generated/playerAssets")))
 }
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
-
-tasks.named("preBuild").configure { dependsOn(syncPlayerAssets) }
 
 dependencies {
     implementation("androidx.webkit:webkit:1.14.0")

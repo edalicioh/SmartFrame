@@ -16,7 +16,7 @@ import java.util.zip.CRC32
 
 @RunWith(AndroidJUnit4::class)
 class OnlinePlayerTest {
-    private val player = OnlinePlayer("https://frame.example:8443", "private-token")
+    private val player = OnlinePlayer("https://frame.example:8443", "private-token", "device-1")
 
     private fun request(address: String, main: Boolean = false, method: String = "GET") = object : WebResourceRequest {
         override fun getUrl() = Uri.parse(address)
@@ -94,7 +94,7 @@ class OnlinePlayerTest {
                         socket.getOutputStream().apply { write(headers.toByteArray(Charsets.US_ASCII)); write(bytes); flush() }
                     }
                 }
-                val local = OnlinePlayer("http://127.0.0.1:${server.localPort}", "private-token")
+                val local = OnlinePlayer("http://127.0.0.1:${server.localPort}", "private-token", "device-1")
                 val failures = mutableListOf<Boolean>()
                 val results = mutableListOf<Boolean>()
                 val response = local.intercept(request("http://127.0.0.1:${server.localPort}$path"),

@@ -12,12 +12,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /** Credencial só é usada nativamente nas duas rotas de leitura do player online. */
-class OnlinePlayer(private val server: String, private val token: String) {
+class OnlinePlayer(private val server: String, private val token: String, private val deviceId: String) {
     private val origin = Uri.parse(server)
-    val dashboardUrl = "$server/player-dashboard/index.html"
+    val dashboardUrl = "$server/player/$deviceId"
     private val reportedConfigFailure = AtomicBoolean(false)
 
-    private fun photoPath(path: String) = path.matches(Regex("/api/player/online-photos/[A-Za-z0-9_-]+"))
+    private fun photoPath(path: String) = path.matches(Regex("/api/player/online-media/[A-Za-z0-9_-]+"))
 
     internal fun allowed(request: WebResourceRequest): Boolean {
         val url = request.url
@@ -27,19 +27,33 @@ class OnlinePlayer(private val server: String, private val token: String) {
         val path = url.encodedPath ?: return false
         // Não aceitar codificações, barras invertidas ou segmentos relativos ambíguos.
         if (!path.matches(Regex("/[A-Za-z0-9_./-]*")) || path.split('/').any { it == "." || it == ".." }) return false
-        if (url.encodedQuery != null && !(photoPath(path) && url.encodedQuery!!.matches(Regex("v=[a-f0-9]{64}")))) return false
-        if (request.isForMainFrame) return path == "/player-dashboard/" || path == "/player-dashboard/index.html"
-        return (path.startsWith("/player-dashboard/") && path != "/player-dashboard/" && !path.endsWith(".html")) ||
-            path == "/api/player/config" || photoPath(path)
+        if (request.isForMainFrame) return url.encodedQuery == null && path == "/player/$deviceId"
+        if (path == "/api/player/config") return validConfigQuery(url.encodedQuery)
+        if (photoPath(path)) return url.encodedQuery?.matches(Regex("v=[a-f0-9]{64}")) == true
+        if (url.encodedQuery != null) return false
+        return path.startsWith("/player-dashboard/") && path != "/player-dashboard/" && !path.endsWith(".html")
+    }
+
+    private fun validConfigQuery(query: String?): Boolean {
+        if (query == null) return true
+        val parts = query.split('&')
+        if (parts.size !in 1..2 || parts.toSet().size != parts.size) return false
+        return parts.all { part ->
+            when {
+                part.startsWith("deviceId=") -> part.substringAfter('=').matches(Regex("[A-Za-z0-9_-]{1,128}")) && part.substringAfter('=') == deviceId
+                part.startsWith("appliedRevision=") -> part.substringAfter('=').matches(Regex("online%3A[A-Za-z0-9_-]{1,128}"))
+                else -> false
+            }
+        }
     }
 
     private fun effectivePort(uri: Uri): Int = if (uri.port != -1) uri.port else if (uri.scheme == "https") 443 else 80
 
     fun navigationAllowed(request: WebResourceRequest) = request.isForMainFrame && allowed(request)
 
-    internal fun dashboardFinished(url: String) = DashboardUrl.matches(server, url)
+    internal fun dashboardFinished(url: String) = try { android.net.Uri.parse(url).encodedPath == "/player/$deviceId" && DashboardUrl.sameOrigin(server, url) } catch (_: Exception) { false }
 
-    fun intercept(request: WebResourceRequest, onFailure: (String, Boolean) -> Unit, onResult: (Boolean) -> Unit): WebResourceResponse {
+    fun intercept(request: WebResourceRequest, onFailure: (String, Boolean) -> Unit = { _, _ -> }, onResult: (Boolean) -> Unit = {}): WebResourceResponse {
         if (!allowed(request)) return forbidden()
         val critical = request.isForMainFrame || DashboardLoad.critical(request.url.encodedPath.orEmpty())
         val path = request.url.encodedPath.orEmpty()
