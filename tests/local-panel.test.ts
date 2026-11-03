@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isAdminLoginDisabled, isLocalPanelRequest, localAdministrator } from "@smartframe/auth";
+import {
+  isAdminLoginDisabled,
+  isLocalPanelRequest,
+  localAdministrator,
+  localPanelRedirect,
+} from "@smartframe/auth";
 import type { PrismaClient } from "@smartframe/database";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -43,6 +48,33 @@ describe("Painel local sem login", () => {
       household: { id: "casa" },
     });
     expect(findMany.mock.calls[0][0].where).toEqual({ owner: { email: "dono@test.local" } });
+  });
+  it("redireciona somente paginas em aliases de loopback para o endereco configurado", () => {
+    const base = "http://localhost:3000";
+    expect(localPanelRedirect(new Headers({ host: "127.0.0.1:3000" }), base)).toBe(base + "/");
+    expect(localPanelRedirect(new Headers({ host: "[::1]:3000" }), base, "/layouts")).toBe(
+      base + "/layouts",
+    );
+    expect(localPanelRedirect(new Headers({ host: "localhost:3000" }), base)).toBeNull();
+    // This does not authorize API reads or writes from an alias.
+    expect(isLocalPanelRequest(new Headers({ host: "127.0.0.1:3000" }), base)).toBe(false);
+    for (const host of [
+      "evil.test:3000",
+      "192.168.1.10:3000",
+      "127.0.0.1:8080",
+      "localhost.evil.test:3000",
+    ])
+      expect(localPanelRedirect(new Headers({ host }), base)).toBeNull();
+    expect(
+      localPanelRedirect(
+        new Headers({ host: "127.0.0.1:3000", "sec-fetch-site": "cross-site" }),
+        base,
+      ),
+    ).toBeNull();
+    expect(
+      localPanelRedirect(new Headers({ host: "127.0.0.1:3000" }), "https://example.test:3000"),
+    ).toBeNull();
+    expect(localPanelRedirect(new Headers({ host: "127.0.0.1:3000" }), "invalid")).toBeNull();
   });
   it("não escolhe uma conta arbitrária quando há zero ou vários proprietários", async () => {
     const findMany = vi.fn().mockResolvedValue([]);

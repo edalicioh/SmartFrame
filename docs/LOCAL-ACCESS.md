@@ -10,6 +10,7 @@ O ambiente atual usa `SMARTFRAME_ADMIN_LOGIN=disabled` no `.env`. Painel e edito
 - O modo só aceita a origem de loopback configurada e o `Host` correspondente; acessos cross-site são recusados.
 - Mantenha o bind em loopback: Compose em `127.0.0.1:8080` e execução local desta sessão em `127.0.0.1:3030`.
 - Credenciais do player permanecem obrigatórias. Manifestos e fotos da API do tablet não ficam públicos.
+- Abrir as páginas `/` ou `/layouts` por outro alias de loopback na mesma porta (por exemplo, `127.0.0.1` em vez de `localhost`) redireciona para a origem configurada. Isso não libera hosts externos, outra porta, requisições cross-site nem altera a autorização das APIs.
 - Usuários, senhas, fotos, versões e dispositivos existentes são preservados.
 - Ações ficam atribuídas ao perfil local, sem distinguir individualmente os visitantes do painel aberto.
 

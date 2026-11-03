@@ -19,6 +19,32 @@ export function isLocalPanelRequest(headers: Pick<Headers, "get">, baseURL: stri
   }
 }
 
+// Browser pages may arrive through Next's printed IPv4 URL. Canonicalize only
+// loopback aliases on the configured port; API authorization stays strict.
+export function localPanelRedirect(
+  headers: Pick<Headers, "get">,
+  baseURL: string,
+  pathname: "/" | "/layouts" = "/",
+) {
+  try {
+    const origin = new URL(baseURL);
+    const loopbacks = ["localhost", "127.0.0.1", "[::1]"];
+    if (
+      !loopbacks.includes(origin.hostname) ||
+      !["http:", "https:"].includes(origin.protocol) ||
+      headers.get("sec-fetch-site") === "cross-site"
+    )
+      return null;
+    const host = headers.get("host")?.toLowerCase();
+    if (!host || host === origin.host.toLowerCase()) return null;
+    const aliases = loopbacks.map((name) => name + (origin.port ? ":" + origin.port : ""));
+    if (!aliases.includes(host)) return null;
+    return new URL(pathname, origin.origin).href;
+  } catch {
+    return null;
+  }
+}
+
 export async function localAdministrator(database: PrismaClient, email?: string) {
   const configuredEmail = email?.trim().toLowerCase();
   const households = await database.household.findMany({

@@ -14,7 +14,8 @@ $exitCode = 0
 
 function Test-SmartFrameServer {
     try {
-        $health = Invoke-RestMethod -Uri "$url/api/health" -TimeoutSec 2
+        # Use IPv4 explicitly: Windows PowerShell may wait on ::1 for localhost.
+        $health = Invoke-RestMethod -Uri 'http://127.0.0.1:3000/api/health' -TimeoutSec 2
         return ($health.status -eq 'ok' -and $health.service -eq 'smartframe')
     } catch {
         return $false
@@ -23,7 +24,7 @@ function Test-SmartFrameServer {
 
 Push-Location $projectRoot
 try {
-    $node = (Get-Command node.exe -CommandType Application -ErrorAction Stop).Source
+    $node = (Get-Command node.exe -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     if (-not (Test-Path '.env')) {
         throw 'Arquivo .env nao encontrado. A configuracao inicial do projeto precisa ser concluida.'
     }
@@ -106,6 +107,8 @@ try {
         if ($usb.HasExited) { throw 'O monitor USB encerrou. Confira as mensagens acima.' }
         throw 'O servidor encerrou. Confira as mensagens acima.'
     }
+} catch [System.Management.Automation.PipelineStoppedException] {
+    $exitCode = 0
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     $exitCode = 1

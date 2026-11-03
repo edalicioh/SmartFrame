@@ -142,6 +142,24 @@ try {
   let cookie = "";
   if (noLogin) {
     assert.equal(anonymous.status, 200);
+    for (const path of ["/", "/layouts"]) {
+      const aliasResponse = await new Promise<{ status: number; location?: string }>(
+        (resolve, reject) => {
+          const request = httpRequest(
+            `${baseURL}${path}`,
+            { headers: { Host: `localhost:${port}` } },
+            (response) => {
+              response.resume();
+              resolve({ status: response.statusCode ?? 0, location: response.headers.location });
+            },
+          );
+          request.on("error", reject);
+          request.end();
+        },
+      );
+      assert.equal(aliasResponse.status, 307, "alias local deve redirecionar, nao causar erro 500");
+      assert.equal(aliasResponse.location, baseURL + path);
+    }
     assert.equal((await fetch(`${baseURL}/login`, { redirect: "manual" })).status, 307);
     assert.equal((await fetch(`${baseURL}/api/devices`)).status, 200);
     const hostileStatus = await new Promise<number>((resolve, reject) => {

@@ -2,7 +2,12 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import type { PrismaClient } from "@smartframe/database";
 import { z } from "zod";
-export { isAdminLoginDisabled, isLocalPanelRequest, localAdministrator } from "./local-panel";
+export {
+  isAdminLoginDisabled,
+  isLocalPanelRequest,
+  localAdministrator,
+  localPanelRedirect,
+} from "./local-panel";
 
 const configSchema = z.object({
   secret: z.string().min(32),

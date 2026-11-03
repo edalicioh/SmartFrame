@@ -60,16 +60,16 @@ Consulte [o README do dashboard](smartframe-player/README.md) para configuraçã
 ### Ligar no Windows com dois cliques
 
 Abra **`Iniciar SmartFrame.cmd`** na pasta do projeto. Ele inicia o servidor local
-e o monitor de conexao USB do P7, sem apagar dados ou substituir o pareamento.
+e o monitor de conexão USB do P7, sem apagar dados ou substituir o pareamento.
 Deixe a janela aberta e o cabo conectado. O painel fica em **http://localhost:3000**.
-Se o servidor ja estiver ligado, ele e reutilizado, nao encerrado. Uma segunda
-abertura do iniciador e bloqueada para evitar processos duplicados. Para encerrar,
-pressione Ctrl+C; somente os processos criados pelo iniciador sao encerrados.
+Se o servidor já estiver ligado, ele é reutilizado, não encerrado. Uma segunda
+abertura do iniciador é bloqueada para evitar processos duplicados. Para encerrar,
+pressione Ctrl+C; somente os processos criados pelo iniciador são encerrados.
 
-O iniciador exige a configuracao inicial e as dependencias ja instaladas. Se o build
-estiver ausente, ele o prepara automaticamente. Nao expoe o painel na rede local.
+O iniciador exige a configuração inicial e as dependências já instaladas. Se o build
+estiver ausente, ele o prepara automaticamente. Não expõe o painel na rede local.
 
-### Preparacao e desenvolvimento
+### Preparação e desenvolvimento
 
 Requisitos: **Node.js 24 LTS e npm 11+**. Java e Android SDK são necessários apenas para o aplicativo Android.
 

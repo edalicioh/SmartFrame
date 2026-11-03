@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Personalizar porta-retratos" };
 
 export default async function LayoutsPage() {
-  const { household } = await requireAdministrator();
+  const { household } = await requireAdministrator("/layouts");
   const state = await frameState(getDatabase(), household.id);
   return (
     <div className="editor-page">
