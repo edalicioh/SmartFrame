@@ -1,142 +1,74 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import * as fs from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import sharp from "sharp";
 import { getDatabase } from "@smartframe/database";
 import { issuePairingCode, redeemPairingCode } from "@smartframe/frames";
 
 vi.mock("server-only", () => ({}));
-vi.mock("node:fs/promises", async (importOriginal) => {
-  const original = await importOriginal<typeof import("node:fs/promises")>();
-  return { ...original, readdir: vi.fn(original.readdir) };
-});
-// Player routes never use panel authentication.
-vi.mock("../apps/web/src/lib/panel-access", () => ({ panelAccess: vi.fn() }));
-vi.mock("@smartframe/widgets", async (original) => ({
-  ...(await original<typeof import("@smartframe/widgets")>()),
-  onlineWidgetData: vi.fn(async () => ({ refreshSeconds: 1800, weather: null, currencies: {} })),
-}));
+const panelAccess = vi.hoisted(() => vi.fn());
+vi.mock("../apps/web/src/lib/panel-access", () => ({ panelAccess }));
+vi.mock("@smartframe/widgets", async (original) => ({ ...(await original<typeof import("@smartframe/widgets")>()), onlineWidgetData: vi.fn(async () => ({ refreshSeconds: 1800, weather: null, currencies: {} })) }));
 
 import { GET as getConfig } from "../apps/web/src/app/api/player/config/route";
-import { GET as getPhoto } from "../apps/web/src/app/api/player/online-photos/[id]/route";
+import { GET as getDashboard } from "../apps/web/src/app/player/[deviceId]/route";
+import { GET as getOnlineFrame, PUT as putOnlineFrame } from "../apps/web/src/app/api/online-frame/route";
+import { POST as publishOnlineFrame } from "../apps/web/src/app/api/online-frame/publish/route";
 
 const db = getDatabase();
 const userId = randomUUID();
-let directory: string;
-let token: string;
+let householdId: string;
 let deviceId: string;
-let household: string;
+let token: string;
+const adminRequest = (url: string, body?: unknown) => new Request(`https://example.test${url}`, { method: body ? "PUT" : "GET", headers: { origin: "https://example.test", ...(body ? { "content-type": "application/json" } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
 
 beforeAll(async () => {
-  directory = await mkdtemp(join(process.env.TEMP ?? tmpdir(), "smartframe-online-routes-"));
-  await mkdir(join(directory, "photos"));
-  await writeFile(
-    join(directory, "photos", "casa.png"),
-    Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
-      "base64",
-    ),
-  );
-  process.env.SMARTFRAME_ONLINE_CONFIG = join(directory, "config.json");
-  process.env.SMARTFRAME_ONLINE_PHOTOS = join(directory, "photos");
-  const user = await db.user.create({
-    data: {
-      id: userId,
-      name: "Online",
-      email: `${userId}@test.local`,
-      household: { create: { name: "Casa" } },
-    },
-    include: { household: true },
-  });
-  household = user.household!.id;
-  process.env.SMARTFRAME_ONLINE_HOUSEHOLD_ID = household;
-  const code = await issuePairingCode(db, household, userId);
-  const paired = await redeemPairingCode(db, code.code, "Tablet");
-  token = paired.token;
+  process.env.BETTER_AUTH_URL = "https://example.test";
+  const user = await db.user.create({ data: { id: userId, name: "Online", email: `${userId}@test.local`, household: { create: { name: "Casa" } } }, include: { household: true } });
+  householdId = user.household!.id;
+  panelAccess.mockResolvedValue({ household: { id: householdId }, user: { id: userId } });
+  const pairing = await issuePairingCode(db, householdId, userId);
+  const paired = await redeemPairingCode(db, pairing.code, "Tablet");
   deviceId = paired.deviceId;
+  token = paired.token;
 });
+afterAll(async () => { await db.household.deleteMany({ where: { ownerId: userId } }); await db.user.deleteMany({ where: { id: userId } }); await db.$disconnect(); });
 
-afterAll(async () => {
-  delete process.env.SMARTFRAME_ONLINE_CONFIG;
-  delete process.env.SMARTFRAME_ONLINE_PHOTOS;
-  delete process.env.SMARTFRAME_ONLINE_HOUSEHOLD_ID;
-  await db.household.deleteMany({ where: { ownerId: userId } });
-  await db.user.deleteMany({ where: { id: userId } });
-  await db.$disconnect();
-  await rm(directory, { recursive: true, force: true });
-});
-
-it("protege configuração e imagem HTTP, inclusive depois da revogação", async () => {
-  const request = (path: string, credential = token) =>
-    new Request(`https://example.test${path}`, {
-      headers: credential ? { authorization: `Bearer ${credential}` } : {},
-    });
-  expect((await getConfig(request("/api/player/config", ""))).status).toBe(401);
-  const response = await getConfig(request("/api/player/config"));
+it("serves canonical dashboard HTML by safe device path without caching or credentials", async () => {
+  const response = await getDashboard(new Request(`https://example.test/player/${deviceId}`), { params: Promise.resolve({ deviceId }) });
   expect(response.status).toBe(200);
-  expect(response.headers.get("cache-control")).toBe("private, no-store");
-  const body = await response.json();
-  expect(body.widgetData.refreshSeconds).toBe(1800);
-  const photoUrl = body.widgets.photos.items[0].src as string;
-  const id = body.widgets.photos.items[0].id as string;
-  const context = { params: Promise.resolve({ id }) };
-  expect((await getPhoto(request(photoUrl, ""), context)).status).toBe(401);
-  const photo = await getPhoto(request(photoUrl), context);
-  expect(photo.status).toBe(200);
-  expect(photo.headers.get("content-type")).toBe("image/png");
-  expect(photo.headers.get("x-content-type-options")).toBe("nosniff");
-  expect(photo.headers.get("cache-control")).toBe("private, no-store");
-  const oversized = await sharp({
-    create: { width: 4097, height: 1, channels: 3, background: "red" },
-  })
-    .png()
-    .toBuffer();
-  await writeFile(join(directory, "photos", "casa.png"), oversized);
-  expect((await getPhoto(request(photoUrl), context)).status).toBe(404);
-  const withoutOversized = await (await getConfig(request("/api/player/config"))).json();
-  expect(withoutOversized.widgets.photos.items).toEqual([]);
-  if (process.platform === "win32") {
-    const name = `${"漢".repeat(129)}.png`;
-    await writeFile(
-      join(directory, "photos", name),
-      Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    );
-    const unicodeConfig = await (await getConfig(request("/api/player/config"))).json();
-    const item = unicodeConfig.widgets.photos.items[0];
-    expect(item.src.length).toBeLessThanOrEqual(512);
-    expect(
-      (await getPhoto(request(item.src), { params: Promise.resolve({ id: item.id }) })).status,
-    ).toBe(200);
-  }
-  expect(Buffer.byteLength(JSON.stringify(body), "utf8")).toBeLessThanOrEqual(1024 * 1024);
-  vi.mocked(fs.readdir).mockResolvedValueOnce(
-    Array.from({ length: 4097 }, (_, i) => `${i}.png`) as never,
-  );
-  const tooLarge = await getConfig(request("/api/player/config"));
-  expect(tooLarge.status).toBe(413);
-  expect(tooLarge.headers.get("cache-control")).toBe("private, no-store");
-  const error = await tooLarge.text();
-  expect(error).toContain("4096");
-  expect(error).not.toContain(directory);
-  expect(
-    (await getPhoto(request(photoUrl), { params: Promise.resolve({ id: "Li4vc2VjcmV0LnBuZw" }) }))
-      .status,
-  ).toBe(404);
-  await writeFile(join(directory, "config.json"), JSON.stringify({ refreshSeconds: 0 }));
-  const invalid = await getConfig(request("/api/player/config"));
-  expect(invalid.status).toBe(400);
-  expect(await invalid.text()).not.toContain(directory);
-  process.env.SMARTFRAME_ONLINE_HOUSEHOLD_ID = "other";
-  expect((await getConfig(request("/api/player/config"))).status).toBe(403);
-  expect((await getPhoto(request(photoUrl), context)).status).toBe(403);
-  process.env.SMARTFRAME_ONLINE_HOUSEHOLD_ID = household;
-  await db.device.update({ where: { id: deviceId }, data: { revokedAt: new Date() } });
-  expect((await getConfig(request("/api/player/config"))).status).toBe(401);
-  expect((await getPhoto(request(photoUrl), context)).status).toBe(401);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("x-frame-options")).toBe("SAMEORIGIN");
+  const html = await response.text();
+  expect(html).toContain("/player-dashboard/player.js");
+  expect(html).toContain("/player-dashboard/player.css");
+  expect(html).not.toContain(token);
+  const invalidId = "../secret";
+  expect((await getDashboard(new Request("https://example.test/player/../secret"), { params: Promise.resolve({ deviceId: invalidId }) })).status).toBe(404);
+});
+
+it("uses only a device's published version and never acknowledges merely delivered config", async () => {
+  const authRequest = (query = "") => new Request(`https://example.test/api/player/config${query}`, { headers: { authorization: `Bearer ${token}` } });
+  expect((await getConfig(authRequest("?deviceId=wrong"))).status).toBe(403);
+  expect((await getConfig(authRequest())).status).toBe(409);
+  const device = await db.device.findUniqueOrThrow({ where: { id: deviceId } });
+  expect(device.appliedRevision).toBeNull();
+  const put = await putOnlineFrame(adminRequest("/api/online-frame", { deviceId, config: { refreshSeconds: 20 }, expectedRevision: 0 }));
+  expect(put.status).toBe(200);
+  expect((await publishOnlineFrame(new Request("https://example.test/api/online-frame/publish", { method: "POST", headers: { origin: "https://example.test", "content-type": "application/json" }, body: JSON.stringify({ deviceId, expectedRevision: 1 }) }))).status).toBe(200);
+  const delivered = await getConfig(authRequest());
+  expect(delivered.status).toBe(200);
+  expect((await delivered.json()).refreshSeconds).toBe(20);
+  expect((await db.device.findUniqueOrThrow({ where: { id: deviceId } })).appliedRevision).toBeNull();
+  const state = await (await getOnlineFrame(new Request(`https://example.test/api/online-frame?deviceId=${deviceId}`))).json();
+  expect(state.publishedRevision).toMatch(/^online:/);
+  expect(state.config.refreshSeconds).toBe(20);
+});
+
+it("rejects stale draft writes and impossible media selections", async () => {
+  const put = (config: unknown, expectedRevision: number) => putOnlineFrame(adminRequest("/api/online-frame", { deviceId, config, expectedRevision }));
+  expect((await put({ refreshSeconds: 30 }, 1)).status).toBe(200);
+  expect((await put({ refreshSeconds: 40 }, 1)).status).toBe(409);
+  expect((await publishOnlineFrame(new Request("https://example.test/api/online-frame/publish", { method: "POST", headers: { origin: "https://example.test", "content-type": "application/json" }, body: JSON.stringify({ deviceId, expectedRevision: 2 }) }))).status).toBe(200);
+  expect((await put({ widgets: { photos: { photoIds: [randomUUID()] } }, refreshSeconds: 40 }, 2)).status).toBe(200);
+  const rejected = await publishOnlineFrame(new Request("https://example.test/api/online-frame/publish", { method: "POST", headers: { origin: "https://example.test", "content-type": "application/json" }, body: JSON.stringify({ deviceId, expectedRevision: 3 }) }));
+  expect(rejected.status).toBe(400);
 });
