@@ -23,6 +23,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { buildConfig = true }
+
+    // Atualizações podem deixar assets ignorados do antigo player na árvore local.
+    // O APK online não deve empacotá-los, mesmo em builds sem clean.
+    sourceSets.getByName("main").assets.setSrcDirs(emptyList<String>())
 }
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }

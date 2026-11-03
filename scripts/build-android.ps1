@@ -3,8 +3,6 @@ $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $android = Join-Path $projectRoot 'apps\android'
-& node (Join-Path $PSScriptRoot 'sync-player.mjs')
-if ($LASTEXITCODE -ne 0) { throw 'Falha ao sincronizar o renderizador compartilhado.' }
 $gradle = Join-Path $projectRoot '.data\android-toolchain\gradle-8.13\bin\gradle.bat'
 
 # Gera tambem o Wrapper oficial, com checksum fixado, para builds posteriores.

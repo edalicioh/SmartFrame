@@ -19,7 +19,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class MainActivity : Activity() {
@@ -46,9 +45,15 @@ class MainActivity : Activity() {
         root.addView(statusView, FrameLayout.LayoutParams(-1, -1))
         statusView.setOnClickListener { showConnection() }
         val menu = Button(this).apply { text = "⚙"; contentDescription = "Configuração da conexão"; setOnClickListener { showConnection() } }
-        root.addView(menu, FrameLayout.LayoutParams(56, 56, android.view.Gravity.TOP or android.view.Gravity.END))
+        val menuSize = (48 * resources.displayMetrics.density).toInt()
+        root.addView(menu, FrameLayout.LayoutParams(menuSize, menuSize, android.view.Gravity.TOP or android.view.Gravity.END))
         ServiceWorkerController.getInstance().serviceWorkerWebSettings.blockNetworkLoads = true
         setContentView(root)
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+            ) { showConnection() }
+        }
         showStatus("Conecte este tablet pelo código do painel.")
         if (credentials.read() != null) openDashboard()
     }
@@ -80,14 +85,20 @@ class MainActivity : Activity() {
                     val path = request.url.encodedPath.orEmpty()
                     val tracked = v === webView && client.allowed(request) && (request.isForMainFrame || DashboardLoad.critical(path))
                     if (tracked) dashboardLoad.begin()
-                    return client.intercept(request, { message, _ -> handler.post { if (v === webView && credentials.read()?.deviceId == c.deviceId) scheduleRetry(message) } }, { success ->
+                    return client.intercept(request, { message, critical ->
+                        // Falhas da configuração e de fotos pertencem ao retry JavaScript.
+                        // Recarregar a página nesses casos perderia a imagem já exibida.
+                        if (critical) handler.post {
+                            if (v === webView && credentials.read()?.deviceId == c.deviceId) scheduleRetry(message)
+                        }
+                    }, { success ->
                         if (tracked) { dashboardLoad.complete(path, request.isForMainFrame, success); handler.post { if (v === webView && load === dashboardLoad) updateLoad(v, dashboardLoad) } }
                     })
                 }
                 override fun onPageFinished(v: WebView, url: String) { if (v === webView && client.dashboardFinished(url)) { dashboardLoad.finish(); updateLoad(v, dashboardLoad) } }
                 override fun onReceivedHttpError(v: WebView, request: WebResourceRequest, error: WebResourceResponse) { if (v === webView && (request.isForMainFrame || DashboardLoad.critical(request.url.encodedPath.orEmpty()))) scheduleRetry("Dashboard ou recurso essencial indisponível (HTTP ${error.statusCode}). Tentando novamente…") }
                 override fun onReceivedError(v: WebView, request: WebResourceRequest, error: WebResourceError) {
-                    if (request.isForMainFrame) scheduleRetry("Falha na conexão com o dashboard. Tentando novamente…")
+                    if (v === webView && request.isForMainFrame) scheduleRetry("Falha na conexão com o dashboard. Tentando novamente…")
                 }
             }
         }
@@ -109,6 +120,9 @@ class MainActivity : Activity() {
     }
 
     private fun scheduleRetry(message: String) {
+        if (closed || credentials.read() == null) return
+        watchdog?.let(handler::removeCallbacks); watchdog = null
+        stable?.let(handler::removeCallbacks); stable = null
         showStatus(message)
         if (!resumed || retry != null) return
         val delay = retryMs; retryMs = (retryMs * 2).coerceAtMost(120_000L)
@@ -121,7 +135,7 @@ class MainActivity : Activity() {
         fun field(label: String, text: String, type: Int) = EditText(this).apply {
             hint = label; setText(text); inputType = type; isSingleLine = true; box.addView(this)
         }
-        val server = field("Endereço HTTPS do servidor", current?.server ?: if (BuildConfig.DEBUG) "http://localhost:3030" else "https://", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
+        val server = field("Endereço HTTPS do servidor", current?.server ?: if (BuildConfig.DEBUG) "http://localhost:3000" else "https://", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         val code = field("Código do painel", "", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS)
         val name = field("Nome deste tablet", Build.MODEL, InputType.TYPE_CLASS_TEXT)
         AlertDialog.Builder(this).setTitle("Conectar ao SmartFrame").setView(box)
@@ -149,6 +163,8 @@ class MainActivity : Activity() {
 
     override fun onResume() { super.onResume(); resumed = true; webView?.onResume(); if (credentials.read() != null) { if (webView == null) openDashboard() else load?.let { updateLoad(webView!!, it) } } }
     override fun onPause() { resumed = false; cancelTimers(); webView?.onPause(); super.onPause() }
+    @Deprecated("Compatibilidade com Android anterior à API 33")
+    @SuppressLint("GestureBackNavigation")
     override fun onBackPressed() { showConnection() }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) hideBars() }
     private fun hideBars() { if (Build.VERSION.SDK_INT >= 30) window.insetsController?.apply { hide(WindowInsets.Type.systemBars()); systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE } else @Suppress("DEPRECATION") run { window.decorView.systemUiVisibility = 5894 or 512 or 1024 } }
