@@ -115,6 +115,9 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
   padding-top: 6px;
   padding-bottom: 6px;
   line-height: 1.15;
@@ -134,23 +137,6 @@
   opacity: 0.8;
   margin-left: 4px;
 }
-.weather-main {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.weather-main > div:first-child {
-  flex: 1;
-  min-width: 0;
-}
-.weather-city {
-  font-size: clamp(12px, 1.45vw, 18px);
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.weather-condition,
 .weather-range {
   font-size: clamp(10px, 1.05vw, 13px);
   white-space: nowrap;
@@ -160,16 +146,11 @@
 .weather-range {
   opacity: 0.85;
 }
-.weather-icon {
-  width: clamp(24px, 4vw, 46px);
-  height: auto;
-  flex-shrink: 1;
-  min-width: 0;
-}
 .weather-temperature {
   font-size: clamp(21px, 3vw, 38px);
   font-weight: 700;
   flex-shrink: 0;
+  line-height: 1;
 }
 .currencies-card {
   background: var(--currency-bg);

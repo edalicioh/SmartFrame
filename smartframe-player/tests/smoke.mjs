@@ -205,7 +205,7 @@ try {
   );
   assert.equal(
     await evaluate(
-      `(() => { applyConfig({widgetData:{weather:${JSON.stringify({ ...widgetData.weather, temperature: 23, stale: true })},currencies:${JSON.stringify(widgetData.currencies)}}}); return document.querySelector('#weather-temperature').textContent==='23°' && document.querySelector('#weather-status').textContent==='Dados anteriores'; })()`,
+      `(() => { applyConfig({widgetData:{weather:${JSON.stringify({ ...widgetData.weather, temperature: 23, stale: true })},currencies:${JSON.stringify(widgetData.currencies)}}}); return document.querySelector('#weather-temperature').textContent==='23°' && document.querySelector('#weather').getAttribute('aria-label').includes('dados anteriores'); })()`,
     ),
     true,
     "atualização de dados não depende de mudança da configuração",
@@ -239,9 +239,13 @@ try {
       const cards = [...document.querySelectorAll('.photo-panel, .widget-stack .card')].filter(x => !x.hidden);
       const boxes = cards.map(x => { const r = x.getBoundingClientRect(); return { id: x.id, left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height, scroll: x.scrollHeight > x.clientHeight + 1 || x.scrollWidth > x.clientWidth + 1, scrollWidth: x.scrollWidth, clientWidth: x.clientWidth, scrollHeight: x.scrollHeight, clientHeight: x.clientHeight }; });
       const escaped = [...document.querySelectorAll('.widget-stack .card:not([hidden])')].flatMap(card => { const outer = card.getBoundingClientRect(); return [...card.querySelectorAll('*')].filter(el => { if (!el.getClientRects().length) return false; const r=el.getBoundingClientRect(); return r.left < outer.left - 1 || r.right > outer.right + 1 || r.top < outer.top - 1 || r.bottom > outer.bottom + 1; }).map(el => ({card:card.id, element:el.id || el.className || el.tagName, rect:el.getBoundingClientRect().toJSON(), outer:outer.toJSON()})); });
-      return { documentScroll: document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth, city: document.querySelector('#weather-city').textContent, boxes, escaped };
+      return { documentScroll: document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth, weatherChildren: [...document.querySelector('#weather').children].map(x => x.id), boxes, escaped };
     })()`);
-      assert.equal(result.city, "Cidade ".repeat(11).trim(), "cidade longa aplicada");
+      assert.deepEqual(
+        result.weatherChildren,
+        ["weather-temperature", "weather-range"],
+        "clima contém somente temperatura atual e máxima/mínima, sem cidade ou rótulos",
+      );
       assert.deepEqual(
         result.escaped,
         [],
