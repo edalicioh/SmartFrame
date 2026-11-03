@@ -4,6 +4,8 @@ export { photoFrameSchema, defaultPhotoFrame } from "./photo-frame";
 export type { PhotoFrame } from "./photo-frame";
 export { widgetDataSchema, defaultWidgetSettings } from "./photo-frame";
 export type { WidgetData } from "./photo-frame";
+export { onlineDashboardSchema, defaultOnlineDashboard } from "./online-dashboard";
+export type { OnlineDashboard, OnlineDashboardState } from "./online-dashboard";
 
 export const carouselSchema = z
   .object({
