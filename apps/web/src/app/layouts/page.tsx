@@ -2,18 +2,15 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { SignOut } from "@/components/sign-out";
-import { FrameEditor } from "@/components/frame-editor";
+import { OnlineFrameEditor } from "@/components/online-frame-editor";
 import { requireAdministrator } from "@/lib/session";
-import { getDatabase } from "@smartframe/database";
-import { frameState } from "@smartframe/frames";
 import { isAdminLoginDisabled } from "@smartframe/auth";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Personalizar porta-retratos" };
 
 export default async function LayoutsPage() {
-  const { household } = await requireAdministrator("/layouts");
-  const state = await frameState(getDatabase(), household.id);
+  await requireAdministrator("/layouts");
   return (
     <div className="editor-page">
       <header className="editor-header">
@@ -25,7 +22,7 @@ export default async function LayoutsPage() {
         </Link>
         {!isAdminLoginDisabled() && <SignOut />}
       </header>
-      <FrameEditor initial={state} />
+      <OnlineFrameEditor />
     </div>
   );
 }
