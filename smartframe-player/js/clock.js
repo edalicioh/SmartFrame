@@ -2,6 +2,7 @@
   "use strict";
   var time = document.getElementById("clock-time"),
     date = document.getElementById("clock-date"),
+    card = document.getElementById("clock"),
     config,
     timer;
   function render() {
@@ -27,6 +28,7 @@
     update: function (value) {
       config = value;
       date.hidden = !value.showDate;
+      card.classList.toggle("clock-time-only", !value.showDate);
       time.className = "clock-time" + (value.size === "normal" ? "" : " clock-" + value.size);
       time.style.color = value.color || "";
       render();

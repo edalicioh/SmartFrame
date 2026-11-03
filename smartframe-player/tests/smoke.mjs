@@ -277,6 +277,27 @@ try {
           );
         }
     }
+    assert.equal(
+      await evaluate(`(() => {
+        applyConfig({widgets:{clock:{showDate:false}}});
+        const card = document.querySelector('#clock').getBoundingClientRect();
+        const time = document.querySelector('#clock-time').getBoundingClientRect();
+        return document.querySelector('#clock-date').hidden &&
+          Math.abs((time.left + time.right) / 2 - (card.left + card.right) / 2) < 1 &&
+          Math.abs((time.top + time.bottom) / 2 - (card.top + card.bottom) / 2) < 1;
+      })()`),
+      true,
+      `${width}x${height}: horário centralizado sem data`,
+    );
+    assert.equal(
+      await evaluate(`(() => {
+        applyConfig({widgets:{clock:{showDate:true}}});
+        return !document.querySelector('#clock-date').hidden &&
+          !document.querySelector('#clock').classList.contains('clock-time-only');
+      })()`),
+      true,
+      "data pode ser reativada sem manter o alinhamento exclusivo do horário",
+    );
     console.log(`Layout ${width}x${height}: OK`);
   }
   assert.equal(

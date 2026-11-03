@@ -84,6 +84,10 @@
   flex-direction: column;
   justify-content: center;
 }
+.clock-card.clock-time-only {
+  align-items: center;
+  text-align: center;
+}
 .clock-time {
   font-size: clamp(18px, var(--clock-normal, 6vw), min(58px, 7vh));
   font-weight: 700;
