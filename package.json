@@ -32,7 +32,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:player": "node --test smartframe-player/tests/carousel.test.mjs",
+    "test:player": "node --test smartframe-player/tests/*.test.mjs",
     "test:smoke": "node --import tsx scripts/smoke.ts",
     "test:smoke:local": "node --import tsx scripts/smoke.ts --no-login",
     "check": "npm run lint && npm run typecheck && npm test && npm run test:player"

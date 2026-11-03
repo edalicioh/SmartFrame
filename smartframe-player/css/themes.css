@@ -19,6 +19,3 @@ body.theme-dark {
   --currency-bg: #102a43;
   --shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
 }
-html { --appearance-background: ; --appearance-accent: ; --appearance-text: ; }
-body { background-color: var(--appearance-background,); color: var(--appearance-text,); }
-.today { background-color: var(--appearance-accent,); }

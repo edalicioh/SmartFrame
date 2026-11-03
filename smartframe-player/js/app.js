@@ -23,9 +23,15 @@
     config = next;
     var appearance = next.appearance || {};
     app.timezone = next.timezone || "";
-    document.documentElement.style.setProperty("--appearance-background", appearance.backgroundColor || "");
-    document.documentElement.style.setProperty("--appearance-accent", appearance.accentColor || "");
-    document.documentElement.style.setProperty("--appearance-text", appearance.textColor || "");
+    [
+      ["--background", appearance.backgroundColor],
+      ["--primary", appearance.accentColor],
+      ["--weather-bg", appearance.accentColor],
+      ["--text", appearance.textColor],
+    ].forEach(function (entry) {
+      if (entry[1]) document.documentElement.style.setProperty(entry[0], entry[1]);
+      else document.documentElement.style.removeProperty(entry[0]);
+    });
     if (!old || old.theme !== next.theme)
       document.body.classList.toggle("theme-dark", next.theme === "dark");
     if (!old || changed(old.layoutOptions, next.layoutOptions)) {
@@ -55,6 +61,10 @@
         app[name === "photos" ? "carousel" : name].update(value);
       }
     });
+    if (old && old.timezone !== next.timezone) {
+      app.clock.update(next.widgets.clock);
+      app.calendar.update(next.widgets.calendar);
+    }
     var anyWidgets = names.slice(1).some(function (name) {
       return next.widgets[name].enabled;
     });
@@ -85,10 +95,12 @@
     return config;
   }
   function schedule(delay) {
+    if (preview) return;
     clearTimeout(pollTimer);
     if (!document.hidden) pollTimer = setTimeout(poll, delay);
   }
   async function poll() {
+    if (preview) return;
     clearTimeout(pollTimer);
     if (document.hidden) return;
     if (inFlight) {
@@ -105,14 +117,25 @@
       var query = new URLSearchParams();
       if (deviceMatch) query.set("deviceId", deviceMatch[1]);
       if (appliedRevision) query.set("appliedRevision", appliedRevision);
-      var response = await fetch("/api/player/config" + (query.size ? "?" + query : ""), {
+      var queryString = query.toString();
+      var response = await fetch("/api/player/config" + (queryString ? "?" + queryString : ""), {
         cache: "no-store",
         credentials: "same-origin",
         signal: requestController.signal,
       });
       if (!response.ok) throw new Error("HTTP " + response.status);
       var data = await response.json();
-      if (!data || typeof data !== "object" || Array.isArray(data))
+      if (
+        !data ||
+        typeof data !== "object" ||
+        Array.isArray(data) ||
+        data.layout !== "photo-dashboard" ||
+        !data.widgets ||
+        typeof data.widgets !== "object" ||
+        !data.widgets.photos ||
+        typeof data.widgets.photos !== "object" ||
+        !/^online:[A-Za-z0-9_-]+$/.test(data.revision || "")
+      )
         throw new Error("Configuração inválida");
       if (!document.hidden && !requestController.signal.aborted) {
         if (!applyConfig(data)) throw new Error("Configuração inválida");
@@ -124,9 +147,10 @@
       if (!document.hidden && !refreshRequested) {
         failures++;
         status.hidden = false;
-        status.textContent = failures === 1
-          ? "Player offline ou não publicado. Verifique a conexão e a publicação no painel."
-          : "Reconectando ao SmartFrame… Verifique se este player continua publicado.";
+        status.textContent =
+          failures === 1
+            ? "Player offline ou não publicado. Verifique a conexão e a publicação no painel."
+            : "Reconectando ao SmartFrame… Verifique se este player continua publicado.";
       }
     } finally {
       clearTimeout(timeout);
@@ -158,25 +182,39 @@
       app.currencies.resume();
       app.clock.resume();
       app.calendar.resume();
-      poll();
+      if (!preview) poll();
     }
+  });
+  window.addEventListener("online", function () {
+    if (!preview) poll();
   });
   window.applyConfig = applyConfig;
   app.applyConfig = applyConfig;
   applyConfig(app.defaults);
   if (preview) {
     window.addEventListener("message", function (event) {
-      if (event.origin !== location.origin || !event.data || event.data.type !== "smartframe:online-preview") return;
+      if (
+        window.parent === window ||
+        event.source !== window.parent ||
+        event.origin !== location.origin ||
+        !event.data ||
+        event.data.type !== "smartframe:online-preview"
+      )
+        return;
       var input = event.data.config;
       if (!input || typeof input !== "object") return;
       var items = input.widgets && input.widgets.photos && input.widgets.photos.items;
-      if (Array.isArray(items)) input.widgets.photos.items = items.map(function (item) {
-        if (!item || typeof item.id !== "string") return item;
-        return Object.assign({}, item, { src: "/api/photos/" + encodeURIComponent(item.id) + "/image" });
-      });
+      if (Array.isArray(items))
+        input.widgets.photos.items = items.map(function (item) {
+          if (!item || typeof item.id !== "string") return item;
+          return Object.assign({}, item, {
+            src: "/api/photos/" + encodeURIComponent(item.id) + "/image",
+          });
+        });
       applyConfig(input);
     });
-    if (window.parent !== window) window.parent.postMessage({ type: "smartframe:online-preview-ready" }, location.origin);
+    if (window.parent !== window)
+      window.parent.postMessage({ type: "smartframe:online-preview-ready" }, location.origin);
     return;
   }
   if (document.hidden) {

@@ -8,15 +8,30 @@
     timer,
     paused = false;
   view = new Date(view.getFullYear(), view.getMonth(), 1);
-  function updateToday() {
+  function zonedToday() {
     var now = new Date();
+    if (!app.timezone) return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: app.timezone,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    }).formatToParts(now);
+    var values = {};
+    parts.forEach(function (part) {
+      values[part.type] = Number(part.value);
+    });
+    return new Date(values.year, values.month - 1, values.day);
+  }
+  function updateToday() {
+    var now = zonedToday();
     if (view.getFullYear() === lastToday.getFullYear() && view.getMonth() === lastToday.getMonth())
       view = new Date(now.getFullYear(), now.getMonth(), 1);
     lastToday = now;
     render();
   }
   function render() {
-    var today = new Date(),
+    var today = zonedToday(),
       year = view.getFullYear(),
       month = view.getMonth(),
       first = new Date(year, month, 1).getDay();
@@ -59,7 +74,7 @@
         updateToday();
         schedule();
       },
-      midnight - now + 50,
+      Math.min(60000, Math.max(1000, midnight - now + 50)),
     );
   }
   document.getElementById("calendar-previous").addEventListener("click", function () {
