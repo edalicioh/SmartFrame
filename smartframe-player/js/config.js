@@ -5,7 +5,9 @@
     layout: "photo-dashboard",
     orientation: "landscape",
     theme: "light",
-    refreshSeconds: 60,
+    refreshSeconds: 15,
+    timezone: "",
+    appearance: { backgroundColor: "", accentColor: "", textColor: "" },
     layoutOptions: { photoPosition: "left", photoWidthPercent: 62 },
     widgets: {
       photos: { enabled: true, intervalSeconds: 15, fit: "cover", items: [] },
@@ -71,12 +73,24 @@
       })
         ? money.symbols.slice()
         : w.currencies.symbols;
+    var appearance = object(data.appearance);
+    function color(value, fallback) {
+      return typeof value === "string" && /^(|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/.test(value) ? value : fallback;
+    }
+    var timezone = typeof data.timezone === "string" && data.timezone.length <= 80 ? data.timezone : old.timezone;
+    if (timezone) { try { new Intl.DateTimeFormat("en", { timeZone: timezone }); } catch { timezone = old.timezone; } }
     return {
       revision: typeof data.revision === "string" ? data.revision : old.revision,
       layout: choice(data.layout, ["photo-dashboard"], old.layout),
       orientation: choice(data.orientation, ["landscape", "portrait"], old.orientation),
       theme: choice(data.theme, ["light", "dark"], old.theme),
       refreshSeconds: seconds(data.refreshSeconds, old.refreshSeconds, 10),
+      timezone: timezone,
+      appearance: {
+        backgroundColor: color(appearance.backgroundColor, old.appearance.backgroundColor),
+        accentColor: color(appearance.accentColor, old.appearance.accentColor),
+        textColor: color(appearance.textColor, old.appearance.textColor),
+      },
       layoutOptions: {
         photoPosition: choice(
           layout.photoPosition,

@@ -9,6 +9,9 @@
     inFlight = false,
     refreshRequested = false,
     failures = 0;
+  var preview = new URLSearchParams(location.search).get("preview") === "1",
+    deviceMatch = location.pathname.match(/^\/player\/([A-Za-z0-9_-]+)$/),
+    appliedRevision = "";
   var names = ["photos", "clock", "weather", "currencies", "calendar"];
   function changed(a, b) {
     return JSON.stringify(a) !== JSON.stringify(b);
@@ -18,6 +21,11 @@
     var old = config,
       next = app.normalizeConfig(input, old);
     config = next;
+    var appearance = next.appearance || {};
+    app.timezone = next.timezone || "";
+    document.documentElement.style.setProperty("--appearance-background", appearance.backgroundColor || "");
+    document.documentElement.style.setProperty("--appearance-accent", appearance.accentColor || "");
+    document.documentElement.style.setProperty("--appearance-text", appearance.textColor || "");
     if (!old || old.theme !== next.theme)
       document.body.classList.toggle("theme-dark", next.theme === "dark");
     if (!old || changed(old.layoutOptions, next.layoutOptions)) {
@@ -94,7 +102,10 @@
         requestController.abort();
       }, 10000);
     try {
-      var response = await fetch("/api/player/config", {
+      var query = new URLSearchParams();
+      if (deviceMatch) query.set("deviceId", deviceMatch[1]);
+      if (appliedRevision) query.set("appliedRevision", appliedRevision);
+      var response = await fetch("/api/player/config" + (query.size ? "?" + query : ""), {
         cache: "no-store",
         credentials: "same-origin",
         signal: requestController.signal,
@@ -104,7 +115,8 @@
       if (!data || typeof data !== "object" || Array.isArray(data))
         throw new Error("Configuração inválida");
       if (!document.hidden && !requestController.signal.aborted) {
-        applyConfig(data);
+        if (!applyConfig(data)) throw new Error("Configuração inválida");
+        if (typeof data.revision === "string") appliedRevision = data.revision;
         failures = 0;
         status.hidden = true;
       }
@@ -112,6 +124,9 @@
       if (!document.hidden && !refreshRequested) {
         failures++;
         status.hidden = false;
+        status.textContent = failures === 1
+          ? "Player offline ou não publicado. Verifique a conexão e a publicação no painel."
+          : "Reconectando ao SmartFrame… Verifique se este player continua publicado.";
       }
     } finally {
       clearTimeout(timeout);
@@ -149,6 +164,21 @@
   window.applyConfig = applyConfig;
   app.applyConfig = applyConfig;
   applyConfig(app.defaults);
+  if (preview) {
+    window.addEventListener("message", function (event) {
+      if (event.origin !== location.origin || !event.data || event.data.type !== "smartframe:online-preview") return;
+      var input = event.data.config;
+      if (!input || typeof input !== "object") return;
+      var items = input.widgets && input.widgets.photos && input.widgets.photos.items;
+      if (Array.isArray(items)) input.widgets.photos.items = items.map(function (item) {
+        if (!item || typeof item.id !== "string") return item;
+        return Object.assign({}, item, { src: "/api/photos/" + encodeURIComponent(item.id) + "/image" });
+      });
+      applyConfig(input);
+    });
+    if (window.parent !== window) window.parent.postMessage({ type: "smartframe:online-preview-ready" }, location.origin);
+    return;
+  }
   if (document.hidden) {
     app.carousel.pause();
     app.currencies.pause();

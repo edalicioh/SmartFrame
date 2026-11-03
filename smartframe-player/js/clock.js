@@ -12,12 +12,14 @@
       hour: "2-digit",
       minute: "2-digit",
       hour12: config.format === "12h",
+      timeZone: app.timezone || undefined,
     }).format(now);
     date.textContent = new Intl.DateTimeFormat("pt-BR", {
       weekday: "long",
       day: "numeric",
       month: "long",
       year: "numeric",
+      timeZone: app.timezone || undefined,
     }).format(now);
     timer = setTimeout(render, 60000 - (Date.now() % 60000) + 30);
   }
