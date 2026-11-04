@@ -17,6 +17,45 @@
   function changed(a, b) {
     return JSON.stringify(a) !== JSON.stringify(b);
   }
+  function styleWidget(name, value) {
+    var element = document.getElementById(name),
+      background = value.backgroundColor || "";
+    if (background) {
+      var hex = background.slice(1);
+      if (hex.length === 3)
+        hex = hex
+          .split("")
+          .map(function (part) {
+            return part + part;
+          })
+          .join("");
+      var channels = [0, 2, 4].map(function (offset) {
+        var channel = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+        return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+      });
+      var light = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722 > 0.179;
+      element.style.setProperty("--widget-background", background);
+      element.style.setProperty("--widget-foreground", light ? "#172033" : "#ffffff");
+      element.style.setProperty("--widget-muted", light ? "#4b5563" : "#d1d5db");
+      element.style.setProperty("--widget-up", light ? "#06642e" : "#8dd6a3");
+      element.style.setProperty("--widget-down", light ? "#a51f28" : "#ff999d");
+      element.style.setProperty("--widget-flat", light ? "#4b5563" : "#bfc3ca");
+    } else {
+      ["background", "foreground", "muted", "up", "down", "flat"].forEach(function (key) {
+        element.style.removeProperty("--widget-" + key);
+      });
+    }
+    if (name !== "photos") {
+      var rows = {
+        clock: [14, 18, 23],
+        weather: [13, 16, 20],
+        currencies: [15, 19, 24],
+        calendar: [38, 47, 59],
+      };
+      var size = value.cardSize === "small" ? 0 : value.cardSize === "large" ? 2 : 1;
+      element.style.setProperty("--widget-rows", rows[name][size]);
+    }
+  }
   function applyConfig(input) {
     if (!input || typeof input !== "object" || Array.isArray(input)) return config;
     var old = config,
@@ -59,6 +98,7 @@
       var value = next.widgets[name];
       if (!old || changed(old.widgets[name], value)) {
         document.getElementById(name).hidden = !value.enabled;
+        styleWidget(name, value);
         app[name === "photos" ? "carousel" : name].update(value);
       }
     });

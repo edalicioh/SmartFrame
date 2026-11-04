@@ -99,6 +99,10 @@ model Device {
   appliedRevision String?
   revokedAt       DateTime?
   createdAt       DateTime  @default(now())
+  activePanelId   String?
+  activePanel     Layout?   @relation("DevicePanel", fields: [activePanelId], references: [id], onDelete: SetNull)
+  activePanelVersionId String?
+  activePanelVersion LayoutVersion? @relation("DevicePanelVersion", fields: [activePanelVersionId], references: [id], onDelete: SetNull)
 
   @@index([householdId, createdAt])
 }
@@ -140,6 +144,7 @@ model Layout {
   versions    LayoutVersion[] @relation("LayoutVersions")
   publishedVersionId String?
   publishedVersion LayoutVersion? @relation("PublishedLayout", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  devices Device[] @relation("DevicePanel")
 
   @@index([householdId])
 }
@@ -151,6 +156,7 @@ model LayoutVersion {
   config    Json
   createdAt DateTime @default(now())
   publishedFor Layout[] @relation("PublishedLayout")
+  devices Device[] @relation("DevicePanelVersion")
 
   @@index([layoutId, createdAt])
 }

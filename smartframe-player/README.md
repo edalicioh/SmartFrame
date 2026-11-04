@@ -37,9 +37,11 @@ confirmações de revisão.
   Coinbase usam cache de **30 minutos**, compartilhado entre dispositivos e prévia.
   Escolha de 1 a 20 pares (USD, BRL, EUR, GBP, JPY, CAD, AUD, CHF, BTC e ETH), como
   USD/BRL ou BTC/USD, e até quatro cotações por vez. O cartão se adapta ao espaço e
-  alterna os demais pares. O cartão mostra apenas o par e o valor centralizados; fonte, horário e
-  indicação de dados anteriores ficam na dica ao passar o mouse. Sem cotação, mostra
-  um traço, nunca valores fictícios. Não é um feed financeiro por segundo.
+  alterna os demais pares. Cada cotação aparece em um cartão escuro com o par e o valor.
+  Para mercados cripto compatíveis, a Coinbase Exchange fornece variação de 24 horas;
+  pares sem estatísticas disponíveis, incluindo pares em BRL, não mostram percentual
+  ou seta. Fonte, horário e indicação de dados anteriores ficam na dica ao passar o mouse.
+  Sem cotação, mostra um traço, nunca valores fictícios. Não é um feed financeiro por segundo.
 - Carrossel usa dois elementos de imagem, sem pré-carregar o álbum inteiro.
 - A configuração aplicada é confirmada na consulta seguinte por `appliedRevision`;
   isso confirma aplicação do layout, não prova que todos os pixels foram exibidos.

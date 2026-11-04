@@ -4,21 +4,25 @@
 > implementação integrada atualmente disponível; endpoints do player offline mais
 > adiante são legado/compatibilidade e não o fluxo primário do APK.
 
-## Dashboard online por dispositivo (novo fluxo)
+## Painéis online e dispositivos
 
-O editor administrativo trabalha por dispositivo. `GET` e alterações usam a sessão
+O editor mantém painéis independentes e publica uma versão para cada dispositivo. `GET` e alterações usam a sessão
 administrativa existente; não exigem `SMARTFRAME_ONLINE_HOUSEHOLD_ID`. Um ID de
 dispositivo identifica o destino, não é uma credencial nem autoriza chamadas Bearer.
 
-| Método | Endpoint                        | Contrato-alvo                                                                     |
-| ------ | ------------------------------- | --------------------------------------------------------------------------------- |
-| GET    | `/api/online-frame?deviceId=ID` | Estado do rascunho e revisões do dispositivo                                      |
-| PUT    | `/api/online-frame`             | `{deviceId,config,expectedRevision}`; grava rascunho com controle de concorrência |
-| POST   | `/api/online-frame/publish`     | `{deviceId,expectedRevision}`; retorna `{revision}` imutável                      |
-| GET    | `/api/photos`                   | Biblioteca de fotos disponível ao editor autenticado                              |
-| POST   | `/api/photos`                   | Multipart `photo`; processamento otimizado no recebimento                         |
+| Método | Endpoint              | Contrato-alvo                                                                |
+| ------ | --------------------- | ---------------------------------------------------------------------------- |
+| GET    | `/api/panels`         | Lista painéis da residência                                                  |
+| GET    | `/api/panels?id=ID`   | Retorna `{id,name,config,draftRevision}`                                     |
+| POST   | `/api/panels`         | Cria `{name,copyFromId?}`; cópia usa o rascunho salvo                        |
+| PUT    | `/api/panels`         | Salva `{id,config,expectedRevision}` sem alterar dispositivos                |
+| PATCH  | `/api/panels`         | Renomeia `{id,name}`                                                         |
+| DELETE | `/api/panels`         | Exclui `{id}` se não estiver em uso por dispositivos ativos                  |
+| POST   | `/api/panels/publish` | Publica `{panelId,deviceId,expectedRevision}`; retorna `{revision}` imutável |
+| GET    | `/api/photos`         | Biblioteca de fotos disponível ao editor autenticado                         |
+| POST   | `/api/photos`         | Multipart `photo`; processamento otimizado no recebimento                    |
 
-Estado esperado: `{deviceId,config,draftRevision,publishedRevision,appliedRevision,lastSeenAt}`.
+`GET /api/devices` retorna `activePanelId`, `activePanelVersionId` e `appliedRevision` para acompanhar a publicação. As rotas `/api/online-frame` permanecem disponíveis para compatibilidade com o fluxo anterior.
 Configuração compartilhada e defaults estão em `packages/contracts/src/online-dashboard.ts`.
 O endpoint de upload gera imagem ajustada para caber em 1024×600 preservando
 proporção, via Sharp. Testes automatizados não substituem validação em aparelho real.
@@ -42,8 +46,9 @@ conhecer o ID. O alvo primário é o APK pareado, cuja camada nativa mantém a c
 fora do JavaScript. Produção exige HTTPS; HTTP de debug somente via loopback e
 `adb reverse`. Tela cheia imersiva não equivale a Android lock-task/kiosk.
 
-O armazenamento de configurações por dispositivo reutiliza `Layout` e
-`LayoutVersion` no SQLite existente; esta atualização não adiciona migration de schema.
+O armazenamento reutiliza `Layout` e `LayoutVersion`; uma migration associa cada
+dispositivo existente ao seu painel e à versão já publicada. Cada dispositivo mantém
+sua própria versão atribuída, sem ser alterado por publicações para outro dispositivo.
 Rotas offline antigas podem permanecer para compatibilidade, mas não são o caminho
 principal do editor ou do APK v0.4.
 
@@ -98,7 +103,7 @@ Exemplo de corpo de login:
 { "data": [] }
 ```
 
-Quando houver dispositivos, cada item conterá `id`, `name`, `timezone`, `lastSeenAt`, `appliedRevision` e `createdAt`.
+Quando houver dispositivos, cada item conterá `id`, `name`, `timezone`, `lastSeenAt`, `appliedRevision`, `activePanelId`, `activePanelVersionId` e `createdAt`.
 
 ## Personalização e pareamento administrativos
 

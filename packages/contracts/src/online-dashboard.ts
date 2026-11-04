@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { onlineCurrenciesSchema } from "./currencies";
+import { widgetBackground, widgetCardSize } from "./widget-style";
 
 const color = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
 const interval = (min: number, fallback: number) =>
@@ -44,6 +45,7 @@ export const onlineDashboardSchema = z
         photos: z
           .object({
             enabled: z.boolean().default(true),
+            backgroundColor: widgetBackground,
             intervalSeconds: interval(5, 15),
             fit: z.enum(["cover", "contain"]).default("cover"),
             photoIds: z
@@ -57,6 +59,8 @@ export const onlineDashboardSchema = z
         clock: z
           .object({
             enabled: z.boolean().default(true),
+            backgroundColor: widgetBackground,
+            cardSize: widgetCardSize,
             format: z.enum(["12h", "24h"]).default("24h"),
             // Accept the legacy flag, but never let older editors re-enable the date.
             showDate: z
@@ -71,6 +75,8 @@ export const onlineDashboardSchema = z
         weather: z
           .object({
             enabled: z.boolean().default(true),
+            backgroundColor: widgetBackground,
+            cardSize: widgetCardSize,
             city: z.string().trim().min(1).max(80).default("Camboriú"),
           })
           .strict()
@@ -79,6 +85,8 @@ export const onlineDashboardSchema = z
         calendar: z
           .object({
             enabled: z.boolean().default(true),
+            backgroundColor: widgetBackground,
+            cardSize: widgetCardSize,
             highlightToday: z.boolean().default(true),
           })
           .strict()

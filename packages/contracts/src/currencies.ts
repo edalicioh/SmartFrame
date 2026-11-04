@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { widgetBackground, widgetCardSize } from "./widget-style";
 
 export const currencyCodes = [
   "USD",
@@ -26,6 +27,8 @@ export const currencyPairSchema = z.string().refine((pair) => {
 export const onlineCurrenciesSchema = z
   .object({
     enabled: z.boolean().default(true),
+    backgroundColor: widgetBackground,
+    cardSize: widgetCardSize,
     symbols: z
       .array(z.enum(["USD", "EUR", "BTC"]))
       .min(1)

@@ -6,9 +6,9 @@ Porta-retratos digital auto-hospedável, com editor administrativo por dispositi
 
 ## v0.4 — fluxo online por dispositivo
 
-O fluxo principal é administrar e publicar um dashboard online por dispositivo. O APK é um WebView fino pareado; o servidor fornece configuração e mídia. O renderer offline, cache/download de manifesto e polling legado não fazem parte do fluxo novo. APIs antigas podem continuar disponíveis para compatibilidade, mas não se promete funcionamento offline no v0.4. As rotas e o estado esperado estão descritos em [API](docs/API.md).
+O fluxo principal permite criar vários painéis online independentes e escolher qual publicar em cada dispositivo. O APK é um WebView fino pareado; o servidor fornece configuração e mídia. O renderer offline, cache/download de manifesto e polling legado não fazem parte do fluxo novo. APIs antigas podem continuar disponíveis para compatibilidade, mas não se promete funcionamento offline no v0.4. As rotas e o estado esperado estão descritos em [API](docs/API.md).
 
-As configurações usam `Layout`/`LayoutVersion` no SQLite existente, sem migração de schema prevista. Antes de atualizar, faça backup consistente do banco, mídia e `.env`; não apague dados nem force novo pareamento. Só pare processos se uma migração realmente for necessária. O identificador visível do dispositivo não é uma credencial.
+As configurações usam `Layout`/`LayoutVersion` no SQLite. A atualização de múltiplos painéis exige migration: faça backup consistente do banco, mídia e `.env`, pare os processos que usam SQLite e execute `npm run db:migrate` antes de reiniciar. Os rascunhos e publicações existentes são preservados e associados aos dispositivos já pareados; não apague dados nem force novo pareamento. O identificador visível do dispositivo não é uma credencial.
 
 ## Histórico — modo Foto com widgets, versão 0.3.0
 

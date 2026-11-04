@@ -223,6 +223,16 @@ const onlineWeatherKey = (city: string) =>
 const onlineRefreshes = new WeakMap<PrismaClient, Map<string, Promise<void>>>();
 const spotPayload = z.object({ rates: z.record(z.string(), z.number().positive().max(1e20)) });
 const spotKey = (base: string) => `online:currencies:spot:${base}`;
+const marketStatsKey = (pair: string) => `online:currencies:stats:${pair}`;
+// Exchange statistics are available for traded crypto markets, not arbitrary FX pairs.
+const hasMarketStats = (pair: string) => {
+  const [base, target] = pair.split("/");
+  return ["BTC", "ETH"].includes(base) && ["USD", "EUR", "GBP", "BTC", "ETH"].includes(target);
+};
+const marketStatsPayload = z.object({
+  open: z.number().positive().max(1e20),
+  last: z.number().positive().max(1e20),
+});
 const selectedPairs = (settings: OnlineSettings) =>
   settings.currencies.enabled
     ? [...new Set(settings.currencies.pairs ?? defaultCurrencyPairs)]
@@ -247,6 +257,17 @@ async function loadSpot(base: string) {
   }
   if (!Object.keys(rates).length) throw new Error("Cotações indisponíveis.");
   return spotPayload.parse({ rates });
+}
+
+async function loadMarketStats(pair: string) {
+  const data = z
+    .object({ open: z.string(), last: z.string() })
+    .parse(
+      await externalJson(
+        `https://api.exchange.coinbase.com/products/${pair.replace("/", "-")}/stats`,
+      ),
+    );
+  return marketStatsPayload.parse({ open: Number(data.open), last: Number(data.last) });
 }
 
 /** Single flight per source, even when different devices select overlapping pairs. */
@@ -293,18 +314,33 @@ export async function refreshOnlineWidgets(
     tasks.push(
       refreshOnlineSource(db, spotKey(base), () => loadSpot(base), CURRENCY_REFRESH_SECONDS * 1000),
     );
+  for (const pair of selectedPairs(settings).filter(hasMarketStats))
+    tasks.push(
+      refreshOnlineSource(
+        db,
+        marketStatsKey(pair),
+        () => loadMarketStats(pair),
+        CURRENCY_REFRESH_SECONDS * 1000,
+      ),
+    );
   await Promise.all(tasks);
 }
 
 export async function onlineWidgetData(db: PrismaClient, settings: OnlineSettings) {
   const pairs = selectedPairs(settings);
   const bases = [...new Set(pairs.map((pair) => pair.split("/")[0]))];
-  const [weather, records] = await Promise.all([
+  const statsPairs = pairs.filter(hasMarketStats);
+  const [weather, records, statsRecords] = await Promise.all([
     settings.weather.enabled
       ? db.widgetSnapshot.findUnique({ where: { key: onlineWeatherKey(settings.weather.city) } })
       : null,
     Promise.all(
       bases.map((base) => db.widgetSnapshot.findUnique({ where: { key: spotKey(base) } })),
+    ),
+    Promise.all(
+      statsPairs.map((pair) =>
+        db.widgetSnapshot.findUnique({ where: { key: marketStatsKey(pair) } }),
+      ),
     ),
   ]);
   // Providers may take longer than the tablet's HTTP deadline. Return the last cache
@@ -323,6 +359,8 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
       source: string;
       updatedAt: string;
       stale: boolean;
+      changePercent?: number;
+      changePeriod?: "24h";
     } | null
   > = {};
   for (const pair of pairs) {
@@ -330,6 +368,9 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
     const record = records[bases.indexOf(base)];
     const parsed = spotPayload.safeParse(record?.payload);
     const value = parsed.success ? parsed.data.rates[target] : null;
+    const statsRecord = statsRecords[statsPairs.indexOf(pair)];
+    const stats = marketStatsPayload.safeParse(statsRecord?.payload);
+    const change = stats.success ? (stats.data.last / stats.data.open - 1) * 100 : NaN;
     currencies[pair] =
       record && value
         ? {
@@ -337,13 +378,19 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
             source: "Coinbase",
             updatedAt: record.updatedAt.toISOString(),
             stale: old(record, CURRENCY_REFRESH_SECONDS * 1000),
+            ...(statsRecord &&
+            !old(record, CURRENCY_REFRESH_SECONDS * 1000) &&
+            !old(statsRecord, CURRENCY_REFRESH_SECONDS * 1000) &&
+            Number.isFinite(change)
+              ? { changePercent: change, changePeriod: "24h" as const }
+              : {}),
           }
         : null;
   }
   return {
     refreshSeconds: WIDGET_REFRESH_SECONDS,
     currencyRefreshSeconds: CURRENCY_REFRESH_SECONDS,
-    currenciesPending: records.some(
+    currenciesPending: [...records, ...statsRecords].some(
       (record) => !record || record.expiresAt.getTime() <= Date.now(),
     ),
     weather:

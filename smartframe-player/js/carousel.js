@@ -1,7 +1,8 @@
 (function (app) {
   "use strict";
   var panel = document.getElementById("photos"),
-    images = panel.querySelectorAll(".photo-image");
+    images = panel.querySelectorAll(".photo-image"),
+    backgrounds = panel.querySelectorAll(".photo-backdrop");
   var message = document.getElementById("photo-message"),
     indicators = document.getElementById("photo-indicators");
   var previous = document.getElementById("photo-previous"),
@@ -29,6 +30,21 @@
     clearTimeout(timer);
     timer = null;
   }
+  function clearImage(index) {
+    images[index].removeAttribute("src");
+    backgrounds[index].removeAttribute("src");
+    backgrounds[index].classList.remove("is-current");
+  }
+  function syncBackgrounds() {
+    backgrounds.forEach(function (background) {
+      background.classList.remove("is-current");
+      if (config.fit !== "contain" || !current) background.removeAttribute("src");
+    });
+    if (config.fit === "contain" && current) {
+      backgrounds[active].src = current.src;
+      backgrounds[active].classList.add("is-current");
+    }
+  }
   function cancelLoad() {
     clearTimeout(loadingTimer);
     clearTimeout(retryTimer);
@@ -37,7 +53,7 @@
     pending = null;
     var image = images[1 - active];
     image.onload = image.onerror = null;
-    image.removeAttribute("src");
+    clearImage(1 - active);
   }
   function currentIndex() {
     return config.items.findIndex(function (item) {
@@ -87,7 +103,7 @@
       preloadTimer = null;
       if (available() && !pending) {
         if (config.items.length > 1) begin(currentIndex() + 1, 1, false);
-        else images[1 - active].removeAttribute("src");
+        else clearImage(1 - active);
       }
     }, 350);
   }
@@ -99,6 +115,7 @@
     image.classList.add("is-current");
     active = 1 - active;
     current = operation.item;
+    syncBackgrounds();
     pending = null;
     retryIndex = null;
     message.hidden = true;
@@ -110,7 +127,7 @@
     if (pending !== operation) return;
     retryIndex = index;
     pending = null;
-    images[1 - active].removeAttribute("src");
+    clearImage(1 - active);
     message.textContent = current
       ? "Algumas fotos estão indisponíveis"
       : "Não foi possível carregar as fotos";
@@ -139,7 +156,7 @@
       clearTimeout(loadingTimer);
       image.onload = image.onerror = null;
       if (!ok) {
-        image.removeAttribute("src");
+        clearImage(1 - active);
         var following = i + operation.direction;
         if (operation.attempts >= Math.min(maxAttempts, items.length)) {
           failed(operation, ((following % items.length) + items.length) % items.length);
@@ -237,9 +254,9 @@
         retryIndex = null;
         if (!value.items.length) {
           current = null;
-          images.forEach(function (image) {
+          images.forEach(function (image, index) {
             image.classList.remove("is-current");
-            image.removeAttribute("src");
+            clearImage(index);
           });
           message.textContent = "Nenhuma foto disponível";
           message.hidden = false;
@@ -249,6 +266,7 @@
         }
         renderIndicators();
       }
+      if (!old || old.fit !== value.fit) syncBackgrounds();
       if (
         !old ||
         old.intervalSeconds !== value.intervalSeconds ||

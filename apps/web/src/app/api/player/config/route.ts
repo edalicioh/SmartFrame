@@ -3,6 +3,7 @@ import { getDatabase } from "@smartframe/database";
 import { authorizePlayer, FrameError } from "@smartframe/frames";
 import { onlineWidgetData } from "@smartframe/widgets";
 import { onlineDashboardSchema } from "@smartframe/contracts";
+import { activeOnlineVersion } from "@/lib/active-online-version";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,14 +15,11 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     if (params.has("deviceId") && params.get("deviceId") !== device.id)
       throw new FrameError(403, "Dispositivo não autorizado.");
-    const layout = await db.layout.findUnique({
-      where: { key: `online:${device.id}` },
-      include: { publishedVersion: true },
-    });
-    if (!layout?.publishedVersion)
+    const version = await activeOnlineVersion(db, device);
+    if (!version)
       throw new FrameError(409, "Este dispositivo ainda não possui uma configuração publicada.");
-    const revision = `online:${layout.publishedVersion.id}`;
-    const config = onlineDashboardSchema.parse(layout.publishedVersion.config);
+    const revision = `online:${version.id}`;
+    const config = onlineDashboardSchema.parse(version.config);
     const photos = config.widgets.photos.photoIds.length
       ? await db.media.findMany({
           where: {

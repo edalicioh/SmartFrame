@@ -32,6 +32,9 @@ function setup(width = 400) {
       appendChild(child) {
         this.children.push(child);
       },
+      setAttribute(name, value) {
+        this[name] = value;
+      },
     };
   }
   const elements = { "currency-list": element() };
@@ -75,16 +78,43 @@ function setup(width = 400) {
   };
 }
 
-test("renders only the pair and its value, with details in the tooltip", () => {
+test("renders pairs and values with details in the tooltip", () => {
   const h = setup();
   h.app.currencies.setData({ "USD/BRL": quote(5.4), "BTC/USD": quote(65000) });
-  assert.equal(h.items()[0].children[0].textContent, "USD/BRL");
-  assert.match(h.items()[0].children[1].textContent, /R\$\s*5,40/);
-  assert.equal(h.items()[1].children[0].textContent, "BTC/USD");
-  assert.match(h.items()[1].children[1].textContent, /US\$\s*65\.000,00/);
+  assert.equal(h.items()[0].children[0].children[0].textContent, "USD / BRL");
+  assert.equal(h.items()[0].children[1].children[0].textContent, "5,40");
+  assert.equal(h.items()[1].children[0].children[0].textContent, "BTC / USD");
+  assert.equal(h.items()[1].children[1].children[0].textContent, "65.000,00");
   assert.equal(h.items()[0].children.length, 2);
   assert.equal(h.items()[1].children.length, 2);
   assert.match(h.items()[0].title, /Coinbase · consultado em/);
+});
+
+test("shows real 24-hour changes with accessible directions, and hides unavailable changes", () => {
+  const h = setup(900);
+  h.app.currencies.update({
+    ...h.config,
+    pairs: ["BTC/BRL", "USD/BRL", "BTC/USD"],
+    displayCount: 3,
+  });
+  h.app.currencies.setData({
+    "BTC/BRL": quote(400000, { changePercent: 1.19, changePeriod: "24h" }),
+    "USD/BRL": quote(5.4, { changePercent: -2.34, changePeriod: "24h" }),
+    "BTC/USD": quote(65000, { changePercent: 0, changePeriod: "24h" }),
+  });
+  assert.equal(h.items()[0].children[0].children[0].textContent, "Bitcoin");
+  assert.equal(h.items()[0].children[0].children[1].textContent, "+1,19%");
+  assert.equal(h.items()[0].children[1].children[1]["aria-label"], "Alta em 24 horas");
+  assert.equal(h.items()[1].children[0].children[1].textContent, "−2,34%");
+  assert.equal(h.items()[1].children[1].children[1].textContent, "↓");
+  assert.equal(h.items()[2].children[0].children[1].textContent, "0,00%");
+  assert.equal(h.items()[2].children[1].children[1].textContent, "→");
+  h.app.currencies.setData({
+    "BTC/BRL": quote(400000, { changePercent: NaN, changePeriod: "24h" }),
+    "USD/BRL": quote(5.4, { changePercent: 2, changePeriod: "24h", stale: true }),
+    "BTC/USD": quote(65000, { changePercent: 2 }),
+  });
+  assert.ok(h.items().every((item) => item.children[0].children.length === 1));
 });
 
 test("adapts the count to available space and rotates all configured pairs", () => {
@@ -94,12 +124,12 @@ test("adapts the count to available space and rotates all configured pairs", () 
   let next = h.timers.values().next().value;
   h.timers.clear();
   next();
-  assert.equal(h.items()[0].children[0].textContent, "BTC/USD");
+  assert.equal(h.items()[0].children[0].children[0].textContent, "BTC / USD");
   next = h.timers.values().next().value;
   h.timers.clear();
   next();
-  assert.equal(h.items()[0].children[0].textContent, "ETH/BTC");
-  assert.equal(h.items()[0].children[1].textContent, "0,03456789 BTC");
+  assert.equal(h.items()[0].children[0].children[0].textContent, "ETH / BTC");
+  assert.equal(h.items()[0].children[1].children[0].textContent, "0,03456789 BTC");
   h.elements["currency-list"].clientWidth = 900;
   h.app.currencies.update({ ...h.config, displayCount: 4 });
   assert.equal(h.items().length, 3);
@@ -109,7 +139,7 @@ test("missing quotes show a dash and stale details stay in the tooltip", () => {
   const h = setup();
   h.app.currencies.setData({ "USD/BRL": quote(5.4, { stale: true }), "BTC/USD": quote(NaN) });
   assert.match(h.items()[0].title, /Dados anteriores/);
-  assert.equal(h.items()[1].children[1].textContent, "—");
+  assert.equal(h.items()[1].children[1].children[0].textContent, "—");
   assert.equal(h.items()[1].children.length, 2);
   assert.equal(h.items()[1].title, "Cotação indisponível");
   h.app.currencies.setData({

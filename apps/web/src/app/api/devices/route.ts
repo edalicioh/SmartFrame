@@ -16,6 +16,8 @@ export async function GET(request: Request) {
         timezone: true,
         lastSeenAt: true,
         appliedRevision: true,
+        activePanelId: true,
+        activePanelVersionId: true,
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },

@@ -5,7 +5,6 @@ import {
   defaultOnlineDashboard,
   onlineDashboardSchema,
   type OnlineDashboard,
-  type OnlineDashboardState,
   currencyCodes,
 } from "@smartframe/contracts";
 
@@ -14,7 +13,11 @@ type Device = {
   name: string;
   lastSeenAt: string | null;
   appliedRevision: string | null;
+  activePanelId: string | null;
+  activePanelVersionId: string | null;
 };
+type Panel = { id: string; name: string };
+type PanelState = Panel & { config: OnlineDashboard; draftRevision: number };
 type Photo = {
   id: string;
   filename: string;
@@ -37,7 +40,9 @@ const pendingPhoto = (photo: Photo) => photo.status === "pending" || photo.statu
 export function OnlineFrameEditor() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState("");
-  const [state, setState] = useState<OnlineDashboardState | null>(null);
+  const [panels, setPanels] = useState<Panel[]>([]);
+  const [panelId, setPanelId] = useState("");
+  const [state, setState] = useState<PanelState | null>(null);
   const [config, setConfig] = useState<OnlineDashboard>(defaultOnlineDashboard);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -53,7 +58,21 @@ export function OnlineFrameEditor() {
   const [currencyTarget, setCurrencyTarget] = useState("BRL");
   const frame = useRef<HTMLIFrameElement>(null);
   const operation = useRef(false);
-  const selectedId = useRef(deviceId);
+  const selectedId = useRef(panelId);
+  const selectedDevice = devices.find((device) => device.id === deviceId);
+  const activePanel = panels.find((panel) => panel.id === selectedDevice?.activePanelId);
+  const publishedRevision = selectedDevice?.activePanelVersionId
+    ? `online:${selectedDevice.activePanelVersionId}`
+    : null;
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   const readyPhotos = useMemo(() => photos.filter((photo) => photo.status === "ready"), [photos]);
   const hasPendingPhotos = photos.some(pendingPhoto);
@@ -78,11 +97,14 @@ export function OnlineFrameEditor() {
   // The preview iframe never polls or receives device credentials. Its parent uses
   // the authenticated, shared server cache, including for unsaved pair selections.
   const widgetSettings = JSON.stringify({
-    weather: config.widgets.weather,
-    currencies: config.widgets.currencies,
+    weather: { enabled: config.widgets.weather.enabled, city: config.widgets.weather.city },
+    currencies: {
+      enabled: config.widgets.currencies.enabled,
+      pairs: config.widgets.currencies.pairs,
+    },
   });
   useEffect(() => {
-    if (!deviceId) return;
+    if (!panelId) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     let controller: AbortController | null = null;
@@ -116,7 +138,7 @@ export function OnlineFrameEditor() {
       clearTimeout(timer);
       controller?.abort();
     };
-  }, [deviceId, widgetSettings]);
+  }, [panelId, widgetSettings]);
 
   const sendPreview = useCallback(() => {
     frame.current?.contentWindow?.postMessage(
@@ -131,6 +153,10 @@ export function OnlineFrameEditor() {
   const refreshDevices = useCallback(async () => {
     const result = await api("/api/devices");
     setDevices(result.data ?? []);
+  }, []);
+  const refreshPanels = useCallback(async () => {
+    const result = await api("/api/panels");
+    setPanels(result.panels ?? []);
   }, []);
   const refreshPhotos = useCallback(async () => {
     const result = await api("/api/photos");
@@ -152,22 +178,29 @@ export function OnlineFrameEditor() {
         if (active) setPhotos(result.photos ?? []);
       })
       .catch(() => {});
+    api("/api/panels")
+      .then((result) => {
+        if (active) setPanels(result.panels ?? []);
+      })
+      .catch((failure) => {
+        if (active) setError(failure.message);
+      });
     return () => {
       active = false;
     };
   }, []);
 
   useEffect(() => {
-    if (!deviceId) return;
+    if (!panelId) return;
     let active = true;
     // Loading and clearing old device data must happen before its response can render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setState(null);
     setError("");
-    api(`/api/online-frame?deviceId=${encodeURIComponent(deviceId)}`)
-      .then((next: OnlineDashboardState) => {
-        if (!active || selectedId.current !== deviceId) return;
+    api(`/api/panels?id=${encodeURIComponent(panelId)}`)
+      .then((next: PanelState) => {
+        if (!active || selectedId.current !== panelId) return;
         setState(next);
         setConfig(next.config);
         setDirty(false);
@@ -181,7 +214,7 @@ export function OnlineFrameEditor() {
     return () => {
       active = false;
     };
-  }, [deviceId]);
+  }, [panelId]);
 
   useEffect(() => {
     if (!pairing) return;
@@ -198,22 +231,19 @@ export function OnlineFrameEditor() {
   }, [pairing, refreshDevices]);
 
   useEffect(() => {
-    if (!deviceId || !state) return;
+    if (!panelId || !state) return;
     let active = true;
     const timer = window.setInterval(async () => {
       if (!active || operation.current) return;
       try {
-        const latest: OnlineDashboardState = await api(
-          `/api/online-frame?deviceId=${encodeURIComponent(deviceId)}`,
-        );
-        if (!active || selectedId.current !== deviceId) return;
+        const latest: PanelState = await api(`/api/panels?id=${encodeURIComponent(panelId)}`);
+        await refreshDevices();
+        if (!active || selectedId.current !== panelId) return;
         setState((current) =>
-          current && current.deviceId === deviceId
+          current && current.id === panelId
             ? {
                 ...current,
-                publishedRevision: latest.publishedRevision,
-                appliedRevision: latest.appliedRevision,
-                lastSeenAt: latest.lastSeenAt,
+                name: latest.name,
                 ...(!dirty && !operation.current
                   ? { draftRevision: latest.draftRevision, config: latest.config }
                   : {}),
@@ -231,7 +261,7 @@ export function OnlineFrameEditor() {
     };
     // The polling response intentionally does not depend on the full state object.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deviceId, state?.deviceId, dirty]);
+  }, [panelId, state?.id, dirty, refreshDevices]);
 
   useEffect(() => {
     if (!hasPendingPhotos) {
@@ -294,16 +324,86 @@ export function OnlineFrameEditor() {
   }
   function chooseDevice(nextId: string) {
     if (operation.current || loading) return;
-    if (dirty && !window.confirm("Há alterações não salvas. Descartar para trocar de dispositivo?"))
+    setDeviceId(nextId);
+  }
+  function choosePanel(nextId: string) {
+    if (operation.current || loading) return;
+    if (dirty && !window.confirm("Há alterações não salvas. Descartar para trocar de painel?"))
       return;
     selectedId.current = nextId;
-    setDeviceId(nextId);
+    setPanelId(nextId);
     setState(null);
     setDirty(false);
   }
 
+  async function managePanel(action: "create" | "duplicate" | "rename" | "delete") {
+    if (operation.current || loading) return;
+    if (
+      (action === "create" || action === "duplicate" || action === "delete") &&
+      dirty &&
+      !window.confirm(
+        action === "duplicate"
+          ? "Há alterações não salvas. Descartá-las e duplicar a última versão salva?"
+          : "Há alterações não salvas. Descartá-las?",
+      )
+    )
+      return;
+    if (action !== "create" && !state) return;
+    let name = "";
+    if (action !== "delete") {
+      const input = window.prompt(
+        "Nome do painel:",
+        action === "rename" ? state!.name : action === "duplicate" ? `${state!.name} (cópia)` : "",
+      );
+      if (input === null) return;
+      name = input.trim();
+      if (!name || name.length > 80) {
+        setError("Informe um nome com até 80 caracteres.");
+        return;
+      }
+    } else if (!window.confirm(`Excluir o painel ${state!.name}?`)) return;
+    operation.current = true;
+    setBusy("Atualizando painéis…");
+    setError("");
+    try {
+      const method = action === "rename" ? "PATCH" : action === "delete" ? "DELETE" : "POST";
+      const body =
+        action === "rename"
+          ? { id: state!.id, name }
+          : action === "delete"
+            ? { id: state!.id }
+            : { name, ...(action === "duplicate" ? { copyFromId: state!.id } : {}) };
+      const result = await api("/api/panels", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      await refreshPanels();
+      if (action === "rename") setState((current) => (current ? { ...current, name } : current));
+      else {
+        const nextId = action === "delete" ? "" : result.id;
+        selectedId.current = nextId;
+        setPanelId(nextId);
+        setState(null);
+        setDirty(false);
+      }
+      setNotice(
+        action === "delete"
+          ? "Painel excluído."
+          : action === "rename"
+            ? "Painel renomeado."
+            : "Painel criado.",
+      );
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Falha ao atualizar painel.");
+    } finally {
+      operation.current = false;
+      setBusy("");
+    }
+  }
+
   async function save(publish: boolean) {
-    if (!state || !deviceId || operation.current) return;
+    if (!state || !panelId || (publish && !deviceId) || operation.current) return;
     const parsed = onlineDashboardSchema.safeParse(config);
     if (!parsed.success) {
       setError("Confira as configurações antes de salvar.");
@@ -317,31 +417,30 @@ export function OnlineFrameEditor() {
       let revision = state.draftRevision;
       const savedConfig = parsed.data;
       if (dirty || revision === 0) {
-        const result = await api("/api/online-frame", {
+        const result = await api("/api/panels", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deviceId, config: savedConfig, expectedRevision: revision }),
+          body: JSON.stringify({ id: panelId, config: savedConfig, expectedRevision: revision }),
         });
         revision = result.draftRevision;
         setState((current) =>
-          current?.deviceId === deviceId
+          current?.id === panelId
             ? { ...current, draftRevision: revision, config: savedConfig }
             : current,
         );
         setDirty(false);
       }
-      let publishedRevision = state.publishedRevision;
       if (publish) {
-        const result = await api("/api/online-frame/publish", {
+        await api("/api/panels/publish", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ deviceId, expectedRevision: revision }),
+          body: JSON.stringify({ panelId, deviceId, expectedRevision: revision }),
         });
-        publishedRevision = result.revision;
+        await refreshDevices();
       }
       setState((current) =>
-        current?.deviceId === deviceId
-          ? { ...current, config: savedConfig, draftRevision: revision, publishedRevision }
+        current?.id === panelId
+          ? { ...current, config: savedConfig, draftRevision: revision }
           : current,
       );
       setDirty(false);
@@ -417,10 +516,7 @@ export function OnlineFrameEditor() {
       await api(`/api/devices/${device.id}`, { method: "DELETE" });
       setDevices((current) => current.filter((item) => item.id !== device.id));
       if (device.id === deviceId) {
-        selectedId.current = "";
         setDeviceId("");
-        setState(null);
-        setDirty(false);
       }
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Falha ao desvincular.");
@@ -457,8 +553,8 @@ export function OnlineFrameEditor() {
       <div className="online-title">
         <div>
           <p className="online-eyebrow">SMARTFRAME ONLINE</p>
-          <h1>Personalize seu porta-retratos</h1>
-          <p>Configure, visualize e publique o conteúdo do seu dispositivo.</p>
+          <h1>Meus painéis</h1>
+          <p>Crie seus painéis e escolha qual exibir em cada dispositivo.</p>
         </div>
         <label>
           Dispositivo
@@ -476,9 +572,52 @@ export function OnlineFrameEditor() {
           </select>
         </label>
       </div>
+      <div className="online-panel-actions">
+        <label>
+          Painel em edição
+          <select
+            disabled={!!busy || loading}
+            value={panelId}
+            onChange={(event) => choosePanel(event.target.value)}
+          >
+            <option value="">Selecione um painel</option>
+            {panels.map((panel) => (
+              <option key={panel.id} value={panel.id}>
+                {panel.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button disabled={!!busy || loading} onClick={() => void managePanel("create")}>
+          Criar painel
+        </button>
+        <button
+          disabled={!!busy || loading || !state}
+          onClick={() => void managePanel("duplicate")}
+        >
+          Duplicar
+        </button>
+        <button disabled={!!busy || loading || !state} onClick={() => void managePanel("rename")}>
+          Renomear
+        </button>
+        <button
+          className="online-danger"
+          disabled={!!busy || loading || !state}
+          onClick={() => void managePanel("delete")}
+        >
+          Excluir
+        </button>
+      </div>
+      {selectedDevice && (
+        <p className="online-device-status">
+          Dispositivo: <strong>{selectedDevice.name}</strong> · Painel enviado:{" "}
+          <strong>{activePanel?.name ?? "Nenhum"}</strong>
+        </p>
+      )}
       {!devices.length && (
         <div className="online-callout">
-          Nenhum dispositivo vinculado. Gere um código e vincule o SmartFrame para começar.
+          Nenhum dispositivo vinculado. Você já pode criar painéis; vincule um dispositivo para
+          exibi-los.
           <button disabled={!!busy} onClick={() => void pair()}>
             Vincular dispositivo
           </button>
@@ -519,14 +658,13 @@ export function OnlineFrameEditor() {
         </div>
       )}
       {notice && <div className="online-notice">{notice}</div>}
-      {!deviceId ? (
-        <p className="online-empty">Selecione um dispositivo para editar seu painel.</p>
+      {!panelId ? (
+        <p className="online-empty">Crie ou selecione um painel para editar.</p>
       ) : loading ? (
-        <p className="online-empty">Carregando configuração do dispositivo…</p>
+        <p className="online-empty">Carregando painel…</p>
       ) : !state ? (
         <p className="online-error">
-          A configuração deste dispositivo não pôde ser carregada. Verifique a conexão e selecione
-          novamente para tentar.
+          O painel não pôde ser carregado. Verifique a conexão e selecione novamente para tentar.
         </p>
       ) : (
         <div className="online-grid">
@@ -710,7 +848,7 @@ export function OnlineFrameEditor() {
                 </select>
               </label>
               <label>
-                Tamanho do relógio
+                Tamanho dos números do relógio
                 <select
                   value={config.widgets.clock.size}
                   onChange={(event) =>
@@ -732,7 +870,7 @@ export function OnlineFrameEditor() {
                 </select>
               </label>
               <label>
-                Cor do relógio
+                Cor dos números do relógio
                 <input
                   type="color"
                   value={config.widgets.clock.color || config.appearance.textColor}
@@ -955,6 +1093,96 @@ export function OnlineFrameEditor() {
                   />
                 </label>
               ))}
+              <fieldset>
+                <legend>Fundo e tamanho dos widgets</legend>
+                <small>
+                  O tamanho controla o espaço vertical relativo de cada cartão. A largura das fotos
+                  é ajustada separadamente abaixo. O texto acompanha a cor do fundo, exceto se os
+                  números do relógio tiverem uma cor personalizada.
+                </small>
+                {(
+                  [
+                    ["clock", "Relógio", config.theme === "dark" ? "#0b1d30" : "#102a43"],
+                    ["weather", "Clima", config.appearance.accentColor],
+                    ["currencies", "Cotações", "#222326"],
+                    ["calendar", "Calendário", config.theme === "dark" ? "#1d3045" : "#ffffff"],
+                    ["photos", "Fotos", "#26384b"],
+                  ] as const
+                ).map(([key, label, fallback]) => {
+                  const background = config.widgets[key].backgroundColor || fallback;
+                  const colorValue =
+                    background.length === 4
+                      ? `#${background
+                          .slice(1)
+                          .split("")
+                          .map((character) => character + character)
+                          .join("")}`
+                      : background;
+                  return (
+                    <fieldset key={key}>
+                      <legend>{label}</legend>
+                      <label>
+                        Cor de fundo
+                        <input
+                          type="color"
+                          value={colorValue}
+                          onChange={(event) =>
+                            change({
+                              ...config,
+                              widgets: {
+                                ...config.widgets,
+                                [key]: {
+                                  ...config.widgets[key],
+                                  backgroundColor: event.target.value,
+                                },
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={!config.widgets[key].backgroundColor}
+                        onClick={() =>
+                          change({
+                            ...config,
+                            widgets: {
+                              ...config.widgets,
+                              [key]: { ...config.widgets[key], backgroundColor: "" },
+                            },
+                          })
+                        }
+                      >
+                        Usar fundo padrão
+                      </button>
+                      {key !== "photos" && (
+                        <label>
+                          Tamanho do cartão
+                          <select
+                            value={config.widgets[key].cardSize}
+                            onChange={(event) =>
+                              change({
+                                ...config,
+                                widgets: {
+                                  ...config.widgets,
+                                  [key]: {
+                                    ...config.widgets[key],
+                                    cardSize: event.target.value as "small" | "normal" | "large",
+                                  },
+                                },
+                              })
+                            }
+                          >
+                            <option value="small">Pequeno</option>
+                            <option value="normal">Normal</option>
+                            <option value="large">Grande</option>
+                          </select>
+                        </label>
+                      )}
+                    </fieldset>
+                  );
+                })}
+              </fieldset>
               <label>
                 Orientação do painel
                 <select
@@ -1031,16 +1259,17 @@ export function OnlineFrameEditor() {
             </fieldset>
             <div className="online-save">
               <button disabled={controlsDisabled} onClick={() => void save(false)}>
-                Salvar rascunho
+                Salvar painel
               </button>
               <button
                 disabled={
                   controlsDisabled ||
+                  !deviceId ||
                   !selectedPhotoIds.every((id) => readyPhotos.some((photo) => photo.id === id))
                 }
                 onClick={() => void save(true)}
               >
-                Publicar
+                Exibir neste dispositivo
               </button>
               {dirty && <small>Alterações não salvas</small>}
             </div>
@@ -1048,11 +1277,7 @@ export function OnlineFrameEditor() {
           <section className="online-preview">
             <header>
               <strong>Prévia ao vivo</strong>
-              <span>
-                {state.publishedRevision
-                  ? `Publicado ${state.publishedRevision}`
-                  : "Ainda não publicado"}
-              </span>
+              <span>{state.name}</span>
             </header>
             <iframe
               ref={frame}
@@ -1061,14 +1286,19 @@ export function OnlineFrameEditor() {
               title="Prévia do painel"
             />
             <p>
-              Rascunho r{state.draftRevision} · Publicado {state.publishedRevision ?? "—"} ·
-              Aplicado pelo dispositivo {state.appliedRevision ?? "—"}
+              Rascunho r{state.draftRevision} · Enviado ao dispositivo {publishedRevision ?? "—"} ·
+              Aplicado {selectedDevice?.appliedRevision ?? "—"}
             </p>
-            {state.lastSeenAt && (
-              <small>Visto por último: {new Date(state.lastSeenAt).toLocaleString("pt-BR")}</small>
+            {selectedDevice?.lastSeenAt && (
+              <small>
+                Visto por último: {new Date(selectedDevice.lastSeenAt).toLocaleString("pt-BR")}
+              </small>
             )}
-            {state.publishedRevision && state.appliedRevision !== state.publishedRevision && (
+            {publishedRevision && selectedDevice?.appliedRevision !== publishedRevision && (
               <p>Publicação enviada; aguardando confirmação do dispositivo conectado.</p>
+            )}
+            {publishedRevision && selectedDevice?.appliedRevision === publishedRevision && (
+              <p>O dispositivo confirmou a versão enviada.</p>
             )}
           </section>
         </div>

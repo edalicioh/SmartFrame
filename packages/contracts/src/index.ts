@@ -7,6 +7,19 @@ export type { WidgetData } from "./photo-frame";
 export { onlineDashboardSchema, defaultOnlineDashboard } from "./online-dashboard";
 export type { OnlineDashboard, OnlineDashboardState } from "./online-dashboard";
 export {
+  convertOnlineDashboardToGrid,
+  createGridWidget,
+  dashboardPhotoIds,
+  findGridPosition,
+  gridDimensions,
+  gridItemsOverlap,
+  gridWidgetCatalog,
+  gridWidgetSchema,
+  readOnlineDashboard,
+  widgetGridDashboardSchema,
+} from "./widget-grid";
+export type { GridItem, GridWidget, WidgetGridDashboard } from "./widget-grid";
+export {
   currencyCodes,
   defaultCurrencyPairs,
   currencyPairSchema,

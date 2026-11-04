@@ -27,6 +27,31 @@ describe("contrato do dashboard online", () => {
     ).toBe(false);
   });
 
+  it("preserva o estilo padrão de publicações antigas e valida fundo e tamanho por widget", () => {
+    const original = onlineDashboardSchema.parse({ widgets: { clock: { format: "12h" } } });
+    for (const key of ["clock", "weather", "currencies", "calendar"] as const) {
+      expect(original.widgets[key].backgroundColor).toBe("");
+      expect(original.widgets[key].cardSize).toBe("normal");
+      expect(
+        onlineDashboardSchema.safeParse({ widgets: { [key]: { cardSize: "huge" } } }).success,
+      ).toBe(false);
+      expect(
+        onlineDashboardSchema.safeParse({ widgets: { [key]: { backgroundColor: "red" } } }).success,
+      ).toBe(false);
+    }
+    expect(original.widgets.photos.backgroundColor).toBe("");
+    const updated = onlineDashboardSchema.parse({
+      widgets: {
+        photos: { backgroundColor: "#123456" },
+        clock: { backgroundColor: "#abc", cardSize: "large" },
+        weather: { backgroundColor: "#ffffff", cardSize: "small" },
+        currencies: { backgroundColor: "#222326", cardSize: "large" },
+        calendar: { backgroundColor: "#000000", cardSize: "small" },
+      },
+    });
+    expect(onlineDashboardSchema.parse(updated)).toEqual(updated);
+  });
+
   it("migra as moedas antigas e permite pares com destinos diferentes", () => {
     const legacy = onlineDashboardSchema.parse({
       widgets: { currencies: { symbols: ["BTC", "USD"] } },

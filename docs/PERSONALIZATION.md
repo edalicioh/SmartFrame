@@ -1,7 +1,10 @@
 # Personalização — fluxo online v0.4
 
-O fluxo principal é o editor administrativo por dispositivo em `/layouts`. Selecione
-um tablet, ajuste o dashboard e publique. O editor salva rascunho e publicação como
+O fluxo principal é o editor de painéis em `/layouts`. Crie ou selecione um painel,
+ajuste suas configurações e salve. Para exibi-lo, selecione um tablet e clique em
+**Exibir neste dispositivo**. Salvar não altera o que está na tela; a mesma foto pode
+ser usada em mais de um painel. Para excluir um painel em uso, primeiro escolha e
+exiba outro painel em cada dispositivo que o utiliza. O editor mantém rascunho e publicação como
 revisões distintas; `appliedRevision` só deve refletir a revisão online depois que o
 APK confirmar aplicação bem-sucedida. Contrato de campos e endpoints: [API](API.md).
 
@@ -12,7 +15,9 @@ APK confirmar aplicação bem-sucedida. Contrato de campos e endpoints: [API](AP
    qualquer atualização. Não use `docker compose down -v`.
 2. Preserve os registros de dispositivos/credenciais existentes; não exclua banco,
    mídia, conta ou pareamento para migrar. A atualização normal não exige pareamento
-   novo nem migração de schema esperada para layouts por dispositivo.
+   novo. Para múltiplos painéis, pare os processos que usam o SQLite e execute
+   `npm run db:migrate` depois do backup. A migration preserva rascunhos e versões
+   publicadas e associa os layouts online existentes aos seus dispositivos.
 3. Instale o APK v0.4 somente se sua assinatura for compatível com o APK instalado.
    Não desinstale automaticamente: isso pode apagar dados e credenciais locais.
 4. No editor, escolha cada dispositivo, crie/ajuste a configuração, selecione fotos
@@ -39,6 +44,17 @@ O upload pela biblioteca é processado pelo servidor com Sharp, ajustado para ca
 em 1024×600 preservando proporção. A escolha e a publicação são explícitas. Os
 endpoints novos e limites estão descritos em [API](API.md); confirme-os na versão
 implantada e mantenha backups antes de alterações operacionais.
+
+## Fundo e tamanho dos widgets
+
+Em **Aparência e layout → Fundo e tamanho dos widgets**, escolha uma cor para cada
+cartão e use **Usar fundo padrão** para voltar a acompanhar o tema. O tamanho pequeno,
+normal ou grande altera o espaço vertical relativo de relógio, clima, cotações e
+calendário; o espaço é compartilhado entre os cartões ativos. O tamanho dos números
+do relógio é independente. A largura das fotos continua sendo ajustada na opção de
+layout existente. O fundo das fotos aparece quando a imagem não cobre a área; no modo
+conter, a cópia desfocada pode cobri-lo. Para cores personalizadas, o texto dos cartões
+usa contraste automático, exceto se a cor dos números do relógio for definida à parte.
 
 ## Registro histórico do modo Foto v0.3
 

@@ -194,39 +194,91 @@ try {
   );
   assert.equal(
     await evaluate(`document.querySelector('.currency-value').textContent.replace(/\\s/g,' ')`),
-    "R$ 5,40",
+    "5,40",
     "cotação recebida do backend",
   );
   assert.equal(
     await evaluate(
-      `!document.querySelector('#currencies-status') && !document.querySelector('#currencies .card-label') && !document.querySelector('#currencies .currency-change') && [...document.querySelectorAll('.currency-item')].every(item => item.children.length === 2)`,
+      `!document.querySelector('#currencies-status') && !document.querySelector('#currencies .card-label') && !document.querySelector('#currencies .currency-change') && [...document.querySelectorAll('.currency-item')].every(item => item.querySelector('.currency-header') && item.querySelector('.currency-body'))`,
     ),
     true,
-    "cartão mostra somente os pares e os valores",
+    "cartão sem variação mostra o par e o valor",
   );
   assert.equal(
     await evaluate(`(() => {
       const item = document.querySelector('.currency-item');
       const card = document.querySelector('#currencies').getBoundingClientRect();
       const list = document.querySelector('#currency-list').getBoundingClientRect();
-      return getComputedStyle(item).textAlign === 'center' &&
+      return getComputedStyle(item).textAlign === 'left' &&
         Math.abs((list.top + list.bottom) / 2 - (card.top + card.bottom) / 2) < 1;
     })()`),
     true,
-    "par e valor centralizados no cartão",
+    "par e valor alinhados à esquerda no cartão",
   );
   assert.equal(
     await evaluate(`(() => {
-      applyConfig({widgets:{currencies:{pairs:['BTC/USD'],displayCount:1}},widgetData:{currencies:{'BTC/USD':{value:65000,source:'Coinbase',updatedAt:new Date().toISOString(),stale:false}}}});
-      return document.querySelector('.currency-code').textContent === 'BTC/USD' &&
-        document.querySelector('.currency-value').textContent.replace(/\u00a0/g,' ') === 'US$ 65.000,00' &&
-        document.querySelector('.currency-item').children.length === 2;
+      applyConfig({widgets:{currencies:{pairs:['BTC/USD'],displayCount:1}},widgetData:{currencies:{'BTC/USD':{value:65000,source:'Coinbase',updatedAt:new Date().toISOString(),stale:false,changePercent:1.19,changePeriod:'24h'}}}});
+      return document.querySelector('.currency-code').textContent === 'BTC / USD' &&
+        document.querySelector('.currency-value').textContent.replace(/\u00a0/g,' ') === '65.000,00' &&
+        document.querySelector('.currency-change').textContent === '+1,19%' &&
+        document.querySelector('.currency-indicator').getAttribute('aria-label') === 'Alta em 24 horas';
     })()`),
     true,
-    "par BTC/USD exibe dólares, sem forçar BRL",
+    "par BTC/USD exibe cotação e variação de 24 horas",
   );
   await evaluate(
     `applyConfig({widgets:{currencies:{pairs:['USD/BRL','EUR/BRL','BTC/BRL'],displayCount:2}},widgetData:${JSON.stringify(widgetData)}})`,
+  );
+  assert.equal(
+    await evaluate(`(() => {
+      applyConfig({widgets:{
+        photos:{backgroundColor:'#123456'},
+        clock:{backgroundColor:'#ffffff',cardSize:'small'},
+        weather:{backgroundColor:'#000000',cardSize:'large'},
+        currencies:{backgroundColor:'#abcdef',cardSize:'large'},
+        calendar:{backgroundColor:'#202020',cardSize:'small'}
+      }});
+      const style = selector => getComputedStyle(document.querySelector(selector));
+      const smallHeight = document.querySelector('#clock').getBoundingClientRect().height;
+      const colorsOk = style('#photos').backgroundColor === 'rgb(18, 52, 86)' &&
+        style('#clock').backgroundColor === 'rgb(255, 255, 255)' &&
+        style('#clock').color === 'rgb(23, 32, 51)' &&
+        style('#weather').backgroundColor === 'rgb(0, 0, 0)' &&
+        style('#weather').color === 'rgb(255, 255, 255)' &&
+        style('.currency-item').backgroundColor === 'rgb(171, 205, 239)' &&
+        style('#calendar').backgroundColor === 'rgb(32, 32, 32)';
+      applyConfig({widgets:{clock:{cardSize:'large'}}});
+      const larger = document.querySelector('#clock').getBoundingClientRect().height > smallHeight;
+      applyConfig({widgets:{photos:{backgroundColor:''},clock:{backgroundColor:'',cardSize:'normal'},weather:{backgroundColor:'',cardSize:'normal'},currencies:{backgroundColor:'',cardSize:'normal'},calendar:{backgroundColor:'',cardSize:'normal'}}});
+      return colorsOk && larger && style('.currency-item').backgroundColor === 'rgb(34, 35, 38)';
+    })()`),
+    true,
+    "fundos e tamanhos independentes aplicam, contrastam e voltam ao padrão",
+  );
+  await call("Emulation.setDeviceMetricsOverride", {
+    width: 800,
+    height: 480,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  for (const small of ["clock", "weather", "currencies", "calendar"]) {
+    const escaped = await evaluate(`(() => {
+      const widgets = Object.fromEntries(['clock','weather','currencies','calendar'].map(name =>
+        [name, {cardSize: name === ${JSON.stringify(small)} ? 'small' : 'large'}]));
+      applyConfig({widgets});
+      return [...document.querySelectorAll('.widget-stack .card:not([hidden])')].flatMap(card => {
+        const outer = card.getBoundingClientRect();
+        return [...card.querySelectorAll('*')].filter(el => {
+          if (!el.getClientRects().length) return false;
+          const r = el.getBoundingClientRect();
+          return r.left < outer.left - 1 || r.right > outer.right + 1 || r.top < outer.top - 1 || r.bottom > outer.bottom + 1;
+        }).map(el => card.id + ':' + (el.className || el.tagName));
+      });
+    })()`);
+    assert.deepEqual(escaped, [], `widgets não transbordam com ${small} pequeno`);
+  }
+  await evaluate(
+    `applyConfig({widgets:{clock:{cardSize:'normal'},weather:{cardSize:'normal'},currencies:{cardSize:'normal'},calendar:{cardSize:'normal'}}})`,
   );
   assert.equal(
     await evaluate(
@@ -242,6 +294,39 @@ try {
     ),
     true,
     "próxima foto carregada antes do intervalo, sem trocar a atual",
+  );
+  assert.equal(
+    await evaluate(`(() => {
+      applyConfig({widgets:{photos:{fit:'contain'}}});
+      const photo = document.querySelector('.photo-image.is-current');
+      const background = document.querySelector('.photo-backdrop.is-current');
+      const style = getComputedStyle(background);
+      return background.getAttribute('src') === photo.getAttribute('src') &&
+        background.alt === '' && background.getAttribute('aria-hidden') === 'true' &&
+        style.display === 'block' && style.objectFit === 'cover' && style.filter === 'blur(20px)' &&
+        getComputedStyle(photo).objectFit === 'contain' && getComputedStyle(photo).filter === 'none' &&
+        getComputedStyle(document.querySelector('.photo-stage')).overflow === 'hidden' &&
+        getComputedStyle(document.querySelector('#photos')).overflow === 'hidden';
+    })()`),
+    true,
+    "conter mantém foto nítida e inteira sobre cópia desfocada, recortada dentro do painel",
+  );
+  await evaluate(
+    `applyConfig({widgetData:{weather:${JSON.stringify(widgetData.weather)},currencies:${JSON.stringify(
+      {
+        ...widgetData.currencies,
+        "USD/BRL": {
+          ...widgetData.currencies["USD/BRL"],
+          changePercent: 1.19,
+          changePeriod: "24h",
+        },
+        "EUR/BRL": {
+          ...widgetData.currencies["EUR/BRL"],
+          changePercent: -1.19,
+          changePeriod: "24h",
+        },
+      },
+    )}}})`,
   );
   for (const [width, height] of [
     [1024, 600],
@@ -405,6 +490,21 @@ try {
   await evaluate(`document.querySelector('#photo-next').click()`);
   await sleep(300);
   assert.equal(await evaluate(`document.querySelector('.photo-image.is-current').alt`), "B");
+  assert.equal(
+    await evaluate(`document.querySelector('.photo-backdrop.is-current').getAttribute('src')`),
+    "/b.png",
+    "fundo desfocado acompanha a navegação do carrossel",
+  );
+  assert.equal(
+    await evaluate(`(() => {
+      applyConfig({widgets:{photos:{fit:'cover'}}});
+      return [...document.querySelectorAll('.photo-backdrop')].every(background =>
+        !background.hasAttribute('src') && getComputedStyle(background).display === 'none') &&
+        getComputedStyle(document.querySelector('.photo-image.is-current')).objectFit === 'cover';
+    })()`),
+    true,
+    "preencher mantém o comportamento original, sem fundo desfocado",
+  );
   await evaluate(
     `applyConfig({widgets:{photos:{items:[{id:'b',src:'/b.png',alt:'B'},{id:'a',src:'/a.png',alt:'A'}]}}})`,
   );

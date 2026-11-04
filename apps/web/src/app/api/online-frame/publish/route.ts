@@ -1,4 +1,4 @@
-import { onlineDashboardSchema } from "@smartframe/contracts";
+import { dashboardPhotoIds, onlineDashboardSchema } from "@smartframe/contracts";
 import { getDatabase } from "@smartframe/database";
 import { FrameError } from "@smartframe/frames";
 import { z } from "zod";
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     if (layout.draftRevision !== expectedRevision)
       throw new FrameError(409, "A configuração foi alterada. Atualize e tente novamente.");
     const config = onlineDashboardSchema.parse(layout.draft ?? {});
-    const ids = config.widgets.photos.photoIds;
+    const ids = dashboardPhotoIds(config);
     const media = ids.length
       ? await db.media.findMany({
           where: {
@@ -50,6 +50,14 @@ export async function POST(request: Request) {
     });
     if (!updated.count)
       throw new FrameError(409, "A configuração foi alterada. Atualize e tente novamente.");
+    await db.device.updateMany({
+      where: {
+        id: device.id,
+        householdId: owner.householdId,
+        OR: [{ activePanelId: null }, { activePanelId: layout.id }],
+      },
+      data: { activePanelId: layout.id, activePanelVersionId: version.id },
+    });
     return Response.json({ revision: `online:${version.id}` }, { headers: privateHeaders });
   });
 }

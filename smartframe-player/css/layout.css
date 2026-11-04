@@ -32,16 +32,16 @@
   row-gap: 0;
 }
 .widget-stack > #clock:not([hidden]) {
-  grid-row: auto / span 18;
+  grid-row: auto / span var(--widget-rows, 18);
 }
 .widget-stack > #weather:not([hidden]) {
-  grid-row: auto / span 16;
+  grid-row: auto / span var(--widget-rows, 16);
 }
 .widget-stack > #currencies:not([hidden]) {
-  grid-row: auto / span 19;
+  grid-row: auto / span var(--widget-rows, 19);
 }
 .widget-stack > #calendar:not([hidden]) {
-  grid-row: auto / span 47;
+  grid-row: auto / span var(--widget-rows, 47);
 }
 .widget-stack > .card:not([hidden]) {
   margin-bottom: 8px;

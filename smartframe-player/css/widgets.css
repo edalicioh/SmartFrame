@@ -1,30 +1,52 @@
 .photo-panel {
   position: relative;
   border-radius: 18px;
-  background: #26384b;
+  background: var(--widget-background, #26384b);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
 .photo-stage,
+.photo-backdrop,
 .photo-image {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
+.photo-stage {
+  overflow: hidden;
+  isolation: isolate;
+}
+.photo-backdrop,
 .photo-image {
   object-fit: cover;
   opacity: 0;
   transition: opacity 0.35s ease;
 }
+.photo-backdrop {
+  display: none;
+  inset: -32px;
+  width: calc(100% + 64px);
+  height: calc(100% + 64px);
+  filter: blur(20px);
+  pointer-events: none;
+}
+.photo-panel.fit-contain .photo-backdrop {
+  display: block;
+}
+.photo-image {
+  z-index: 1;
+}
 .photo-panel.fit-contain .photo-image {
   object-fit: contain;
 }
-.photo-image.is-current {
+.photo-image.is-current,
+.photo-backdrop.is-current {
   opacity: 1;
 }
 .photo-empty {
   position: absolute;
+  z-index: 2;
   inset: 0;
   display: grid;
   place-items: center;
@@ -78,8 +100,8 @@
   padding: clamp(8px, 1.3vw, 16px);
 }
 .clock-card {
-  background: var(--clock-bg);
-  color: #fff;
+  background: var(--widget-background, var(--clock-bg));
+  color: var(--widget-foreground, #fff);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -103,8 +125,8 @@
   display: none !important;
 }
 .weather-card {
-  background: var(--weather-bg);
-  color: white;
+  background: var(--widget-background, var(--weather-bg));
+  color: var(--widget-foreground, white);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -145,33 +167,92 @@
   flex-shrink: 0;
   line-height: 1;
 }
-.currencies-card {
-  background: var(--currency-bg);
-  color: white;
+.card.currencies-card {
+  background: transparent;
+  color: var(--widget-foreground, white);
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
+  padding: 0;
+  box-shadow: none;
 }
 .currency-list {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  width: 100%;
   min-height: 0;
 }
 .currency-item {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(5px, 1vh, 12px);
+  padding: clamp(8px, 1.3vw, 16px);
+  border: 1px solid #3a3b3f;
+  border-radius: 18px;
+  background: var(--widget-background, #222326);
+  text-align: left;
+  overflow: hidden;
+}
+.currency-header,
+.currency-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.currency-body {
+  justify-content: space-between;
 }
 .currency-code {
+  min-width: 0;
   font-size: clamp(12px, 1.4vw, 18px);
-  color: #c8d8e9;
+  font-weight: 600;
+  color: var(--widget-foreground, #f2f2f3);
 }
 .currency-value {
   font-size: clamp(22px, 3vw, 36px);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.15;
   white-space: nowrap;
+  min-width: 0;
+}
+.currency-change {
+  font-size: clamp(11px, 1.3vw, 17px);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.currency-change.currency-up {
+  color: var(--widget-up, #8dd6a3);
+}
+.currency-change.currency-down {
+  color: var(--widget-down, #ff999d);
+}
+.currency-change.currency-flat {
+  color: var(--widget-flat, #bfc3ca);
+}
+.currency-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 clamp(25px, 3vw, 40px);
+  width: clamp(25px, 3vw, 40px);
+  height: clamp(25px, 3vw, 40px);
+  border-radius: 50%;
+  font-size: clamp(19px, 2.2vw, 30px);
+  line-height: 1;
+}
+.currency-indicator.currency-up {
+  color: #b3f2c8;
+  background: #075a2d;
+}
+.currency-indicator.currency-down {
+  color: #ffd1d1;
+  background: #812f36;
+}
+.currency-indicator.currency-flat {
+  color: #e0e2e6;
+  background: #52565e;
 }
 .currency-code,
 .currency-value {
@@ -180,7 +261,8 @@
   white-space: nowrap;
 }
 .calendar-card {
-  background: var(--surface);
+  background: var(--widget-background, var(--surface));
+  color: var(--widget-foreground, var(--text));
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -214,7 +296,7 @@
   align-items: center;
 }
 .calendar-weekdays {
-  color: var(--muted);
+  color: var(--widget-muted, var(--muted));
   font-size: clamp(8px, 0.9vw, 11px);
   font-weight: 700;
 }
@@ -234,7 +316,7 @@
   border-radius: 50%;
 }
 .calendar-day.adjacent {
-  color: var(--muted);
+  color: var(--widget-muted, var(--muted));
   opacity: 0.55;
 }
 .calendar-day.today {

@@ -29,7 +29,8 @@ function harness(result = () => ({ ok: true, delay: 0 })) {
     now = end;
   }
   class Element {
-    constructor() {
+    constructor(background = false) {
+      this.background = background;
       const classes = new Set();
       this.classList = {
         add: (name) => classes.add(name),
@@ -44,6 +45,7 @@ function harness(result = () => ({ ok: true, delay: 0 })) {
     set src(value) {
       timers.delete(this.loadId);
       this.url = value;
+      if (this.background) return;
       requests.push({ src: value, at: now });
       const response = result(value, requests.filter((x) => x.src === value).length);
       this.loadId = later(() => {
@@ -69,13 +71,15 @@ function harness(result = () => ({ ok: true, delay: 0 })) {
     }
   }
   const images = [new Element(), new Element()];
+  const backgrounds = [new Element(true), new Element(true)];
   const elements = Object.fromEntries(
     ["photos", "photo-message", "photo-indicators", "photo-previous", "photo-next"].map((name) => [
       name,
       new Element(),
     ]),
   );
-  elements.photos.querySelectorAll = () => images;
+  elements.photos.querySelectorAll = (selector) =>
+    selector === ".photo-backdrop" ? backgrounds : images;
   const app = {};
   runInNewContext(source, {
     window: { SmartFrame: app },
@@ -83,10 +87,10 @@ function harness(result = () => ({ ok: true, delay: 0 })) {
     setTimeout: later,
     clearTimeout: (id) => timers.delete(id),
   });
-  function update(items, intervalSeconds = 5) {
+  function update(items, intervalSeconds = 5, fit = "cover") {
     app.carousel.update({
       enabled: true,
-      fit: "cover",
+      fit,
       intervalSeconds,
       items: items.map((id) => ({ id, src: "/" + id, alt: id })),
     });
@@ -94,6 +98,8 @@ function harness(result = () => ({ ok: true, delay: 0 })) {
   return {
     app,
     images,
+    backgrounds,
+    panel: elements.photos,
     requests,
     advance,
     update,
@@ -198,4 +204,47 @@ test("replacing the list discards the old preload and releases the outgoing imag
   assert.equal(h.images.filter((image) => image.src).length, 1);
   h.advance(10000);
   assert.equal(h.displayed(), "c");
+});
+
+test("contain backgrounds follow the displayed photo, not the pending preload", () => {
+  const h = harness();
+  h.update(["a", "b"], 5, "contain");
+  h.advance(0);
+  const background = () => h.backgrounds.find((image) => image.classList.contains("is-current"));
+  assert.equal(h.panel.classList.contains("fit-contain"), true);
+  assert.equal(background().src, "/a");
+  h.advance(350);
+  assert.equal(background().src, "/a");
+  assert.equal(h.backgrounds.filter((image) => image.src).length, 1);
+  h.advance(4650);
+  assert.equal(h.displayed(), "b");
+  assert.equal(background().src, "/b");
+  h.advance(350);
+  assert.equal(h.backgrounds.filter((image) => image.src).length, 1);
+});
+
+test("switching fit updates backgrounds immediately without reloading the foreground", () => {
+  const h = harness();
+  h.update(["a"]);
+  h.advance(0);
+  assert.ok(h.backgrounds.every((image) => !image.src));
+  h.update(["a"], 5, "contain");
+  assert.equal(h.backgrounds.find((image) => image.classList.contains("is-current")).src, "/a");
+  h.update(["a"]);
+  assert.equal(h.panel.classList.contains("fit-contain"), false);
+  assert.ok(h.backgrounds.every((image) => !image.src && !image.classList.contains("is-current")));
+  assert.equal(h.displayed(), "a");
+  assert.equal(h.requests.length, 1);
+});
+
+test("contain preserves the current background on failure and clears it for an empty album", () => {
+  const h = harness((src) => ({ ok: src !== "/bad", delay: 0 }));
+  h.update(["a"], 5, "contain");
+  h.advance(0);
+  h.update(["bad"], 5, "contain");
+  h.advance(0);
+  assert.equal(h.displayed(), "a");
+  assert.equal(h.backgrounds.find((image) => image.classList.contains("is-current")).src, "/a");
+  h.update([], 5, "contain");
+  assert.ok(h.backgrounds.every((image) => !image.src && !image.classList.contains("is-current")));
 });

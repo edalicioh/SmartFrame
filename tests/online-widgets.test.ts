@@ -35,6 +35,7 @@ function source(input: URL | RequestInfo) {
       current: { temperature_2m: 24, weather_code: 2 },
       daily: { temperature_2m_min: [19], temperature_2m_max: [27] },
     };
+  if (url.includes("api.exchange.coinbase.com")) return { open: "50000", last: "65000" };
   const currency = new URL(url).searchParams.get("currency");
   const rates =
     currency === "USD"
@@ -74,19 +75,22 @@ describe("cotações online por par", () => {
     expect(data.currencies["EUR/BRL"]?.value).toBe(6);
     expect(data.currencies["BTC/BRL"]?.value).toBe(350000);
     expect(data.currencies["BTC/USD"]?.value).toBe(65000);
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(data.currencies["BTC/USD"]?.changePercent).toBeCloseTo(30);
+    expect(data.currencies["BTC/USD"]?.changePeriod).toBe("24h");
+    expect(data.currencies["BTC/BRL"]).not.toHaveProperty("changePercent");
+    expect(fetcher).toHaveBeenCalledTimes(6);
     vi.setSystemTime(new Date("2026-11-02T12:01:00Z"));
     await refreshOnlineWidgets(db, settings);
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenCalledTimes(6);
     vi.setSystemTime(new Date("2026-11-02T12:29:59.999Z"));
     await refreshOnlineWidgets(db, settings);
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenCalledTimes(6);
     expect((await onlineWidgetData(db, settings)).currencies["BTC/USD"]?.updatedAt).toBe(
       "2026-11-02T12:00:00.000Z",
     );
     vi.setSystemTime(new Date("2026-11-02T12:30:00Z"));
     await refreshOnlineWidgets(db, settings);
-    expect(fetcher).toHaveBeenCalledTimes(10);
+    expect(fetcher).toHaveBeenCalledTimes(12);
     expect((await onlineWidgetData(db, settings)).weather?.updatedAt).toBe(
       "2026-11-02T12:30:00.000Z",
     );
@@ -104,7 +108,7 @@ describe("cotações online por par", () => {
       await onlineWidgetData(db, settings);
       await refreshOnlineWidgets(db, settings);
     }
-    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(fetcher).toHaveBeenCalledTimes(6);
   });
 
   it("preserva o cache e sinaliza dados antigos após falha, sem inventar valores", async () => {
@@ -121,13 +125,14 @@ describe("cotações online por par", () => {
     await refreshOnlineWidgets(db, settings);
     expect(data.weather).toMatchObject({ temperature: 24, stale: true });
     expect(data.currencies["BTC/BRL"]).toMatchObject({ value: 350000, stale: true });
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(data.currencies["BTC/USD"]).not.toHaveProperty("changePercent");
+    expect(fetcher).toHaveBeenCalledTimes(5);
     vi.setSystemTime(new Date("2026-11-02T12:31:59.999Z"));
     await refreshOnlineWidgets(db, settings);
-    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(fetcher).toHaveBeenCalledTimes(5);
     vi.setSystemTime(new Date("2026-11-02T12:32:00Z"));
     await refreshOnlineWidgets(db, settings);
-    expect(fetcher).toHaveBeenCalledTimes(8);
+    expect(fetcher).toHaveBeenCalledTimes(10);
   });
 
   it("sem cache ou com widgets desligados não fornece demonstrações", async () => {
@@ -154,6 +159,28 @@ describe("cotações online por par", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("mantém a cotação quando a estatística de 24 horas é inválida ou indisponível", async () => {
+    const onlyBtc = {
+      weather: { enabled: false, city: "" },
+      currencies: { enabled: true, pairs: ["BTC/USD"] },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn<typeof fetch>()
+        .mockImplementation(async (input) =>
+          String(input).includes("api.exchange.coinbase.com")
+            ? Response.json({ open: "0", last: "65000" })
+            : Response.json(source(input)),
+        ),
+    );
+    await refreshOnlineWidgets(db, onlyBtc);
+    const data = await onlineWidgetData(db, onlyBtc);
+    expect(data.currencies["BTC/USD"]?.value).toBe(65000);
+    expect(data.currencies["BTC/USD"]).not.toHaveProperty("changePercent");
+    await refreshOnlineWidgets(db, onlyBtc);
+  });
+
   it("trocar a cidade não reutiliza o clima da cidade anterior", async () => {
     vi.stubGlobal(
       "fetch",
@@ -178,7 +205,7 @@ describe("cotações online por par", () => {
     };
     const second = { ...first, currencies: { enabled: true, pairs: ["BTC/BRL", "BTC/ETH"] } };
     await Promise.all([refreshOnlineWidgets(db, first), refreshOnlineWidgets(db, second)]);
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(3);
     expect((await onlineWidgetData(db, second)).currencies["BTC/ETH"]?.value).toBe(30);
     await refreshOnlineWidgets(db, second);
   });
@@ -206,14 +233,15 @@ describe("cotações online por par", () => {
     let complete!: () => void;
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockImplementation(
-        () =>
-          new Promise<Response>((resolve) => {
-            complete = () =>
-              resolve(
-                Response.json(source("https://api.coinbase.com/v2/exchange-rates?currency=BTC")),
-              );
-          }),
+      vi.fn().mockImplementation((input) =>
+        String(input).includes("api.exchange.coinbase.com")
+          ? Promise.resolve(Response.json({ open: "50000", last: "65000" }))
+          : new Promise<Response>((resolve) => {
+              complete = () =>
+                resolve(
+                  Response.json(source("https://api.coinbase.com/v2/exchange-rates?currency=BTC")),
+                );
+            }),
       ),
     );
     const onlyBtc = {

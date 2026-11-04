@@ -10,16 +10,26 @@
     appearance: { backgroundColor: "", accentColor: "", textColor: "" },
     layoutOptions: { photoPosition: "left", photoWidthPercent: 62 },
     widgets: {
-      photos: { enabled: true, intervalSeconds: 15, fit: "cover", items: [] },
-      clock: { enabled: true, format: "24h", showDate: false, size: "normal", color: "" },
-      weather: { enabled: true, city: "Camboriú" },
+      photos: { enabled: true, backgroundColor: "", intervalSeconds: 15, fit: "cover", items: [] },
+      clock: {
+        enabled: true,
+        backgroundColor: "",
+        cardSize: "normal",
+        format: "24h",
+        showDate: false,
+        size: "normal",
+        color: "",
+      },
+      weather: { enabled: true, backgroundColor: "", cardSize: "normal", city: "Camboriú" },
       currencies: {
         enabled: true,
+        backgroundColor: "",
+        cardSize: "normal",
         pairs: ["USD/BRL", "EUR/BRL", "BTC/BRL"],
         displayCount: 2,
         intervalSeconds: 10,
       },
-      calendar: { enabled: true, highlightToday: true },
+      calendar: { enabled: true, backgroundColor: "", cardSize: "normal", highlightToday: true },
     },
   };
   function object(value) {
@@ -144,12 +154,15 @@
       widgets: {
         photos: {
           enabled: bool(p.enabled, w.photos.enabled),
+          backgroundColor: color(p.backgroundColor, w.photos.backgroundColor),
           intervalSeconds: seconds(p.intervalSeconds, w.photos.intervalSeconds, 5),
           fit: choice(p.fit, ["cover", "contain"], w.photos.fit),
           items: photos(p.items, w.photos.items),
         },
         clock: {
           enabled: bool(c.enabled, w.clock.enabled),
+          backgroundColor: color(c.backgroundColor, w.clock.backgroundColor),
+          cardSize: choice(c.cardSize, ["small", "normal", "large"], w.clock.cardSize),
           format: choice(c.format, ["12h", "24h"], w.clock.format),
           // Retain the legacy field for compatibility, but this player shows time only.
           showDate: false,
@@ -161,10 +174,14 @@
         },
         weather: {
           enabled: bool(weather.enabled, w.weather.enabled),
+          backgroundColor: color(weather.backgroundColor, w.weather.backgroundColor),
+          cardSize: choice(weather.cardSize, ["small", "normal", "large"], w.weather.cardSize),
           city: text(weather.city, w.weather.city, 80),
         },
         currencies: {
           enabled: bool(money.enabled, w.currencies.enabled),
+          backgroundColor: color(money.backgroundColor, w.currencies.backgroundColor),
+          cardSize: choice(money.cardSize, ["small", "normal", "large"], w.currencies.cardSize),
           pairs: pairs,
           displayCount:
             Number.isInteger(money.displayCount) &&
@@ -176,6 +193,8 @@
         },
         calendar: {
           enabled: bool(cal.enabled, w.calendar.enabled),
+          backgroundColor: color(cal.backgroundColor, w.calendar.backgroundColor),
+          cardSize: choice(cal.cardSize, ["small", "normal", "large"], w.calendar.cardSize),
           highlightToday: bool(cal.highlightToday, w.calendar.highlightToday),
         },
       },
