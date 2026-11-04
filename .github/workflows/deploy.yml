@@ -1,0 +1,27 @@
+name: Deploy SmartFrame
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smartframe-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Linux, smartframe]
+    timeout-minutes: 45
+    steps:
+      - name: Baixar a revisão
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Construir e publicar
+        shell: bash
+        run: bash scripts/deploy-server.sh

@@ -150,6 +150,10 @@ O Prisma Client é gerado localmente e não é versionado. Após alterar o schem
 
 Requer Docker com suporte a containers Linux. Execute `npm run setup:env` ou prepare `.env` manualmente com um segredo aleatório de pelo menos 32 caracteres.
 
+Para deploy automático em servidor Linux usando um runner próprio do GitHub Actions,
+consulte [deploy com GitHub Actions](docs/DEPLOY-GITHUB-ACTIONS.md). O primeiro deploy
+requer configuração do runner, ambiente e volume; não migra dados automaticamente.
+
 Antes de iniciar, ajuste no `.env`:
 
 ```dotenv
