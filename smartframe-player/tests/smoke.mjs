@@ -591,6 +591,80 @@ try {
     "reorganização de widgets",
   );
   console.log("Configuração parcial, layout, calendário e carrossel: OK");
+  for (const theme of ["light", "dark"]) {
+    const colors = await evaluate(`(() => {
+      const config = structuredClone(SmartFrame.defaults);
+      config.theme = ${JSON.stringify(theme)};
+      for (const widget of Object.values(config.widgets)) widget.enabled = false;
+      config.widgets.notes.enabled = true;
+      config.widgets.notes.messages = [{text:'Recado de teste'}];
+      config.widgets.pomodoro.enabled = true;
+      applyConfig(config);
+      const notes = getComputedStyle(document.querySelector('#notes'));
+      const button = getComputedStyle(document.querySelector('#pomodoro button'));
+      return {background:notes.backgroundColor, color:notes.color, buttonBackground:button.backgroundColor, buttonColor:button.color};
+    })()`);
+    const background = theme === "dark" ? "rgb(29, 48, 69)" : "rgb(255, 255, 255)";
+    const color = theme === "dark" ? "rgb(241, 245, 249)" : "rgb(23, 32, 51)";
+    assert.deepEqual(colors, {
+      background,
+      color,
+      buttonBackground: background,
+      buttonColor: color,
+    });
+  }
+  assert.equal(
+    await evaluate(`new Promise(resolve => {
+      const start = document.querySelector('#pomodoro button');
+      start.click();
+      start.focus();
+      setTimeout(() => resolve(start.isConnected && document.activeElement === start), 400);
+    })`),
+    true,
+    "Pomodoro mantém o botão e o foco entre ticks",
+  );
+  const position = await evaluate(`(() => {
+    const rect = document.querySelector('#pomodoro button').getBoundingClientRect();
+    return {x:rect.x + rect.width / 2, y:rect.y + rect.height / 2};
+  })()`);
+  await call("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    button: "left",
+    clickCount: 1,
+    ...position,
+  });
+  await sleep(400);
+  await call("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    button: "left",
+    clickCount: 1,
+    ...position,
+  });
+  assert.equal(
+    await evaluate(`document.querySelector('#pomodoro button').textContent`),
+    "Iniciar",
+    "clique mantido durante um tick pausa o Pomodoro",
+  );
+  await call("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Enter",
+    code: "Enter",
+    text: "\r",
+    unmodifiedText: "\r",
+    windowsVirtualKeyCode: 13,
+  });
+  await call("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Enter",
+    code: "Enter",
+    windowsVirtualKeyCode: 13,
+  });
+  assert.equal(
+    await evaluate(`document.querySelector('#pomodoro button').textContent`),
+    "Pausar",
+    "controle do Pomodoro permanece utilizável por teclado",
+  );
+  console.log("Widgets adicionais nos dois temas e controles estáveis do Pomodoro: OK");
 } finally {
   if (socket) socket.close();
   browser.kill();

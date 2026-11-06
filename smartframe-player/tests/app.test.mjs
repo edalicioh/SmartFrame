@@ -12,6 +12,7 @@ function setup(
     revision: "online:v4",
     widgets: { photos: { items: [] } },
   },
+  withLocalWidgets = false,
 ) {
   const listeners = {},
     documentListeners = {},
@@ -36,6 +37,11 @@ function setup(
       "weather",
       "currencies",
       "calendar",
+      "notes",
+      "countdown",
+      "birthdays",
+      "tasks",
+      "pomodoro",
     ].map((id) => [id, element()]),
   );
   elements["widget-stack"].children = [
@@ -73,6 +79,13 @@ function setup(
     weather: { update() {}, setData() {} },
     currencies: { update() {}, setData() {}, relayout() {}, pause() {}, resume() {} },
   };
+  if (withLocalWidgets) {
+    for (const name of ["notes", "countdown", "birthdays", "tasks", "pomodoro"]) {
+      defaults.widgets[name] = { enabled: false, title: name };
+      elements["widget-stack"].children.push(elements[name]);
+    }
+    app.localWidgets = { create: () => ({ update() {}, pause() {}, resume() {} }) };
+  }
   const parent = { postMessage() {} };
   const window = {
     SmartFrame: app,
@@ -113,8 +126,20 @@ function setup(
     },
     clearTimeout() {},
   });
-  return { app, window, fetches, listeners, documentListeners, timers };
+  return { app, window, fetches, listeners, documentListeners, timers, elements };
 }
+
+test("os cartões adicionais aparecem e desaparecem conforme a configuração", () => {
+  const h = setup(true, undefined, true);
+  assert.equal(h.elements.notes.hidden, true);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    widgets: { ...h.app.defaults.widgets, notes: { enabled: true, title: "Casa" } },
+  });
+  assert.equal(h.elements.notes.hidden, false);
+  h.app.applyConfig({ ...h.app.defaults });
+  assert.equal(h.elements.notes.hidden, true);
+});
 
 test("preview never fetches on init, refresh apply, visibility restore, or online", async () => {
   const h = setup(true);

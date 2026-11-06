@@ -91,6 +91,99 @@ export const onlineDashboardSchema = z
           })
           .strict()
           .prefault({}),
+        notes: z
+          .object({
+            enabled: z.boolean().default(false),
+            title: z.string().trim().min(1).max(80).default("Recados"),
+            messages: z
+              .array(
+                z
+                  .object({
+                    id: z.string().min(1).max(128),
+                    text: z.string().trim().min(1).max(500),
+                  })
+                  .strict(),
+              )
+              .max(20)
+              .default([]),
+            intervalSeconds: interval(5, 15),
+          })
+          .strict()
+          .prefault({}),
+        countdown: z
+          .object({
+            enabled: z.boolean().default(false),
+            title: z.string().trim().min(1).max(80).default("Contagem regressiva"),
+            target: z
+              .discriminatedUnion("kind", [
+                z.object({ kind: z.literal("date"), date: z.iso.date() }).strict(),
+                z
+                  .object({
+                    kind: z.literal("datetime"),
+                    dateTime: z.iso.datetime({ offset: true }),
+                  })
+                  .strict(),
+              ])
+              .default({ kind: "date", date: "2030-01-01" }),
+            display: z.enum(["days", "detailed"]).default("days"),
+            completedText: z.string().trim().min(1).max(100).default("Chegou o dia!"),
+          })
+          .strict()
+          .prefault({}),
+        birthdays: z
+          .object({
+            enabled: z.boolean().default(false),
+            title: z.string().trim().min(1).max(80).default("Aniversários"),
+            people: z
+              .array(
+                z
+                  .object({
+                    id: z.string().min(1).max(128),
+                    name: z.string().trim().min(1).max(80),
+                    day: z.number().int().min(1).max(31),
+                    month: z.number().int().min(1).max(12),
+                  })
+                  .strict()
+                  .refine(
+                    ({ day, month }) => day <= new Date(Date.UTC(2000, month, 0)).getUTCDate(),
+                    "Data inválida",
+                  ),
+              )
+              .max(50)
+              .default([]),
+            displayCount: z.number().int().min(1).max(10).default(3),
+          })
+          .strict()
+          .prefault({}),
+        tasks: z
+          .object({
+            enabled: z.boolean().default(false),
+            title: z.string().trim().min(1).max(80).default("Tarefas"),
+            items: z
+              .array(
+                z
+                  .object({
+                    id: z.string().min(1).max(128),
+                    text: z.string().trim().min(1).max(200),
+                    completed: z.boolean(),
+                  })
+                  .strict(),
+              )
+              .max(50)
+              .default([]),
+            showCompleted: z.boolean().default(false),
+          })
+          .strict()
+          .prefault({}),
+        pomodoro: z
+          .object({
+            enabled: z.boolean().default(false),
+            title: z.string().trim().min(1).max(80).default("Pomodoro"),
+            workMinutes: z.number().int().min(1).max(180).default(25),
+            breakMinutes: z.number().int().min(1).max(60).default(5),
+          })
+          .strict()
+          .prefault({}),
       })
       .strict()
       .prefault({}),

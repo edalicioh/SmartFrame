@@ -30,6 +30,17 @@
         intervalSeconds: 10,
       },
       calendar: { enabled: true, backgroundColor: "", cardSize: "normal", highlightToday: true },
+      notes: { enabled: false, title: "Recados", messages: [], intervalSeconds: 15 },
+      countdown: {
+        enabled: false,
+        title: "Contagem regressiva",
+        target: { kind: "date", date: "2030-01-01" },
+        display: "days",
+        completedText: "Chegou o dia!",
+      },
+      birthdays: { enabled: false, title: "Aniversários", people: [], displayCount: 3 },
+      tasks: { enabled: false, title: "Tarefas", items: [], showCompleted: false },
+      pomodoro: { enabled: false, title: "Pomodoro", workMinutes: 25, breakMinutes: 5 },
     },
   };
   function object(value) {
@@ -110,6 +121,79 @@
         ? incomingPairs.slice()
         : w.currencies.pairs;
     var appearance = object(data.appearance);
+    function local(name) {
+      var value = object(widgets[name]),
+        fallback = defaults.widgets[name];
+      var result = Object.assign({}, fallback, value);
+      result.enabled = bool(value.enabled, fallback.enabled);
+      result.title = text(value.title, fallback.title, 80);
+      if (name === "notes") {
+        result.messages = Array.isArray(value.messages)
+          ? value.messages
+              .filter(function (item) {
+                return item && typeof item.text === "string" && item.text.length <= 500;
+              })
+              .slice(0, 20)
+          : [];
+        result.intervalSeconds = seconds(value.intervalSeconds, 15, 5);
+      } else if (name === "countdown") {
+        var target = object(value.target);
+        result.target =
+          target.kind === "date" && /^\d{4}-\d{2}-\d{2}$/.test(target.date)
+            ? target
+            : target.kind === "datetime" &&
+                typeof target.dateTime === "string" &&
+                Number.isFinite(Date.parse(target.dateTime))
+              ? target
+              : fallback.target;
+        result.display = choice(value.display, ["days", "detailed"], "days");
+        result.completedText = text(value.completedText, fallback.completedText, 100);
+      } else if (name === "birthdays") {
+        result.people = Array.isArray(value.people)
+          ? value.people
+              .filter(function (item) {
+                return (
+                  item &&
+                  typeof item.name === "string" &&
+                  Number.isInteger(item.month) &&
+                  item.month >= 1 &&
+                  item.month <= 12 &&
+                  Number.isInteger(item.day) &&
+                  item.day >= 1 &&
+                  item.day <= new Date(Date.UTC(2000, item.month, 0)).getUTCDate()
+                );
+              })
+              .slice(0, 50)
+          : [];
+        result.displayCount =
+          Number.isInteger(value.displayCount) &&
+          value.displayCount >= 1 &&
+          value.displayCount <= 10
+            ? value.displayCount
+            : 3;
+      } else if (name === "tasks") {
+        result.items = Array.isArray(value.items)
+          ? value.items
+              .filter(function (item) {
+                return item && typeof item.text === "string" && typeof item.completed === "boolean";
+              })
+              .slice(0, 50)
+          : [];
+        result.showCompleted = bool(value.showCompleted, false);
+      } else {
+        result.workMinutes =
+          Number.isInteger(value.workMinutes) && value.workMinutes >= 1 && value.workMinutes <= 180
+            ? value.workMinutes
+            : 25;
+        result.breakMinutes =
+          Number.isInteger(value.breakMinutes) &&
+          value.breakMinutes >= 1 &&
+          value.breakMinutes <= 60
+            ? value.breakMinutes
+            : 5;
+      }
+      return result;
+    }
     function color(value, fallback) {
       return typeof value === "string" && /^(|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$/.test(value)
         ? value
@@ -197,6 +281,11 @@
           cardSize: choice(cal.cardSize, ["small", "normal", "large"], w.calendar.cardSize),
           highlightToday: bool(cal.highlightToday, w.calendar.highlightToday),
         },
+        notes: local("notes"),
+        countdown: local("countdown"),
+        birthdays: local("birthdays"),
+        tasks: local("tasks"),
+        pomodoro: local("pomodoro"),
       },
     };
   }

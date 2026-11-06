@@ -99,6 +99,36 @@
   box-shadow: var(--shadow);
   padding: clamp(8px, 1.3vw, 16px);
 }
+.local-card {
+  overflow: auto;
+  background: var(--surface, #fff);
+  color: var(--text, #172033);
+  text-align: center;
+}
+.local-widget-title {
+  font-size: clamp(12px, 1.5vw, 20px);
+  margin: 0 0 0.3em;
+}
+.local-widget-value {
+  font-size: clamp(18px, 3vw, 40px);
+  font-weight: 700;
+  margin: 0;
+}
+.local-widget-item,
+.local-widget-message,
+.local-widget-empty {
+  margin: 0.2em 0;
+  overflow-wrap: anywhere;
+}
+.pomodoro-button {
+  background: var(--surface, #fff);
+  color: var(--text, #172033);
+  border: 1px solid var(--muted, #64748b);
+  border-radius: 6px;
+  margin: 0.25em;
+  padding: 0.25em 0.65em;
+  cursor: pointer;
+}
 .clock-card {
   background: var(--widget-background, var(--clock-bg));
   color: var(--widget-foreground, #fff);

@@ -18,6 +18,7 @@
     <script defer src="/player-dashboard/js/calendar.js"></script>
     <script defer src="/player-dashboard/js/weather.js"></script>
     <script defer src="/player-dashboard/js/currencies.js"></script>
+    <script defer src="/player-dashboard/js/local-widgets.js"></script>
     <script defer src="/player-dashboard/js/app.js"></script>
   </head>
   <body>
@@ -76,6 +77,16 @@
           </div>
           <div class="calendar-grid calendar-days" id="calendar-days"></div>
         </section>
+        <section class="card local-card" id="notes" aria-label="Recados" hidden></section>
+        <section
+          class="card local-card"
+          id="countdown"
+          aria-label="Contagem regressiva"
+          hidden
+        ></section>
+        <section class="card local-card" id="birthdays" aria-label="Aniversários" hidden></section>
+        <section class="card local-card" id="tasks" aria-label="Tarefas" hidden></section>
+        <section class="card local-card" id="pomodoro" aria-label="Pomodoro" hidden></section>
       </div>
       <div class="connection-status" id="connection-status" role="status" hidden>
         Conexão indisponível

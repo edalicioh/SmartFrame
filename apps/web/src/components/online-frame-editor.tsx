@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LocalWidgetEditor } from "./local-widget-editor";
 import {
   defaultOnlineDashboard,
   onlineDashboardSchema,
@@ -406,7 +407,10 @@ export function OnlineFrameEditor() {
     if (!state || !panelId || (publish && !deviceId) || operation.current) return;
     const parsed = onlineDashboardSchema.safeParse(config);
     if (!parsed.success) {
-      setError("Confira as configurações antes de salvar.");
+      const issue = parsed.error.issues[0];
+      setError(
+        `Confira as configurações antes de salvar: ${issue.path.join(" → ")} — ${issue.message}.`,
+      );
       return;
     }
     operation.current = true;
@@ -1059,6 +1063,13 @@ export function OnlineFrameEditor() {
                 />
                 Destacar o dia atual
               </label>
+            </fieldset>
+            <fieldset disabled={controlsDisabled}>
+              <legend>Widgets adicionais</legend>
+              <LocalWidgetEditor
+                widgets={config.widgets}
+                onChange={(widgets) => change({ ...config, widgets })}
+              />
             </fieldset>
             <fieldset disabled={controlsDisabled}>
               <legend>Aparência e layout</legend>

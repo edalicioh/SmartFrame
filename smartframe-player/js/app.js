@@ -14,6 +14,17 @@
     deviceMatch = location.pathname.match(/^\/player\/([A-Za-z0-9_-]+)$/),
     appliedRevision = "";
   var names = ["photos", "clock", "weather", "currencies", "calendar"];
+  var localNames = ["notes", "countdown", "birthdays", "tasks", "pomodoro"];
+  var localContext = { timezone: "America/Sao_Paulo" },
+    localRenderers = {};
+  if (app.localWidgets)
+    localNames.forEach(function (name) {
+      localRenderers[name] = app.localWidgets.create(
+        name,
+        document.getElementById(name),
+        localContext,
+      );
+    });
   function changed(a, b) {
     return JSON.stringify(a) !== JSON.stringify(b);
   }
@@ -63,6 +74,7 @@
     config = next;
     var appearance = next.appearance || {};
     app.timezone = next.timezone || "";
+    localContext.timezone = next.timezone || "America/Sao_Paulo";
     [
       ["--background", appearance.backgroundColor],
       ["--primary", appearance.accentColor],
@@ -102,13 +114,29 @@
         app[name === "photos" ? "carousel" : name].update(value);
       }
     });
+    if (app.localWidgets)
+      localNames.forEach(function (name) {
+        var value = next.widgets[name];
+        if (!old || changed(old.widgets[name], value) || old.timezone !== next.timezone) {
+          document.getElementById(name).hidden = !value.enabled;
+          if (value.enabled) {
+            localRenderers[name].update(value);
+            localRenderers[name].resume();
+          } else localRenderers[name].pause();
+        }
+      });
     if (old && old.timezone !== next.timezone) {
       app.clock.update(next.widgets.clock);
       app.calendar.update(next.widgets.calendar);
     }
-    var anyWidgets = names.slice(1).some(function (name) {
-      return next.widgets[name].enabled;
-    });
+    var anyWidgets =
+      names.slice(1).some(function (name) {
+        return next.widgets[name].enabled;
+      }) ||
+      (app.localWidgets &&
+        localNames.some(function (name) {
+          return next.widgets[name].enabled;
+        }));
     stack.hidden = !anyWidgets;
     dashboard.classList.toggle("no-photos", !next.widgets.photos.enabled);
     dashboard.classList.toggle("no-widgets", !anyWidgets);
@@ -222,11 +250,17 @@
       app.currencies.pause();
       app.clock.pause();
       app.calendar.pause();
+      localNames.forEach(function (name) {
+        if (localRenderers[name]) localRenderers[name].pause();
+      });
     } else {
       app.carousel.resume();
       app.currencies.resume();
       app.clock.resume();
       app.calendar.resume();
+      localNames.forEach(function (name) {
+        if (localRenderers[name] && config.widgets[name].enabled) localRenderers[name].resume();
+      });
       if (!preview) poll();
     }
   });

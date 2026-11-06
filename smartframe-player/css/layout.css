@@ -43,6 +43,9 @@
 .widget-stack > #calendar:not([hidden]) {
   grid-row: auto / span var(--widget-rows, 47);
 }
+.widget-stack > .local-card:not([hidden]) {
+  grid-row: auto / span 20;
+}
 .widget-stack > .card:not([hidden]) {
   margin-bottom: 8px;
 }

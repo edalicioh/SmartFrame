@@ -9,7 +9,16 @@ function setup(type, time = "2027-03-01T02:00:00Z") {
   const app = {};
   const timers = new Map();
   let nextId = 0;
-  const document = { createElement: () => ({ textContent: "", className: "" }) };
+  let current = Date.parse(time);
+  const document = {
+    createElement: () => ({
+      textContent: "",
+      className: "",
+      addEventListener(name, callback) {
+        this[name] = callback;
+      },
+    }),
+  };
   const root = {
     ownerDocument: document,
     children: [],
@@ -23,7 +32,7 @@ function setup(type, time = "2027-03-01T02:00:00Z") {
   runInNewContext(source, { window: { SmartFrame: app }, Intl, Date, setTimeout, clearTimeout });
   const widget = app.localWidgets.create(type, root, {
     timezone: "America/Sao_Paulo",
-    now: () => Date.parse(time),
+    now: () => current,
     setTimeout: (callback) => {
       const id = ++nextId;
       timers.set(id, callback);
@@ -37,7 +46,16 @@ function setup(type, time = "2027-03-01T02:00:00Z") {
     timers.delete(id);
     callback();
   };
-  return { widget, timers, texts, tick };
+  return {
+    widget,
+    timers,
+    texts,
+    tick,
+    root,
+    advance: (ms) => {
+      current += ms;
+    },
+  };
 }
 
 test("recados alternam com texto literal e param ao descartar", () => {
@@ -59,6 +77,54 @@ test("recados alternam com texto literal e param ao descartar", () => {
   widget.resume();
   assert.equal(timers.size, 0);
   assert.deepEqual(texts(), []);
+});
+
+test("pomodoro inicia, pausa, retoma e passa para a pausa sem reiniciar automaticamente", () => {
+  const { widget, timers, texts, tick, root, advance } = setup("pomodoro");
+  widget.update({ title: "Pomodoro", workMinutes: 1, breakMinutes: 1 });
+  assert.deepEqual(texts(), ["Pomodoro", "Foco", "01:00", "Iniciar", "Reiniciar"]);
+  root.children[3].click();
+  advance(15000);
+  tick();
+  assert.equal(texts()[2], "00:45");
+  root.children[3].click();
+  assert.equal(timers.size, 0);
+  advance(90000);
+  root.children[3].click();
+  advance(45000);
+  tick();
+  assert.deepEqual(texts(), ["Pomodoro", "Pausa", "01:00", "Iniciar", "Reiniciar"]);
+  assert.equal(timers.size, 0);
+  root.children[4].click();
+  assert.equal(texts()[1], "Foco");
+  widget.destroy();
+});
+
+test("pomodoro mantém os mesmos controles entre ticks, atualizações e retomadas", () => {
+  const { widget, root, advance, tick, texts } = setup("pomodoro");
+  const settings = { title: "Pomodoro", workMinutes: 1, breakMinutes: 1 };
+  widget.update(settings);
+  const start = root.children[3];
+  const reset = root.children[4];
+  start.click();
+  for (let i = 0; i < 4; i++) {
+    advance(250);
+    tick();
+    assert.equal(root.children[3], start);
+    assert.equal(root.children[4], reset);
+  }
+  assert.equal(texts()[2], "00:59");
+  widget.pause();
+  widget.resume();
+  widget.update({ ...settings, title: "Estudar" });
+  assert.equal(root.children[3], start);
+  assert.equal(root.children[4], reset);
+  assert.equal(texts()[0], "Estudar");
+  start.click();
+  assert.equal(texts()[3], "Iniciar");
+  reset.click();
+  assert.equal(texts()[2], "01:00");
+  widget.destroy();
 });
 
 test("contagem de data respeita a data local e não o dia UTC", () => {

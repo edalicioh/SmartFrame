@@ -1,8 +1,6 @@
 (function (app) {
   "use strict";
 
-  // These renderers are registered for the modular player; the current dashboard
-  // does not load them until it can validate and apply grid configurations.
   function civilDate(now, timezone) {
     var fields = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
@@ -39,7 +37,7 @@
 
   /** One renderer per instance. Untrusted text is always assigned via textContent. */
   function create(type, root, context) {
-    if (["notes", "countdown", "birthdays", "tasks"].indexOf(type) < 0)
+    if (["notes", "countdown", "birthdays", "tasks", "pomodoro"].indexOf(type) < 0)
       throw new Error("Widget local desconhecido");
     var document = root.ownerDocument;
     var settings = null;
@@ -47,6 +45,11 @@
     var index = 0;
     var paused = false;
     var disposed = false;
+    var pomodoroElements = null;
+    var phase = "work",
+      running = false,
+      end = 0,
+      remainingMs = 0;
     var setTimer = context.setTimeout || setTimeout;
     var clearTimer = context.clearTimeout || clearTimeout;
     var now =
@@ -66,8 +69,10 @@
       clearTimer(timer);
       timer = null;
       if (!settings || paused || disposed) return;
-      root.textContent = "";
-      line(root, "h2", settings.title, "local-widget-title");
+      if (type !== "pomodoro") {
+        root.textContent = "";
+        line(root, "h2", settings.title, "local-widget-title");
+      }
       var current = now();
       var delay = 60000 - (current % 60000) + 30;
       if (type === "notes") {
@@ -132,6 +137,51 @@
             "local-widget-item",
           );
         });
+      } else if (type === "pomodoro") {
+        // Keep interactive nodes mounted across ticks so focus and pending clicks survive.
+        if (!pomodoroElements) {
+          root.textContent = "";
+          pomodoroElements = {
+            title: line(root, "h2", settings.title, "local-widget-title"),
+            phase: line(root, "p", "", "local-widget-item"),
+            time: line(root, "p", "", "local-widget-value"),
+            start: line(root, "button", "Iniciar", "pomodoro-button"),
+            reset: line(root, "button", "Reiniciar", "pomodoro-button"),
+          };
+          pomodoroElements.start.type = "button";
+          pomodoroElements.start.addEventListener("click", function () {
+            if (running) {
+              remainingMs = Math.max(0, end - now());
+              running = false;
+            } else {
+              end = now() + remainingMs;
+              running = true;
+            }
+            render();
+          });
+          pomodoroElements.reset.type = "button";
+          pomodoroElements.reset.addEventListener("click", function () {
+            running = false;
+            phase = "work";
+            remainingMs = settings.workMinutes * 60000;
+            render();
+          });
+        }
+        if (running && current >= end) {
+          running = false;
+          phase = phase === "work" ? "break" : "work";
+          remainingMs = (phase === "work" ? settings.workMinutes : settings.breakMinutes) * 60000;
+        }
+        var left = running ? Math.max(0, end - current) : remainingMs;
+        var totalSeconds = Math.ceil(left / 1000);
+        pomodoroElements.title.textContent = settings.title;
+        pomodoroElements.phase.textContent = phase === "work" ? "Foco" : "Pausa";
+        pomodoroElements.time.textContent =
+          String(Math.floor(totalSeconds / 60)).padStart(2, "0") +
+          ":" +
+          String(totalSeconds % 60).padStart(2, "0");
+        pomodoroElements.start.textContent = running ? "Pausar" : "Iniciar";
+        delay = 250;
       } else {
         var items = settings.items.filter(function (item) {
           return settings.showCompleted || !item.completed;
@@ -141,7 +191,11 @@
           line(root, "p", (item.completed ? "✓ " : "○ ") + item.text, "local-widget-item");
         });
       }
-      if (type !== "tasks" && (type !== "notes" || settings.messages.length > 1)) {
+      if (
+        type !== "tasks" &&
+        (type !== "pomodoro" || running) &&
+        (type !== "notes" || settings.messages.length > 1)
+      ) {
         timer = setTimer(function () {
           if (type === "notes") index++;
           render();
@@ -150,6 +204,16 @@
     }
     return {
       update: function (value) {
+        if (
+          type === "pomodoro" &&
+          (!settings ||
+            settings.workMinutes !== value.workMinutes ||
+            settings.breakMinutes !== value.breakMinutes)
+        ) {
+          running = false;
+          phase = "work";
+          remainingMs = value.workMinutes * 60000;
+        }
         settings = value;
         index = 0;
         render();
@@ -170,6 +234,7 @@
         clearTimer(timer);
         timer = null;
         root.textContent = "";
+        pomodoroElements = null;
       },
     };
   }
