@@ -19,6 +19,13 @@ O setup portátil instala JDK 21, Gradle/SDK em `.data/android-toolchain/`; buil
 lint produzem `apps/android/app/build/outputs/apk/debug/app-debug.apk`. O setup exige
 aceitar as licenças oficiais do Android SDK.
 
+A CI Android executa build de debug, testes unitários e lint em pull requests e no
+deploy da `main`, além de disponibilizar o APK como artefato. Para publicar o APK no
+painel, o deploy exige uma chave de debug persistente e confere sua assinatura; veja
+[DEPLOY-GITHUB-ACTIONS.md](../../docs/DEPLOY-GITHUB-ACTIONS.md). Builds de pull
+request usam uma chave temporária e podem não atualizar a instalação existente. Não
+desinstale o app para contornar incompatibilidade sem antes proteger seus dados.
+
 ## Atualização e preservação
 
 Antes de atualizar uma instalação em uso, faça backup do diretório/volume `.data`
@@ -51,6 +58,12 @@ ADB ativo:
 ```powershell
 adb -s SERIAL_DO_TABLET reverse tcp:3000 tcp:3000
 ```
+
+O APK de debug deste ambiente também confia na CA pública em
+`app/src/debug/res/raw/smartframe_local_ca.pem` exclusivamente para
+`frame.home.arpa`. Outros endereços continuam usando as CAs do sistema; builds de
+produção não incluem essa exceção. Trocar a CA local exige atualizar o certificado
+público e reconstruir o APK. Nunca inclua a chave privada da CA no aplicativo.
 
 Mantenha cabo e encaminhamento ativos; se tablet e servidor estiverem em LAN, use o
 hostname/IP alcançável do servidor e HTTPS confiável — não use `localhost` do tablet.

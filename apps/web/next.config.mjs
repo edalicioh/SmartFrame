@@ -17,6 +17,7 @@ process.env.SMARTFRAME_ONLINE_PHOTOS = resolve(
   root,
   process.env.SMARTFRAME_ONLINE_PHOTOS ?? ".data/player-online/photos",
 );
+process.env.SMARTFRAME_ANDROID_APK = resolve(root, "apps/web/public/downloads/smartframe.apk");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

@@ -5,6 +5,49 @@ pode ser iniciado manualmente em **Actions → Deploy SmartFrame → Run workflo
 Ele requer um runner dedicado, identificado pela label `smartframe`. O deploy só
 deve ser habilitado depois de configurar o servidor e preparar o volume.
 
+Antes do deploy, um job hospedado pelo GitHub compila e testa o Android. O APK da
+mesma revisão é incluído na imagem do servidor; depois do deploy, o painel
+**Personalizar** oferece o link **Baixar aplicativo Android**. O arquivo é servido
+em `/downloads/smartframe.apk` e pode ser baixado por qualquer cliente que alcance
+esse endereço, mesmo sem login. O APK é de debug, não uma versão de produção.
+
+## Assinatura do APK no GitHub Actions
+
+O Android só atualiza uma instalação existente se o APK tiver a mesma assinatura.
+O deploy falha antes de alterar o servidor se a chave ou a impressão digital não
+estiverem configuradas ou não coincidirem. Não gere uma nova chave para substituir
+uma instalação existente; não desinstale o app para forçar a atualização.
+
+1. Identifique e faça backup seguro da chave de debug que assinou o APK instalado.
+   No setup portátil deste projeto ela normalmente está em
+   `.data/android-toolchain/android-user/debug.keystore`. O arquivo contém uma
+   **chave privada**: não o adicione ao Git nem o envie pelo chat.
+2. Em **Settings → Secrets and variables → Actions → Secrets**, crie o segredo
+   `SMARTFRAME_ANDROID_DEBUG_KEYSTORE_BASE64` com o arquivo inteiro codificado em
+   Base64, sem quebras de linha. No PowerShell, após verificar o caminho, é possível
+   copiar o valor para a área de transferência com:
+
+   ```powershell
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path '.data/android-toolchain/android-user/debug.keystore'))) | Set-Clipboard
+   ```
+
+   Cole diretamente no campo do segredo e limpe a área de transferência depois.
+   Armazenar a chave no GitHub permite que workflows autorizados a utilizem;
+   proteja a branch, as permissões e o acesso aos segredos do repositório.
+
+3. Em **Variables**, crie `SMARTFRAME_ANDROID_SIGNER_SHA256` com a impressão digital
+   SHA-256 do certificado da chave, em minúsculas e sem `:`. Para a instalação
+   atualmente validada neste projeto, é
+   `414fc47794fdb798e40443f2127c435e026f0d9a759d3c18e42efb66b222afa3`.
+   Confirme essa impressão contra o APK instalado antes de usar outra chave.
+4. O workflow utiliza a configuração padrão da chave de debug Android (alias
+   `AndroidDebugKey` e senhas padrão do Android). Chaves de produção precisam de
+   configuração própria; não substitua o processo de distribuição por este fluxo.
+
+Pull requests não recebem a chave de publicação e geram um APK temporário. A chave
+deve ser preservada fora do runner: se for perdida ou trocada, APKs posteriores não
+atualizarão instalações já assinadas com ela.
+
 ## Segurança e pré-requisitos
 
 - Linux, Git, Docker e Docker Compose; o daemon Docker deve ser local ao runner.

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { request as httpRequest } from "node:http";
 import { resolve } from "node:path";
@@ -216,7 +217,16 @@ try {
   );
   const editor = await fetch(`${baseURL}/layouts`, { headers: { cookie } });
   assert.equal(editor.status, 200);
-  assert((await editor.text()).includes("SMARTFRAME ONLINE"));
+  const editorHtml = await editor.text();
+  assert(editorHtml.includes("SMARTFRAME ONLINE"));
+  const apkPath = resolve("apps/web/public/downloads/smartframe.apk");
+  const hasApk = existsSync(apkPath);
+  assert.equal(editorHtml.includes('href="/downloads/smartframe.apk"'), hasApk);
+  if (hasApk) {
+    const apk = await fetch(`${baseURL}/downloads/smartframe.apk`);
+    assert.equal(apk.status, 200);
+    assert.deepEqual(Buffer.from(await apk.arrayBuffer()), await readFile(apkPath));
+  }
   const preview = await fetch(`${baseURL}/player/index.html`);
   assert.equal(preview.headers.get("x-frame-options"), "SAMEORIGIN");
   const state = await (await fetch(`${baseURL}/api/frame`, { headers: { cookie } })).json();

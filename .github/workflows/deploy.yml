@@ -13,8 +13,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  android:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/android.yml
+    secrets:
+      SMARTFRAME_ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.SMARTFRAME_ANDROID_DEBUG_KEYSTORE_BASE64 }}
   deploy:
     if: github.ref == 'refs/heads/main'
+    needs: android
     runs-on: [self-hosted, Linux, smartframe]
     timeout-minutes: 45
     steps:
@@ -22,6 +28,14 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Baixar o APK da mesma revisão
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: smartframe-android-debug
+          path: apps/web/public/downloads
+      - name: Preparar o APK para publicação
+        shell: bash
+        run: mv apps/web/public/downloads/app-debug.apk apps/web/public/downloads/smartframe.apk
       - name: Construir e publicar
         shell: bash
         run: bash scripts/deploy-server.sh

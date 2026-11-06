@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
+    <!-- A CA local deste ambiente só é confiável para o nome do servidor. -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">frame.home.arpa</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/smartframe_local_ca" />
+        </trust-anchors>
+    </domain-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">localhost</domain>
         <domain includeSubdomains="false">127.0.0.1</domain>

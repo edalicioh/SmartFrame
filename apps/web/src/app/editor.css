@@ -46,6 +46,20 @@
   font-size: 12px;
   color: var(--muted);
 }
+.android-download {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 16px 4vw 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.android-download a {
+  color: var(--green);
+  font-weight: 600;
+  text-decoration: underline;
+}
 .frame-editor {
   max-width: 1500px;
   padding: 32px 4vw 50px;

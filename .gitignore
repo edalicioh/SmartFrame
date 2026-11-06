@@ -13,6 +13,7 @@ apps/android/.kotlin/
 apps/android/app/src/main/assets/player/
 apps/web/public/player/
 apps/web/public/player-dashboard/
+apps/web/public/downloads/
 apps/android/local.properties
 apps/android/**/build/
 *.jks
