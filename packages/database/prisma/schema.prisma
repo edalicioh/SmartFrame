@@ -103,6 +103,7 @@ model Device {
   activePanel     Layout?   @relation("DevicePanel", fields: [activePanelId], references: [id], onDelete: SetNull)
   activePanelVersionId String?
   activePanelVersion LayoutVersion? @relation("DevicePanelVersion", fields: [activePanelVersionId], references: [id], onDelete: SetNull)
+  allowedPanels   DevicePanelAccess[]
 
   @@index([householdId, createdAt])
 }
@@ -145,6 +146,7 @@ model Layout {
   publishedVersionId String?
   publishedVersion LayoutVersion? @relation("PublishedLayout", fields: [publishedVersionId], references: [id], onDelete: SetNull)
   devices Device[] @relation("DevicePanel")
+  allowedDevices DevicePanelAccess[]
 
   @@index([householdId])
 }
@@ -157,8 +159,22 @@ model LayoutVersion {
   createdAt DateTime @default(now())
   publishedFor Layout[] @relation("PublishedLayout")
   devices Device[] @relation("DevicePanelVersion")
+  approvedFor DevicePanelAccess[]
 
   @@index([layoutId, createdAt])
+}
+
+model DevicePanelAccess {
+  deviceId String
+  panelId String
+  versionId String
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  panel Layout @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  version LayoutVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@id([deviceId, panelId])
+  @@index([panelId])
+  @@index([versionId])
 }
 
 model PairingCode {

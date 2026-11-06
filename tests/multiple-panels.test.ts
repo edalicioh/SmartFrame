@@ -15,8 +15,18 @@ vi.mock("@smartframe/widgets", async (original) => ({
 
 import { GET, POST, PUT, PATCH, DELETE } from "../apps/web/src/app/api/panels/route";
 import { POST as publish } from "../apps/web/src/app/api/panels/publish/route";
+import { PUT as saveLegacy } from "../apps/web/src/app/api/online-frame/route";
+import { POST as publishLegacy } from "../apps/web/src/app/api/online-frame/publish/route";
 import { GET as playerConfig } from "../apps/web/src/app/api/player/config/route";
 import { GET as playerMedia } from "../apps/web/src/app/api/player/online-media/[id]/route";
+import {
+  GET as listOptions,
+  POST as switchPanel,
+} from "../apps/web/src/app/api/player/panels/route";
+import {
+  GET as adminOptions,
+  DELETE as removeOption,
+} from "../apps/web/src/app/api/devices/panels/route";
 
 const db = getDatabase();
 const userId = randomUUID();
@@ -98,6 +108,29 @@ it("preserves existing drafts, published versions, credentials and applied revis
     expect(sqlite.prepare("SELECT config FROM LayoutVersion WHERE id = 'v'").get()?.config).toBe(
       '{"refreshSeconds":20}',
     );
+  } finally {
+    sqlite.close();
+  }
+});
+
+it("migrates only each active, valid publication into device permissions", () => {
+  const sqlite = new DatabaseSync(":memory:");
+  try {
+    sqlite.exec(`CREATE TABLE Device (id TEXT PRIMARY KEY, householdId TEXT, activePanelId TEXT, activePanelVersionId TEXT, revokedAt TEXT);
+      CREATE TABLE Layout (id TEXT PRIMARY KEY, householdId TEXT);
+      CREATE TABLE LayoutVersion (id TEXT PRIMARY KEY, layoutId TEXT);
+      INSERT INTO Layout VALUES ('a','home'),('b','home'),('foreign','other');
+      INSERT INTO LayoutVersion VALUES ('va','a'),('vb','b'),('vf','foreign');
+      INSERT INTO Device VALUES ('d','home','a','va',NULL),('bad','home','foreign','vf',NULL),('revoked','home','b','vb','now');`);
+    sqlite.exec(
+      readFileSync(
+        "packages/database/prisma/migrations/20261106120000_device_panel_access/migration.sql",
+        "utf8",
+      ),
+    );
+    expect(sqlite.prepare('SELECT * FROM "DevicePanelAccess"').all()).toEqual([
+      { deviceId: "d", panelId: "a", versionId: "va" },
+    ]);
   } finally {
     sqlite.close();
   }
@@ -201,6 +234,16 @@ it("rejects unauthenticated, cross-origin and cross-household operations", async
     expect((await DELETE(request("DELETE", { id }))).status).toBe(404);
     expect(
       (
+        await adminOptions(
+          request("GET", undefined, `/api/devices/panels?deviceId=${first.deviceId}`),
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (await removeOption(request("DELETE", { deviceId: first.deviceId, panelId: id }))).status,
+    ).toBe(404);
+    expect(
+      (
         await publish(
           request("POST", { panelId: id, deviceId: first.deviceId, expectedRevision: 1 }),
         )
@@ -250,4 +293,157 @@ it("does not expose photos from a panel assigned to a different device", async (
   );
   expect(response.status).toBe(404);
   expect((await (await player(first.token)).json()).widgets.photos.items[0].id).toBe(photo.id);
+});
+
+it("allows only explicitly approved versions to be switched per device", async () => {
+  const a = (await (await POST(request("POST", { name: "Seleção A" }))).json()).id;
+  const b = (await (await POST(request("POST", { name: "Seleção B" }))).json()).id;
+  const send = (panelId: string, deviceId: string, expectedRevision: number, activate = true) =>
+    publish(request("POST", { panelId, deviceId, expectedRevision, activate }));
+  const options = (token: string) =>
+    listOptions(
+      new Request("https://example.test/api/player/panels", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+    );
+  const choose = (token: string, panelId: string) =>
+    switchPanel(
+      new Request("https://example.test/api/player/panels", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ panelId }),
+      }),
+    );
+  expect((await send(a, first.deviceId, 1)).status).toBe(200);
+  expect((await send(a, second.deviceId, 1)).status).toBe(200);
+  expect((await choose(first.token, b)).status).toBe(404);
+  expect((await send(b, first.deviceId, 1, false)).status).toBe(200);
+  const initial = await db.device.findUniqueOrThrow({ where: { id: first.deviceId } });
+  expect(initial.activePanelId).toBe(a);
+  const firstList = await (await options(first.token)).json();
+  expect(firstList.panels.map((panel: { id: string }) => panel.id)).toContain(b);
+  expect(
+    (await (await options(second.token)).json()).panels.map((panel: { id: string }) => panel.id),
+  ).not.toContain(b);
+  expect((await choose(second.token, b)).status).toBe(404);
+  const approved = await db.devicePanelAccess.findUniqueOrThrow({
+    where: { deviceId_panelId: { deviceId: first.deviceId, panelId: b } },
+  });
+  expect(
+    (await PUT(request("PUT", { id: b, expectedRevision: 1, config: { refreshSeconds: 45 } })))
+      .status,
+  ).toBe(200);
+  expect((await send(b, second.deviceId, 2)).status).toBe(200);
+  expect((await choose(first.token, b)).status).toBe(200);
+  expect((await (await player(first.token)).json()).revision).toBe(`online:${approved.versionId}`);
+  await playerConfig(
+    new Request(
+      `https://example.test/api/player/config?appliedRevision=${encodeURIComponent(`online:${approved.versionId}`)}`,
+      { headers: { authorization: `Bearer ${first.token}` } },
+    ),
+  );
+  expect((await choose(first.token, b)).status).toBe(200);
+  expect(
+    (await db.device.findUniqueOrThrow({ where: { id: first.deviceId } })).appliedRevision,
+  ).toBe(`online:${approved.versionId}`);
+  expect((await (await player(first.token)).json()).refreshSeconds).toBe(15);
+  expect((await (await player(second.token)).json()).refreshSeconds).toBe(45);
+  expect(
+    (await removeOption(request("DELETE", { deviceId: first.deviceId, panelId: b }))).status,
+  ).toBe(409);
+  expect((await choose(first.token, a)).status).toBe(200);
+  expect(
+    (await db.device.findUniqueOrThrow({ where: { id: first.deviceId } })).appliedRevision,
+  ).toBeNull();
+  expect(
+    (await removeOption(request("DELETE", { deviceId: first.deviceId, panelId: b }))).status,
+  ).toBe(200);
+  expect((await choose(first.token, b)).status).toBe(404);
+  expect(
+    (
+      await adminOptions(
+        request("GET", undefined, `/api/devices/panels?deviceId=${first.deviceId}`),
+      )
+    ).status,
+  ).toBe(200);
+  expect((await options("invalid-token")).status).toBe(401);
+  await db.device.update({ where: { id: first.deviceId }, data: { revokedAt: new Date() } });
+  try {
+    expect((await choose(first.token, a)).status).toBe(401);
+  } finally {
+    await db.device.update({ where: { id: first.deviceId }, data: { revokedAt: null } });
+  }
+});
+
+it("keeps legacy publications and approved versions in sync without changing other devices", async () => {
+  const pairing = await issuePairingCode(db, householdId, userId);
+  const paired = await redeemPairingCode(db, pairing.code, "Compatibilidade");
+  const save = (expectedRevision: number, refreshSeconds: number) =>
+    saveLegacy(
+      request("PUT", { deviceId: paired.deviceId, expectedRevision, config: { refreshSeconds } }),
+    );
+  const send = (expectedRevision: number) =>
+    publishLegacy(request("POST", { deviceId: paired.deviceId, expectedRevision }));
+  const playerRequest = (method = "GET", body?: unknown) =>
+    new Request("https://example.test/api/player/panels", {
+      method,
+      headers: { authorization: `Bearer ${paired.token}`, "content-type": "application/json" },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  expect((await save(0, 15)).status).toBe(200);
+  expect((await send(1)).status).toBe(200);
+  const panel = await db.layout.findUniqueOrThrow({ where: { key: `online:${paired.deviceId}` } });
+  const accessKey = { deviceId_panelId: { deviceId: paired.deviceId, panelId: panel.id } };
+  expect(await db.devicePanelAccess.findUnique({ where: accessKey })).not.toBeNull();
+
+  expect(
+    (
+      await publish(
+        request("POST", { panelId: panel.id, deviceId: second.deviceId, expectedRevision: 1 }),
+      )
+    ).status,
+  ).toBe(200);
+  const otherAccess = await db.devicePanelAccess.findUniqueOrThrow({
+    where: { deviceId_panelId: { deviceId: second.deviceId, panelId: panel.id } },
+  });
+  expect((await save(1, 45)).status).toBe(200);
+  const publication = await send(2);
+  expect(publication.status).toBe(200);
+  const revision = (await publication.json()).revision;
+  const options = await (await listOptions(playerRequest())).json();
+  expect(options.panels).toEqual([
+    expect.objectContaining({ id: panel.id, current: true, updateAvailable: false }),
+  ]);
+  const chosen = await switchPanel(playerRequest("POST", { panelId: panel.id }));
+  expect(chosen.status).toBe(200);
+  expect((await chosen.json()).revision).toBe(revision);
+  expect((await (await player(paired.token)).json()).refreshSeconds).toBe(45);
+  expect((await (await player(second.token)).json()).refreshSeconds).toBe(15);
+  expect(
+    (
+      await db.devicePanelAccess.findUniqueOrThrow({
+        where: { deviceId_panelId: { deviceId: second.deviceId, panelId: panel.id } },
+      })
+    ).versionId,
+  ).toBe(otherAccess.versionId);
+
+  const versionCount = await db.layoutVersion.count({ where: { layoutId: panel.id } });
+  expect((await send(1)).status).toBe(409);
+  expect(await db.layoutVersion.count({ where: { layoutId: panel.id } })).toBe(versionCount);
+
+  const other = (await (await POST(request("POST", { name: "Painel selecionado" }))).json()).id;
+  expect(
+    (
+      await publish(
+        request("POST", { panelId: other, deviceId: paired.deviceId, expectedRevision: 1 }),
+      )
+    ).status,
+  ).toBe(200);
+  expect((await save(2, 60)).status).toBe(200);
+  expect((await send(3)).status).toBe(200);
+  expect(
+    (await db.device.findUniqueOrThrow({ where: { id: paired.deviceId } })).activePanelId,
+  ).toBe(other);
+  expect((await switchPanel(playerRequest("POST", { panelId: panel.id }))).status).toBe(200);
+  expect((await (await player(paired.token)).json()).refreshSeconds).toBe(60);
 });

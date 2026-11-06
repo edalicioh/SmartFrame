@@ -48,6 +48,82 @@ Pull requests não recebem a chave de publicação e geram um APK temporário. A
 deve ser preservada fora do runner: se for perdida ou trocada, APKs posteriores não
 atualizarão instalações já assinadas com ela.
 
+## Atualizar automaticamente o tablet conectado por USB
+
+Depois de um deploy web bem-sucedido, o workflow executa
+`scripts/update-tablet-usb.sh` no **host Linux do runner**, não em um container.
+Ele atualiza apenas o número de série configurado, verifica se o APK instalado
+corresponde ao artefato deste deploy e reabre o SmartFrame. A instalação usa
+`adb install -r`, sem desinstalar o app ou limpar seus dados e pareamento.
+
+### Preparação única no servidor e no tablet
+
+1. Instale o ADB no host. Em Debian/Ubuntu, por exemplo:
+
+   ```bash
+   sudo apt-get update
+   sudo apt-get install adb android-sdk-platform-tools-common
+   ```
+
+2. Ative **Depuração USB** no tablet e mantenha o cabo de dados conectado.
+   Execute o comando abaixo com **o mesmo usuário Linux que executa o serviço
+   do runner**. No tablet, confira e autorize a chave desse computador, marcando
+   a opção de permitir sempre quando apropriado:
+
+   ```bash
+   adb devices -l
+   ```
+
+   O aparelho deve aparecer como `device`, não `unauthorized` ou `offline`.
+   Um ADB autorizado como `root` ou outro usuário não comprova que o usuário do
+   runner está autorizado. Se aparecer `no permissions`, configure as regras
+   udev e permissões USB da distribuição para esse usuário; não execute todo o
+   runner como root para contornar isso. Preserve a chave ADB desse usuário.
+
+3. Em **Settings → Secrets and variables → Actions → Variables**, crie
+   `SMARTFRAME_TABLET_SERIAL` com o serial USB exibido pelo comando, por exemplo
+   `TABLET-123`. Não use IP/porta nem escolha automaticamente o primeiro aparelho.
+   A atualização recusa transportes de rede e emuladores.
+4. O SmartFrame precisa já estar instalado e pareado nesse tablet. Preserve a
+   chave de assinatura configurada na seção anterior. O Android recusa outra
+   assinatura e códigos de versão inferiores; o script não força downgrade,
+   não desinstala e não tenta apagar dados para resolver essas recusas.
+
+O usuário do runner terá controle ADB sobre esse tablet. Restrinja o acesso ao
+servidor e ao repositório; não exponha ADB por TCP/IP. Não é necessário abrir
+portas, configurar Device Owner ou confirmar cada instalação no tablet após a
+autorização USB inicial, embora políticas de alguns fabricantes possam exigir
+permissões adicionais para instalação via USB.
+
+### Falhas e nova tentativa
+
+- Sem serial configurado ou com o tablet desconectado/não autorizado, o workflow
+  registra **atualização USB pendente** no resumo e mantém o deploy web.
+- Erros de instalação, assinatura, integridade ou abertura do aplicativo fazem
+  a etapa falhar de forma visível. O servidor já publicado não é revertido.
+- O script não altera a URL salva no aplicativo nem os encaminhamentos USB.
+  O tablet precisa continuar alcançando o servidor pelo endereço configurado.
+- A verificação final confirma o APK instalado e o processo em execução, não a
+  renderização da tela. A confirmação do painel continua no protocolo do player.
+- Não há fila automática de reconexão. Depois de reconectar e autorizar o tablet,
+  faça outro deploy ou execute manualmente no checkout do runner que contém o
+  APK desejado:
+
+  ```bash
+  SMARTFRAME_TABLET_SERIAL=TABLET-123 bash scripts/update-tablet-usb.sh
+  ```
+
+  Também é possível fornecer um APK já verificado como argumento:
+
+  ```bash
+  SMARTFRAME_TABLET_SERIAL=TABLET-123 bash scripts/update-tablet-usb.sh /caminho/smartframe.apk
+  ```
+
+Os comandos têm limites de tempo e sempre selecionam o serial explicitamente.
+Outros dispositivos conectados não são atualizados. Os testes com ADB simulado
+podem ser executados com `bash tests/update-tablet-usb.test.sh` e rodam no job
+`checks` antes de permitir a publicação do servidor.
+
 ## Segurança e pré-requisitos
 
 - Linux, Git, Docker e Docker Compose; o daemon Docker deve ser local ao runner.

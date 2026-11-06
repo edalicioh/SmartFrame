@@ -10,19 +10,29 @@ O editor mantém painéis independentes e publica uma versão para cada disposit
 administrativa existente; não exigem `SMARTFRAME_ONLINE_HOUSEHOLD_ID`. Um ID de
 dispositivo identifica o destino, não é uma credencial nem autoriza chamadas Bearer.
 
-| Método | Endpoint              | Contrato-alvo                                                                |
-| ------ | --------------------- | ---------------------------------------------------------------------------- |
-| GET    | `/api/panels`         | Lista painéis da residência                                                  |
-| GET    | `/api/panels?id=ID`   | Retorna `{id,name,config,draftRevision}`                                     |
-| POST   | `/api/panels`         | Cria `{name,copyFromId?}`; cópia usa o rascunho salvo                        |
-| PUT    | `/api/panels`         | Salva `{id,config,expectedRevision}` sem alterar dispositivos                |
-| PATCH  | `/api/panels`         | Renomeia `{id,name}`                                                         |
-| DELETE | `/api/panels`         | Exclui `{id}` se não estiver em uso por dispositivos ativos                  |
-| POST   | `/api/panels/publish` | Publica `{panelId,deviceId,expectedRevision}`; retorna `{revision}` imutável |
-| GET    | `/api/photos`         | Biblioteca de fotos disponível ao editor autenticado                         |
-| POST   | `/api/photos`         | Multipart `photo`; processamento otimizado no recebimento                    |
+| Método | Endpoint                          | Contrato-alvo                                                                |
+| ------ | --------------------------------- | ---------------------------------------------------------------------------- |
+| GET    | `/api/panels`                     | Lista painéis da residência                                                  |
+| GET    | `/api/panels?id=ID`               | Retorna `{id,name,config,draftRevision}`                                     |
+| POST   | `/api/panels`                     | Cria `{name,copyFromId?}`; cópia usa o rascunho salvo                        |
+| PUT    | `/api/panels`                     | Salva `{id,config,expectedRevision}` sem alterar dispositivos                |
+| PATCH  | `/api/panels`                     | Renomeia `{id,name}`                                                         |
+| DELETE | `/api/panels`                     | Exclui `{id}` se não estiver em uso por dispositivos ativos                  |
+| POST   | `/api/panels/publish`             | Publica `{panelId,deviceId,expectedRevision}`; retorna `{revision}` imutável |
+| GET    | `/api/devices/panels?deviceId=ID` | Lista versões disponibilizadas ao dispositivo para administração             |
+| DELETE | `/api/devices/panels`             | Remove `{deviceId,panelId}` das opções, exceto o painel atualmente enviado   |
+| GET    | `/api/photos`                     | Biblioteca de fotos disponível ao editor autenticado                         |
+| POST   | `/api/photos`                     | Multipart `photo`; processamento otimizado no recebimento                    |
 
 `GET /api/devices` retorna `activePanelId`, `activePanelVersionId` e `appliedRevision` para acompanhar a publicação. As rotas `/api/online-frame` permanecem disponíveis para compatibilidade com o fluxo anterior.
+Na publicação, `activate` é opcional e vale `true` por padrão. Com `false`, a versão
+é disponibilizada para o dispositivo sem alterar o painel enviado. Publicar diretamente
+também disponibiliza a versão para trocas futuras. Cada dispositivo mantém sua própria
+versão aprovada; publicar em outro não a atualiza. Exclusão de um painel remove também
+suas permissões, mas continua proibida enquanto ele estiver enviado a dispositivo ativo.
+A rota de compatibilidade `/api/online-frame/publish` também atualiza a versão aprovada
+na mesma transação. Se outro painel estiver ativo, ele permanece enviado ao dispositivo;
+a nova publicação legada fica disponível apenas para uma escolha posterior.
 Configuração compartilhada e defaults estão em `packages/contracts/src/online-dashboard.ts`.
 O endpoint de upload gera imagem ajustada para caber em 1024×600 preservando
 proporção, via Sharp. Testes automatizados não substituem validação em aparelho real.
@@ -38,6 +48,11 @@ proporção, via Sharp. Testes automatizados não substituem validação em apar
   Receber a resposta não confirma aplicação. `POST /api/player/heartbeat` permanece
   exclusivo do protocolo legado, não é utilizado pelo APK v0.4.
 - `GET /api/player/online-media/{id}?v=sha256` entrega mídia da publicação autorizada.
+- `GET /api/player/panels` lista apenas painéis disponibilizados ao dispositivo autenticado,
+  além do painel enviado e revisões enviada/aplicada. `POST /api/player/panels`, com
+  `{panelId}`, ativa a versão aprovada para o próprio dispositivo e retorna `{revision}`.
+  A resposta confirma o envio, não a aplicação; a confirmação continua no polling.
+  Ambas as chamadas usam o Bearer nativo do dispositivo e não expõem a credencial ao JavaScript.
 - A prévia administrativa usa `/player-dashboard/index.html?preview=1` e `postMessage`
   limitado à mesma origem.
 
@@ -49,6 +64,9 @@ fora do JavaScript. Produção exige HTTPS; HTTP de debug somente via loopback e
 O armazenamento reutiliza `Layout` e `LayoutVersion`; uma migration associa cada
 dispositivo existente ao seu painel e à versão já publicada. Cada dispositivo mantém
 sua própria versão atribuída, sem ser alterado por publicações para outro dispositivo.
+Uma migration posterior disponibiliza somente a publicação atual de cada dispositivo;
+nenhum outro painel é liberado automaticamente. Faça backup e execute `npm run db:migrate`
+antes de iniciar a versão nova. Não há troca offline nem garantia de retomada offline do APK.
 Rotas offline antigas podem permanecer para compatibilidade, mas não são o caminho
 principal do editor ou do APK v0.4.
 

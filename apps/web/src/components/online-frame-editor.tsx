@@ -18,6 +18,7 @@ type Device = {
   activePanelVersionId: string | null;
 };
 type Panel = { id: string; name: string };
+type PanelAccess = { panelId: string; versionId: string };
 type PanelState = Panel & { config: OnlineDashboard; draftRevision: number };
 type Photo = {
   id: string;
@@ -42,6 +43,8 @@ export function OnlineFrameEditor() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [panels, setPanels] = useState<Panel[]>([]);
+  const [access, setAccess] = useState<PanelAccess[]>([]);
+  const [accessDevice, setAccessDevice] = useState("");
   const [panelId, setPanelId] = useState("");
   const [state, setState] = useState<PanelState | null>(null);
   const [config, setConfig] = useState<OnlineDashboard>(defaultOnlineDashboard);
@@ -164,6 +167,29 @@ export function OnlineFrameEditor() {
     setPhotos(result.photos ?? []);
     return (result.photos ?? []) as Photo[];
   }, []);
+
+  const refreshAccess = useCallback(async (id: string) => {
+    const result = await api(`/api/devices/panels?deviceId=${encodeURIComponent(id)}`);
+    return result.access as PanelAccess[];
+  }, []);
+
+  useEffect(() => {
+    if (!deviceId) return;
+    let active = true;
+    refreshAccess(deviceId)
+      .then((items) => {
+        if (active) {
+          setAccess(items);
+          setAccessDevice(deviceId);
+        }
+      })
+      .catch((failure) => {
+        if (active) setError(failure.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [deviceId, refreshAccess]);
 
   useEffect(() => {
     let active = true;
@@ -403,7 +429,7 @@ export function OnlineFrameEditor() {
     }
   }
 
-  async function save(publish: boolean) {
+  async function save(publish: boolean, activate = true) {
     if (!state || !panelId || (publish && !deviceId) || operation.current) return;
     const parsed = onlineDashboardSchema.safeParse(config);
     if (!parsed.success) {
@@ -438,9 +464,11 @@ export function OnlineFrameEditor() {
         await api("/api/panels/publish", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ panelId, deviceId, expectedRevision: revision }),
+          body: JSON.stringify({ panelId, deviceId, expectedRevision: revision, activate }),
         });
         await refreshDevices();
+        setAccess(await refreshAccess(deviceId));
+        setAccessDevice(deviceId);
       }
       setState((current) =>
         current?.id === panelId
@@ -450,11 +478,34 @@ export function OnlineFrameEditor() {
       setDirty(false);
       setNotice(
         publish
-          ? "Publicado. Aguardando confirmação de aplicação pelo dispositivo."
+          ? activate
+            ? "Publicado. Aguardando confirmação de aplicação pelo dispositivo."
+            : "Publicação disponibilizada para este dispositivo, sem alterar o painel exibido."
           : "Rascunho salvo; o dispositivo não foi alterado.",
       );
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Falha ao salvar.");
+    } finally {
+      operation.current = false;
+      setBusy("");
+    }
+  }
+
+  async function removeAccess(id: string) {
+    if (operation.current || !deviceId) return;
+    operation.current = true;
+    setBusy("Atualizando permissões…");
+    setError("");
+    try {
+      await api("/api/devices/panels", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId, panelId: id }),
+      });
+      setAccess(await refreshAccess(deviceId));
+      setNotice("Painel removido das opções deste dispositivo.");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Falha ao atualizar permissões.");
     } finally {
       operation.current = false;
       setBusy("");
@@ -617,6 +668,46 @@ export function OnlineFrameEditor() {
           Dispositivo: <strong>{selectedDevice.name}</strong> · Painel enviado:{" "}
           <strong>{activePanel?.name ?? "Nenhum"}</strong>
         </p>
+      )}
+      {selectedDevice && (
+        <section className="online-callout" aria-label="Painéis disponíveis no dispositivo">
+          <h2>Painéis disponíveis neste dispositivo</h2>
+          <p>
+            Somente publicações disponibilizadas aqui podem ser escolhidas no tablet. Rascunhos não
+            ficam acessíveis.
+          </p>
+          {accessDevice !== deviceId ? (
+            <p>Carregando permissões…</p>
+          ) : (
+            <ul>
+              {panels.map((panel) => {
+                const allowed = access.some((item) => item.panelId === panel.id);
+                return (
+                  <li key={panel.id}>
+                    {panel.name} — {allowed ? "disponível" : "não disponível"}
+                    {selectedDevice.activePanelId === panel.id
+                      ? " (painel enviado)"
+                      : allowed && (
+                          <button disabled={!!busy} onClick={() => void removeAccess(panel.id)}>
+                            Remover acesso
+                          </button>
+                        )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p>
+            Selecione um painel em edição e disponibilize a versão atual sem trocar a tela do
+            tablet.
+          </p>
+          <button
+            disabled={!!busy || loading || !state || accessDevice !== deviceId}
+            onClick={() => void save(true, false)}
+          >
+            Disponibilizar painel em edição
+          </button>
+        </section>
       )}
       {!devices.length && (
         <div className="online-callout">

@@ -53,7 +53,13 @@ export async function GET(request: Request) {
     const applied = params.get("appliedRevision");
     if (applied && applied === revision)
       await db.device.updateMany({
-        where: { id: device.id, tokenHash: device.tokenHash, revokedAt: null },
+        where: {
+          id: device.id,
+          tokenHash: device.tokenHash,
+          revokedAt: null,
+          activePanelId: device.activePanelId,
+          activePanelVersionId: device.activePanelVersionId,
+        },
         data: { appliedRevision: revision },
       });
     await db.device.updateMany({

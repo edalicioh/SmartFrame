@@ -13,6 +13,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  checks:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Baixar a revisão
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Testar scripts de deploy e atualização USB
+        shell: bash
+        run: |
+          bash -n scripts/deploy-server.sh
+          bash -n scripts/update-tablet-usb.sh
+          bash tests/deploy-server.test.sh
+          bash tests/update-tablet-usb.test.sh
   android:
     if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/android.yml
@@ -20,7 +36,7 @@ jobs:
       SMARTFRAME_ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.SMARTFRAME_ANDROID_DEBUG_KEYSTORE_BASE64 }}
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: android
+    needs: [android, checks]
     runs-on: [self-hosted, Linux, smartframe]
     timeout-minutes: 45
     steps:
@@ -39,3 +55,9 @@ jobs:
       - name: Construir e publicar
         shell: bash
         run: bash scripts/deploy-server.sh
+      - name: Atualizar o tablet por USB
+        timeout-minutes: 10
+        shell: bash
+        env:
+          SMARTFRAME_TABLET_SERIAL: ${{ vars.SMARTFRAME_TABLET_SERIAL }}
+        run: bash scripts/update-tablet-usb.sh

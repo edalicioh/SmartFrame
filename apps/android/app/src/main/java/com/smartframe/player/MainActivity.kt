@@ -44,7 +44,7 @@ class MainActivity : Activity() {
         statusView = TextView(this).apply { textSize = 18f; gravity = android.view.Gravity.CENTER; setPadding(32, 32, 32, 32) }
         root.addView(statusView, FrameLayout.LayoutParams(-1, -1))
         statusView.setOnClickListener { showConnection() }
-        val menu = Button(this).apply { text = "⚙"; contentDescription = "Configuração da conexão"; setOnClickListener { showConnection() } }
+        val menu = Button(this).apply { text = "⚙"; contentDescription = "Menu do SmartFrame"; setOnClickListener { showMenu() } }
         val menuSize = (48 * resources.displayMetrics.density).toInt()
         root.addView(menu, FrameLayout.LayoutParams(menuSize, menuSize, android.view.Gravity.TOP or android.view.Gravity.END))
         ServiceWorkerController.getInstance().serviceWorkerWebSettings.blockNetworkLoads = true
@@ -52,7 +52,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
                 android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
-            ) { showConnection() }
+            ) { showMenu() }
         }
         showStatus("Conecte este tablet pelo código do painel.")
         if (credentials.read() != null) openDashboard()
@@ -129,6 +129,66 @@ class MainActivity : Activity() {
         retry = Runnable { retry = null; openDashboard() }.also { handler.postDelayed(it, delay) }
     }
 
+    private fun showMenu() {
+        if (credentials.read() == null) return showConnection()
+        AlertDialog.Builder(this).setTitle("SmartFrame")
+            .setItems(arrayOf("Trocar painel", "Configuração da conexão")) { _, which ->
+                if (which == 0) showPanels() else showConnection()
+            }.setNegativeButton("Fechar", null).show()
+    }
+
+    private fun showPanels() {
+        val c = credentials.read() ?: return showConnection()
+        val progress = AlertDialog.Builder(this).setTitle("Trocar painel").setMessage("Carregando painéis disponíveis…").setNegativeButton("Fechar", null).create()
+        progress.show()
+        executor.execute {
+            try {
+                val result = PanelClient.list(c)
+                runOnUiThread {
+                    if (isDestroyed || !progress.isShowing || credentials.read() != c) return@runOnUiThread
+                    progress.dismiss()
+                    if (result.isEmpty()) {
+                        AlertDialog.Builder(this).setTitle("Trocar painel").setMessage("Nenhum painel disponível. Peça ao administrador para disponibilizar uma publicação.").setPositiveButton("Fechar", null).show()
+                    } else {
+                        val labels = result.map { panel ->
+                            val state = if (!panel.current) "" else if (panel.applied) " — aplicado" else " — aguardando aplicação"
+                            panel.name + state + if (panel.updateAvailable) ", nova versão disponível" else ""
+                        }.toTypedArray()
+                        AlertDialog.Builder(this).setTitle("Trocar painel").setItems(labels) { _, index ->
+                            val panel = result[index]
+                            if (!panel.current || panel.updateAvailable) switchPanel(c, panel)
+                        }.setNegativeButton("Cancelar", null).show()
+                    }
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    if (isDestroyed || !progress.isShowing || credentials.read() != c) return@runOnUiThread
+                    progress.dismiss()
+                    AlertDialog.Builder(this).setTitle("Trocar painel").setMessage("Não foi possível consultar os painéis. Verifique a conexão; o painel atual permanece na tela.")
+                        .setPositiveButton("Tentar novamente") { _, _ -> showPanels() }.setNegativeButton("Fechar", null).show()
+                }
+            }
+        }
+    }
+
+    private fun switchPanel(c: DeviceConnection, panel: AvailablePanel) {
+        val progress = AlertDialog.Builder(this).setTitle("Trocar painel").setMessage("Solicitando troca…").setCancelable(false).create()
+        progress.show()
+        executor.execute {
+            val message = try {
+                PanelClient.activate(c, panel.id)
+                "Troca solicitada. O painel será carregado na próxima sincronização; a aplicação ainda não foi confirmada."
+            } catch (_: Exception) {
+                "Não foi possível confirmar a troca. A solicitação pode ter sido recebida; consulte novamente os painéis quando a conexão voltar."
+            }
+            runOnUiThread {
+                if (isDestroyed || credentials.read() != c) return@runOnUiThread
+                progress.dismiss()
+                AlertDialog.Builder(this).setTitle("Trocar painel").setMessage(message).setPositiveButton("Fechar", null).show()
+            }
+        }
+    }
+
     private fun showConnection() {
         val current = credentials.read()
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 8, 24, 0) }
@@ -165,7 +225,7 @@ class MainActivity : Activity() {
     override fun onPause() { resumed = false; cancelTimers(); webView?.onPause(); super.onPause() }
     @Deprecated("Compatibilidade com Android anterior à API 33")
     @SuppressLint("GestureBackNavigation")
-    override fun onBackPressed() { showConnection() }
+    override fun onBackPressed() { showMenu() }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (hasFocus) hideBars() }
     @Suppress("DEPRECATION")
     private fun hideBars() {
@@ -184,6 +244,52 @@ class MainActivity : Activity() {
         }
     }
     override fun onDestroy() { closed = true; cancelTimers(); handler.removeCallbacksAndMessages(null); executor.shutdownNow(); webView?.destroy(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
+}
+
+internal data class AvailablePanel(val id: String, val name: String, val current: Boolean, val updateAvailable: Boolean, val applied: Boolean)
+
+internal object PanelClient {
+    fun list(c: DeviceConnection): List<AvailablePanel> {
+        val json = request(c, null)
+        val items = json.getJSONArray("panels")
+        require(items.length() <= 1000)
+        return (0 until items.length()).map { index ->
+            val panel = items.getJSONObject(index)
+            val id = panel.getString("id"); val name = panel.getString("name")
+            require(id.matches(Regex("[A-Za-z0-9_-]{1,128}")) && name.length in 1..80)
+            AvailablePanel(id, name, panel.getBoolean("current"), panel.getBoolean("updateAvailable"), panel.getBoolean("applied"))
+        }
+    }
+
+    fun activate(c: DeviceConnection, panelId: String) {
+        require(panelId.matches(Regex("[A-Za-z0-9_-]{1,128}")))
+        val revision = request(c, panelId).getString("revision")
+        require(revision.matches(Regex("online:[A-Za-z0-9_-]{1,128}")))
+    }
+
+    private fun request(c: DeviceConnection, panelId: String?): JSONObject {
+        val server = PairingClient.normalizeServer(c.server, BuildConfig.DEBUG)
+        val conn = URL("$server/api/player/panels").openConnection() as HttpURLConnection
+        return withConnectionDeadline(conn) {
+            conn.connectTimeout = 10_000; conn.readTimeout = 15_000; conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Authorization", "Bearer ${c.token}")
+            conn.setRequestProperty("Accept", "application/json")
+            if (panelId != null) {
+                conn.requestMethod = "POST"; conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.outputStream.use { it.write(JSONObject().put("panelId", panelId).toString().toByteArray(Charsets.UTF_8)) }
+            }
+            check(conn.responseCode == 200)
+            require(conn.contentType?.substringBefore(';')?.trim()?.equals("application/json", true) == true)
+            require(conn.contentLengthLong <= 131072)
+            val bytes = conn.inputStream.use { input ->
+                val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(4096)
+                while (true) { val n = input.read(buffer); if (n < 0) break; require(output.size() + n <= 131072); output.write(buffer, 0, n) }
+                output.toByteArray()
+            }
+            JSONObject(String(bytes, Charsets.UTF_8))
+        }
+    }
 }
 
 internal object PairingClient {
