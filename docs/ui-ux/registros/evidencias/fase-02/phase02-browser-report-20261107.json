@@ -1,0 +1,2436 @@
+{
+  "date": "2026-11-07T10:02:01.647Z",
+  "origin": "http://127.0.0.1:43195",
+  "browser": "Chrome/156.0.8078.4",
+  "checks": [
+    {
+      "name": "ready/pending/processing/error/unknown statuses and authenticated thumbnail requests",
+      "details": {
+        "photos": [
+          "▧\nFailed fixture.png\nFalha no processamento\nSelecionar",
+          "▧\nUnknown state fixture.png\nEstado desconhecido — indisponível\nSelecionar",
+          "▧\nPending fixture.jpeg\nAguardando processamento\nSelecionar",
+          "▧\nProcessing fixture.webp\nProcessando — ainda não selecionável\nSelecionar",
+          "Fixture ready 104.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 103.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 102.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 101.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 100.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 099.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 098.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 097.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 096.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 095.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 094.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 093.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 092.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 091.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 090.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 089.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 088.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 087.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 086.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 085.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 084.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 083.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 082.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 081.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 080.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 079.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 078.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 077.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 076.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 075.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 074.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 073.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 072.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 071.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 070.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 069.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 068.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 067.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 066.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 065.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 064.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 063.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 062.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 061.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 060.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 059.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 058.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 057.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 056.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 055.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 054.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 053.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 052.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 051.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 050.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 049.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 048.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 047.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 046.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 045.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 044.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 043.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 042.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 041.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 040.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 039.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 038.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 037.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 036.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 035.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 034.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 033.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 032.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 031.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 030.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 029.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 028.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 027.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 026.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 025.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 024.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 023.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 022.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 021.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 020.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 019.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 018.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 017.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 016.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 015.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 014.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 013.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 012.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 011.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 010.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 009.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 008.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 007.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 006.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Fixture ready 005.png\nPronta para seleção · 120 × 80\nSelecionar",
+          "Long filename for browser fixture Long filename for browser fixture Long filename for browser fixture Long filename for browser fixture Long filename for browser fixture Long filename for browser fixture Long filename for browser fixture .webp\nPronta para seleção · 120 × 80\nSelecionar",
+          "Ready image with intentionally missing thumbnail long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-.jpg\nPronta para seleção · 120 × 80\nSelecionar",
+          "same-name.jpg\nPronta para seleção · 120 × 80\nSelecionar",
+          "same-name.jpg\nPronta para seleção · 120 × 80\nSelecionada\nRetirar do painel"
+        ],
+        "readyRequests": 105,
+        "overflow": true
+      }
+    },
+    {
+      "name": "404 thumbnail uses accessible declarative fallback",
+      "details": {
+        "fallback": "Miniatura indisponível",
+        "imageClass": "photo-thumb  is-fallback",
+        "description": "Miniatura indisponível para Ready image with intentionally missing thumbnail long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-long-name-.jpg"
+      }
+    },
+    {
+      "name": "long and duplicate photo filenames rendered",
+      "details": {
+        "long": 2,
+        "duplicate": 2
+      }
+    },
+    {
+      "name": "selection through UI reaches exactly 100 unique ready IDs",
+      "details": 100
+    },
+    {
+      "name": "attempt 101 refused with visible explanation",
+      "details": {
+        "count": 100,
+        "status": "O painel já atingiu o limite de 100 fotos.",
+        "countText": "100 de 100 fotos selecionadas — limite atingido; retire uma foto para selecionar outra."
+      }
+    },
+    {
+      "name": "keyboard reorder to first announces result and keeps ID focus when edge action disables",
+      "details": {
+        "first": "cmw68i00z0001lgtoh3rda1yt",
+        "focused": "cmw68i00z0001lgtoh3rda1yt",
+        "tag": "ARTICLE",
+        "focusLabel": null,
+        "announcement": "same-name.jpg movida para a posição 1 de 2."
+      }
+    },
+    {
+      "name": "keyboard reorder to last focuses the ID row when direction becomes disabled",
+      "details": {
+        "last": "cmw68i00z0001lgtoh3rda1yt",
+        "focused": "cmw68i00z0001lgtoh3rda1yt",
+        "tag": "ARTICLE"
+      }
+    },
+    {
+      "name": "retire from A preserves B draft and library",
+      "details": {
+        "removed": {
+          "ordered": [
+            "cmw68i00s0000lgto9d1ovy0g"
+          ],
+          "library": true
+        },
+        "bState": {
+          "ids": [
+            "cmw68i00s0000lgto9d1ovy0g",
+            "cmw68i00z0001lgtoh3rda1yt"
+          ],
+          "includesSamePhoto": true
+        }
+      }
+    },
+    {
+      "name": "partial upload preserves successful pending upload and identifies invalid file without auto-select",
+      "details": {
+        "error": "Alguns arquivos não foram enviados: upload-invalid.txt: formato não aceito",
+        "selected": [
+          "cmw68i00s0000lgto9d1ovy0g"
+        ],
+        "library": "▧\nupload-valid.png\nAguardando processamento\nSelecionar"
+      }
+    },
+    {
+      "name": "every widget activation and task display setting disabled/restored",
+      "details": {
+        "count": 11,
+        "names": [
+          "Relógio",
+          "Clima",
+          "Moedas",
+          "Calendário",
+          "Fotos",
+          "Ativar Recados",
+          "Ativar Contagem regressiva",
+          "Ativar Aniversários",
+          "Ativar Tarefas",
+          "Mostrar concluídas",
+          "Ativar Pomodoro"
+        ]
+      }
+    },
+    {
+      "name": "currencies preserve 1–20 minimum boundary with widget configuration intact",
+      "details": {
+        "one": 1,
+        "lastDisabled": true,
+        "restored": [
+          "USD/BRL\nRemover",
+          "EUR/JPY\nRemover"
+        ]
+      }
+    },
+    {
+      "name": "empty required note remains blocked and error visible after widget is disabled",
+      "details": {
+        "message": "Confira as configurações antes de salvar: widgets → notes → messages → 0 → text — Too small: expected string to have >=1 characters.",
+        "puts": 0
+      }
+    },
+    {
+      "name": "impossible birthday date stays blocked when Aniversários is disabled",
+      "details": {
+        "message": "Confira as configurações antes de salvar: widgets → birthdays → people → 0 — Data inválida.",
+        "puts": 0
+      }
+    },
+    {
+      "name": "empty numeric field shows associated error and blocks save request",
+      "details": {
+        "invalid": "true",
+        "message": "Informe um valor.",
+        "global": "Corrija o campo notes interval: Informe um valor."
+      }
+    },
+    {
+      "name": "out-of-range numeric field blocks save without coercing to zero",
+      "details": {
+        "invalid": "true",
+        "message": "Use um valor entre 5 e 3600."
+      }
+    },
+    {
+      "name": "invalid numeric draft/error in A is discarded on confirmed switch and does not prevent saving B",
+      "details": {
+        "bAfterSwitch": {
+          "status": "Rascunho r3 salvo",
+          "invalid": false
+        },
+        "bPutAfter": 1
+      }
+    },
+    {
+      "name": "custom appearance and every widget config survive toggles/save/reload",
+      "details": {
+        "theme": "dark",
+        "appearance": {
+          "backgroundColor": "#AABBCC",
+          "accentColor": "#8755AA",
+          "textColor": "#223344"
+        },
+        "timezone": "America/Sao_Paulo",
+        "refreshSeconds": 67,
+        "widgets": {
+          "photos": {
+            "enabled": true
+          },
+          "clock": {
+            "enabled": true,
+            "custom": "12h"
+          },
+          "weather": {
+            "enabled": true,
+            "custom": "Fixture City"
+          },
+          "currencies": {
+            "enabled": true
+          },
+          "calendar": {
+            "enabled": true
+          },
+          "notes": {
+            "enabled": true,
+            "custom": "Fixture notes"
+          },
+          "countdown": {
+            "enabled": true,
+            "custom": "Fixture countdown"
+          },
+          "birthdays": {
+            "enabled": true,
+            "custom": "Fixture birthdays"
+          },
+          "tasks": {
+            "enabled": true,
+            "custom": "Fixture tasks"
+          },
+          "pomodoro": {
+            "enabled": true,
+            "custom": "Fixture pomodoro"
+          }
+        }
+      }
+    },
+    {
+      "name": "library media and panel B remain untouched after removal from A",
+      "details": {
+        "library": true,
+        "b": [
+          "cmw68i00s0000lgto9d1ovy0g",
+          "cmw68i00z0001lgtoh3rda1yt"
+        ]
+      }
+    },
+    {
+      "name": "actual preview postMessage uses restricted origin, reflects dirty widget draft and excludes device credentials",
+      "details": {
+        "sameFrame": true,
+        "messages": [
+          {
+            "origin": "http://127.0.0.1:43195",
+            "type": "smartframe:online-preview",
+            "hasToken": false,
+            "hasDeviceId": false,
+            "hasDeviceReference": false,
+            "config": {
+              "orientation": "landscape",
+              "photos": 1,
+              "weather": "Fixture Weather Updated"
+            }
+          },
+          {
+            "origin": "http://127.0.0.1:43195",
+            "type": "smartframe:online-preview",
+            "hasToken": false,
+            "hasDeviceId": false,
+            "hasDeviceReference": false,
+            "config": {
+              "orientation": "landscape",
+              "photos": 1,
+              "weather": "Fixture Weather Updated"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "preview portrait at 1440x1000 maintains ratio/no overflow",
+      "details": {
+        "width": 1440,
+        "scrollWidth": 1425,
+        "rect": {
+          "x": 809.625,
+          "y": 429,
+          "width": 437.5,
+          "height": 700
+        },
+        "ratio": 0.625,
+        "orientation": "draft-preview portrait",
+        "mode": "Configurar"
+      }
+    },
+    {
+      "name": "preview landscape at 1440x1000 maintains ratio/no overflow",
+      "details": {
+        "width": 1440,
+        "scrollWidth": 1425,
+        "rect": {
+          "x": 655.75,
+          "y": 429,
+          "width": 745.25,
+          "height": 465.78125
+        },
+        "ratio": 1.6,
+        "orientation": "draft-preview landscape",
+        "mode": "Configurar"
+      }
+    },
+    {
+      "name": "preview portrait at 390x844 maintains ratio/no overflow",
+      "details": {
+        "width": 390,
+        "scrollWidth": 390,
+        "rect": {
+          "x": 10,
+          "y": 591,
+          "width": 370,
+          "height": 592
+        },
+        "ratio": 0.625,
+        "orientation": "draft-preview portrait",
+        "mode": "Visualizar"
+      }
+    },
+    {
+      "name": "preview landscape at 390x844 maintains ratio/no overflow",
+      "details": {
+        "width": 390,
+        "scrollWidth": 390,
+        "rect": {
+          "x": 10,
+          "y": 591,
+          "width": 370,
+          "height": 231.25
+        },
+        "ratio": 1.6,
+        "orientation": "draft-preview landscape",
+        "mode": "Visualizar"
+      }
+    },
+    {
+      "name": "same preview iframe receives both unsaved orientations through restricted postMessage",
+      "details": [
+        "landscape",
+        "portrait"
+      ]
+    },
+    {
+      "name": "mobile configure/preview retains one iframe instance and dirty widget draft",
+      "details": {
+        "previewPane": {
+          "visible": true,
+          "frameSame": true,
+          "dirty": "Alterações não salvas",
+          "orientation": "draft-preview landscape"
+        },
+        "configurePane": {
+          "visible": true,
+          "frameSame": true,
+          "weather": "Fixture Weather Updated"
+        },
+        "iframeBefore": true
+      }
+    },
+    {
+      "name": "network audit: no publish/pairing/device mutation or identifier/credential-bearing URL",
+      "details": {
+        "mutations": [],
+        "credentialURLs": [],
+        "deviceURLs": [],
+        "deviceListReads": 5,
+        "uploads": 1,
+        "saves": 2
+      }
+    }
+  ],
+  "errors": [],
+  "network": [
+    {
+      "method": "GET",
+      "path": "/layouts",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_src_app_15unuaifn5x8m._.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1anvha4rlo79g._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/turbopack-apps_web_06rkbud3pyrlm._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1cy5vtpz5-fey._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_20wefz_f1k6jn._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0u9akzw7bed-i._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0gjffvb6t1n5h._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_0ihh5tnjuo6_8._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_classic_1vfk8f730hcy9._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_core_14qn2mg1f8pkp._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_locales_1-ided7izgr--._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_0e5asv8fpnavi._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsayzyj2p6._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/favicon.ico",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i07d002vlgtoxl90d6nw/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i07a002ulgtopqusgfjt/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i078002tlgto9p4vlpj9/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i076002slgtoptfibggu/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i074002rlgto98n32f3q/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i072002qlgto0dqp0q4r/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i070002plgto23biih5h/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06y002olgtolymu1l1p/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06w002nlgtogthrqw3w/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06u002mlgtorttd8o5w/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06s002llgtocx5cf2oz/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06q002klgtokcstla91/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06o002jlgto3q52f8l0/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06m002ilgtomuc299ef/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06k002hlgtokp2p3d1s/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06h002glgtoqhpwfrxe/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06e002flgto37a8pjmm/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06c002elgtou4orosdv/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06b002dlgtozlj8fboz/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02b000llgto0zj7qgkp/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i027000klgtos50hybtm/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i025000jlgtok87osq55/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i022000ilgto26m7i9al/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i020000hlgtoebcg9omp/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01y000glgtoigd51k78/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01w000flgtocjinh1ee/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01t000elgtolxk9gmjr/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01r000dlgto1s41enzp/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01p000clgtoe07tt56h/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01m000blgtot67l9opq/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01k000algtodxbxee3h/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01h0009lgton1v2p2i9/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01f0008lgtowkdsx2b5/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01d0007lgto0keh7kgz/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i01a0006lgto4w1yzwzj/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i0180005lgto0wtz8elo/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i0160004lgtodg6absbt/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i0130003lgtowmx1iygm/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i0120002lgtonsydseit/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00z0001lgtoh3rda1yt/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i069002clgto1rrar56r/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i067002blgtoc89ziwg2/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i065002algtomagwb2nh/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i0630029lgtosohks8e1/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i0610028lgto8kqj3zp0/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05z0027lgton7feje0z/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05x0026lgtocaegfcwq/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05v0025lgtouhnnongx/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05t0024lgto64zms3vm/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05q0023lgton5u9h2xo/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05o0022lgtosrxqpbki/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05m0021lgtowfzp1np9/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05k0020lgtovn65jadh/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i07d002vlgtoxl90d6nw/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05i001zlgtocctkdn4y/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05f001ylgto6ryutkqo/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05d001xlgtotwotwrjv/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i05b001wlgtoisxbj5us/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i059001vlgtobnss6etc/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i057001ulgtoo6mthaiv/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i054001tlgtofdho65cd/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i052001slgtoqaelpkp7/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i050001rlgto3yhpteww/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04x001qlgtor7cret0q/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04v001plgtoyysy7977/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04t001olgto5hbdag12/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04q001nlgtou9y6988l/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04o001mlgtogcmlhf9p/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04m001llgtoby96js0a/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04j001klgtoakf7yiii/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04h001jlgto6vv0rk7y/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04f001ilgtooi6i9s1z/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04d001hlgtorzq2ely1/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i04b001glgtoq9d4wuuv/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i048001flgto4g6rm38r/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i046001elgtoc7njbfyl/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i044001dlgtodktrifda/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i042001clgtok56abino/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i040001blgtoexmrarb6/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03y001algtoxvyleyy4/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03v0019lgtofx5l0nrf/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03s0018lgtonevzfnze/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03q0017lgtojdldllof/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03o0016lgtoapddbbn5/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03m0015lgtog0k7cao0/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03k0014lgtoisqkvv7y/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03h0013lgtoipa7gd7m/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03f0012lgtoubex43uf/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03c0011lgto1v19qu0k/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i03a0010lgtoi7vv0egc/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i037000zlgtobxpga1vi/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i035000ylgto9l888gwl/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i033000xlgtorc2uvqeg/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i031000wlgtoltlii6xt/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02z000vlgto8a90dfqo/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02x000ulgtoyu705i0u/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02u000tlgto0kjb6cit/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02s000slgtoomqbw32a/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02p000rlgto6h95r5ul/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02n000qlgtoakdlcrfn/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02l000plgtoznshaajj/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02j000olgtohkury1pm/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02g000nlgtobb8ovd2y/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i02d000mlgtouinrrt0q/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNSIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJXaW5kb3dUZXh0IiBkPSJNMjAgM2gtMVYxaC0ydjJIN1YxSDV2Mkg0Yy0xLjEgMC0yIC45LTIgMnYxNmMwIDEuMS45IDIgMiAyaDE2YzEuMSAwIDItLjkgMi0yVjVjMC0xLjEtLjktMi0yLTJ6bTAgMThINFY4aDE2djEzeiIvPjxwYXRoIGZpbGw9Im5vbmUiIGQ9Ik0wIDBoMjR2MjRIMHoiLz48L3N2Zz4=",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00z0001lgtoh3rda1yt/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/layouts",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_src_app_15unuaifn5x8m._.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1anvha4rlo79g._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/turbopack-apps_web_06rkbud3pyrlm._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1cy5vtpz5-fey._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_20wefz_f1k6jn._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0u9akzw7bed-i._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0gjffvb6t1n5h._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_0ihh5tnjuo6_8._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_classic_1vfk8f730hcy9._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_core_14qn2mg1f8pkp._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_locales_1-ided7izgr--._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_0e5asv8fpnavi._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsayzyj2p6._.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/favicon.ico",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i07d002vlgtoxl90d6nw/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i07a002ulgtopqusgfjt/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i078002tlgto9p4vlpj9/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i076002slgtoptfibggu/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i074002rlgto98n32f3q/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i072002qlgto0dqp0q4r/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i070002plgto23biih5h/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06y002olgtolymu1l1p/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06w002nlgtogthrqw3w/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06u002mlgtorttd8o5w/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06s002llgtocx5cf2oz/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06q002klgtokcstla91/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06o002jlgto3q52f8l0/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06m002ilgtomuc299ef/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06k002hlgtokp2p3d1s/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06h002glgtoqhpwfrxe/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06e002flgto37a8pjmm/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06c002elgtou4orosdv/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNSIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJXaW5kb3dUZXh0IiBkPSJNMjAgM2gtMVYxaC0ydjJIN1YxSDV2Mkg0Yy0xLjEgMC0yIC45LTIgMnYxNmMwIDEuMS45IDIgMiAyaDE2YzEuMSAwIDItLjkgMi0yVjVjMC0xLjEtLjktMi0yLTJ6bTAgMThINFY4aDE2djEzeiIvPjxwYXRoIGZpbGw9Im5vbmUiIGQ9Ik0wIDBoMjR2MjRIMHoiLz48L3N2Zz4=",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos",
+      "hasCredential": false,
+      "hasDeviceId": false,
+      "hasDeviceParameter": false
+    }
+  ]
+}

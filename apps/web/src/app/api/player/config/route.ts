@@ -2,7 +2,7 @@ import { frameResponse, privateHeaders } from "@/lib/frame-api";
 import { getDatabase } from "@smartframe/database";
 import { authorizePlayer, FrameError } from "@smartframe/frames";
 import { onlineWidgetData } from "@smartframe/widgets";
-import { onlineDashboardSchema } from "@smartframe/contracts";
+import { readStoredOnlineDashboard } from "@smartframe/contracts";
 import { activeOnlineVersion } from "@/lib/active-online-version";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     if (!version)
       throw new FrameError(409, "Este dispositivo ainda não possui uma configuração publicada.");
     const revision = `online:${version.id}`;
-    const config = onlineDashboardSchema.parse(version.config);
+    const config = readStoredOnlineDashboard(version.config);
     const photos = config.widgets.photos.photoIds.length
       ? await db.media.findMany({
           where: {

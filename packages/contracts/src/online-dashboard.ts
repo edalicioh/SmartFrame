@@ -1,10 +1,81 @@
 import { z } from "zod";
 import { onlineCurrenciesSchema } from "./currencies";
-import { widgetBackground, widgetCardSize } from "./widget-style";
+import {
+  scopedAppearanceFields,
+  widgetAppearanceOverrideSchema,
+  widgetBackground,
+  widgetCardSize,
+} from "./widget-style";
 
 const color = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
 const interval = (min: number, fallback: number) =>
   z.number().int().min(min).max(3600).default(fallback);
+
+export const dashboardWidgetKeys = [
+  "photos",
+  "clock",
+  "weather",
+  "currencies",
+  "calendar",
+  "notes",
+  "countdown",
+  "birthdays",
+  "tasks",
+  "pomodoro",
+] as const;
+
+export type DashboardWidgetKey = (typeof dashboardWidgetKeys)[number];
+export const dashboardWidgetKeySchema = z.enum(dashboardWidgetKeys);
+
+export const gridDimensions = {
+  landscape: { columns: 24, rows: 24 },
+  portrait: { columns: 12, rows: 40 },
+} as const;
+
+/** Shared metadata; widget implementations themselves remain trusted project code. */
+export const gridWidgetCatalog = {
+  photos: { label: "Fotos", minWidth: 4, minHeight: 4 },
+  clock: { label: "Relógio", minWidth: 3, minHeight: 2 },
+  weather: { label: "Clima", minWidth: 3, minHeight: 2 },
+  currencies: { label: "Moedas", minWidth: 3, minHeight: 2 },
+  calendar: { label: "Calendário", minWidth: 4, minHeight: 4 },
+  notes: { label: "Recados", minWidth: 3, minHeight: 2 },
+  countdown: { label: "Contagem regressiva", minWidth: 3, minHeight: 2 },
+  birthdays: { label: "Aniversários", minWidth: 3, minHeight: 2 },
+  tasks: { label: "Tarefas", minWidth: 3, minHeight: 2 },
+  pomodoro: { label: "Pomodoro", minWidth: 3, minHeight: 3 },
+} as const satisfies Record<
+  DashboardWidgetKey,
+  { label: string; minWidth: number; minHeight: number }
+>;
+
+export type GridBox = { x: number; y: number; w: number; h: number };
+
+export function gridItemsOverlap<A extends GridBox, B extends GridBox>(a: A, b: B): boolean {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+export const dashboardGridItemSchema = z
+  .object({
+    widgetId: dashboardWidgetKeySchema,
+    x: z.number().int().nonnegative(),
+    y: z.number().int().nonnegative(),
+    w: z.number().int().positive(),
+    h: z.number().int().positive(),
+  })
+  .strict();
+
+export type DashboardGridItem = z.infer<typeof dashboardGridItemSchema>;
+
+export const dashboardGridLayoutSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    landscape: z.array(dashboardGridItemSchema).max(dashboardWidgetKeys.length).default([]),
+    portrait: z.array(dashboardGridItemSchema).max(dashboardWidgetKeys.length).default([]),
+  })
+  .strict();
+
+export type DashboardGridLayout = z.infer<typeof dashboardGridLayoutSchema>;
 
 /** Published online configuration contains IDs, never physical paths or credentials. */
 export const onlineDashboardSchema = z
@@ -30,6 +101,7 @@ export const onlineDashboardSchema = z
         backgroundColor: color.default("#E8EEF5"),
         accentColor: color.default("#2563EB"),
         textColor: color.default("#172033"),
+        ...scopedAppearanceFields,
       })
       .strict()
       .prefault({}),
@@ -46,6 +118,7 @@ export const onlineDashboardSchema = z
           .object({
             enabled: z.boolean().default(true),
             backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             intervalSeconds: interval(5, 15),
             fit: z.enum(["cover", "contain"]).default("cover"),
             photoIds: z
@@ -61,6 +134,7 @@ export const onlineDashboardSchema = z
             enabled: z.boolean().default(true),
             backgroundColor: widgetBackground,
             cardSize: widgetCardSize,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             format: z.enum(["12h", "24h"]).default("24h"),
             // Accept the legacy flag, but never let older editors re-enable the date.
             showDate: z
@@ -77,6 +151,7 @@ export const onlineDashboardSchema = z
             enabled: z.boolean().default(true),
             backgroundColor: widgetBackground,
             cardSize: widgetCardSize,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             city: z.string().trim().min(1).max(80).default("Camboriú"),
           })
           .strict()
@@ -87,6 +162,7 @@ export const onlineDashboardSchema = z
             enabled: z.boolean().default(true),
             backgroundColor: widgetBackground,
             cardSize: widgetCardSize,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             highlightToday: z.boolean().default(true),
           })
           .strict()
@@ -94,6 +170,8 @@ export const onlineDashboardSchema = z
         notes: z
           .object({
             enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             title: z.string().trim().min(1).max(80).default("Recados"),
             messages: z
               .array(
@@ -113,6 +191,8 @@ export const onlineDashboardSchema = z
         countdown: z
           .object({
             enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             title: z.string().trim().min(1).max(80).default("Contagem regressiva"),
             target: z
               .discriminatedUnion("kind", [
@@ -133,6 +213,8 @@ export const onlineDashboardSchema = z
         birthdays: z
           .object({
             enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             title: z.string().trim().min(1).max(80).default("Aniversários"),
             people: z
               .array(
@@ -158,6 +240,8 @@ export const onlineDashboardSchema = z
         tasks: z
           .object({
             enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             title: z.string().trim().min(1).max(80).default("Tarefas"),
             items: z
               .array(
@@ -178,6 +262,8 @@ export const onlineDashboardSchema = z
         pomodoro: z
           .object({
             enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
             title: z.string().trim().min(1).max(80).default("Pomodoro"),
             workMinutes: z.number().int().min(1).max(180).default(25),
             breakMinutes: z.number().int().min(1).max(60).default(5),
@@ -187,8 +273,55 @@ export const onlineDashboardSchema = z
       })
       .strict()
       .prefault({}),
+    gridLayout: dashboardGridLayoutSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((dashboard, ctx) => {
+    if (!dashboard.gridLayout) return;
+    for (const orientation of ["landscape", "portrait"] as const) {
+      const { columns, rows } = gridDimensions[orientation];
+      const items = dashboard.gridLayout[orientation];
+      const seen = new Set<string>();
+      items.forEach((item, index) => {
+        const path = ["gridLayout", orientation, index];
+        if (seen.has(item.widgetId))
+          ctx.addIssue({ code: "custom", message: "Posição duplicada", path });
+        seen.add(item.widgetId);
+        if (item.x + item.w > columns || item.y + item.h > rows)
+          ctx.addIssue({ code: "custom", message: "Widget fora da grade", path });
+        const minimum = gridWidgetCatalog[item.widgetId];
+        if (item.w < minimum.minWidth || item.h < minimum.minHeight)
+          ctx.addIssue({
+            code: "custom",
+            message: "Widget menor que o tamanho mínimo",
+            path,
+          });
+        if (
+          dashboard.gridLayout?.enabled &&
+          dashboard.widgets[item.widgetId].enabled &&
+          items
+            .slice(0, index)
+            .some(
+              (other) => dashboard.widgets[other.widgetId].enabled && gridItemsOverlap(item, other),
+            )
+        ) {
+          ctx.addIssue({ code: "custom", message: "Widgets sobrepostos", path });
+        }
+      });
+      // A grid that is in use must position every enabled widget: the player
+      // would otherwise auto-place it and could overlap explicit positions.
+      if (dashboard.gridLayout.enabled) {
+        for (const key of dashboardWidgetKeys) {
+          if (!dashboard.widgets[key].enabled || seen.has(key)) continue;
+          ctx.addIssue({
+            code: "custom",
+            message: `Widget ativado sem posição na grade de ${orientation}`,
+            path: ["gridLayout", orientation],
+          });
+        }
+      }
+    }
+  });
 
 export type OnlineDashboard = z.infer<typeof onlineDashboardSchema>;
 export const defaultOnlineDashboard: OnlineDashboard = onlineDashboardSchema.parse({});

@@ -1,5 +1,5 @@
 import "server-only";
-import { dashboardPhotoIds, onlineDashboardSchema } from "@smartframe/contracts";
+import { dashboardPhotoIds, readStoredOnlineDashboard } from "@smartframe/contracts";
 import type { PrismaClient } from "@smartframe/database";
 import { FrameError } from "@smartframe/frames";
 
@@ -29,7 +29,7 @@ export async function publishOnlinePanel(db: PrismaClient, input: Publication) {
     if (!device || !panel) throw new FrameError(404, "Dispositivo ou painel não encontrado.");
     if (panel.draftRevision !== input.expectedRevision)
       throw new FrameError(409, "O painel foi alterado. Atualize e tente novamente.");
-    const config = onlineDashboardSchema.parse(panel.draft ?? {});
+    const config = readStoredOnlineDashboard(panel.draft ?? {});
     const ids = dashboardPhotoIds(config);
     const media = ids.length
       ? await tx.media.findMany({

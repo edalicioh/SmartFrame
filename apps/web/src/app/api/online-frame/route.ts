@@ -1,4 +1,4 @@
-import { onlineDashboardSchema } from "@smartframe/contracts";
+import { readStoredOnlineDashboard, onlineDashboardSchema } from "@smartframe/contracts";
 import { getDatabase } from "@smartframe/database";
 import { FrameError } from "@smartframe/frames";
 import { z } from "zod";
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     return Response.json(
       {
         deviceId,
-        config: onlineDashboardSchema.parse(layout?.draft ?? {}),
+        config: readStoredOnlineDashboard(layout?.draft ?? {}),
         draftRevision: layout?.draftRevision ?? 0,
         publishedRevision: layout?.publishedVersionId
           ? `online:${layout.publishedVersionId}`

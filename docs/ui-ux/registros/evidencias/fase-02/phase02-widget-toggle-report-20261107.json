@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-07T10:13:05.930Z",
+  "browser": "Chrome/156.0.8078.4",
+  "checks": [
+    {
+      "name": "all widget options survive save/reload with all ten widgets disabled",
+      "details": {
+        "toggles": {
+          "count": 11,
+          "names": [
+            "Relógio",
+            "Clima",
+            "Moedas",
+            "Calendário",
+            "Fotos",
+            "Ativar Recados",
+            "Ativar Contagem regressiva",
+            "Ativar Aniversários",
+            "Ativar Tarefas",
+            "Mostrar concluídas",
+            "Ativar Pomodoro"
+          ],
+          "allOff": true
+        },
+        "notes": "Custom note survives toggle",
+        "birthday": "Fixture Birthday",
+        "task": "Custom task survives toggle"
+      }
+    },
+    {
+      "name": "all widget options survive reactivation, save and reload",
+      "details": {
+        "toggles": {
+          "count": 10,
+          "names": [
+            "Relógio",
+            "Clima",
+            "Moedas",
+            "Calendário",
+            "Fotos",
+            "Ativar Recados",
+            "Ativar Contagem regressiva",
+            "Ativar Aniversários",
+            "Ativar Tarefas",
+            "Ativar Pomodoro"
+          ],
+          "allOn": true,
+          "showCompleted": true
+        },
+        "showCompleted": true,
+        "theme": "light"
+      }
+    }
+  ],
+  "errors": [],
+  "saves": 2
+}

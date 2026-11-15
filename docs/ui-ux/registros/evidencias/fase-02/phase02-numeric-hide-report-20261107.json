@@ -1,0 +1,288 @@
+{
+  "date": "2026-11-07T10:05:19.832Z",
+  "browser": "Chrome/156.0.8078.4",
+  "checks": [
+    {
+      "name": "invalid numeric draft remains announced and blocks save after widget hides its field",
+      "details": {
+        "visible": {
+          "fieldMounted": true,
+          "error": "Corrija os campos numéricos: notes interval.",
+          "fieldError": "Use um valor entre 5 e 3600."
+        },
+        "hidden": {
+          "fieldMounted": false,
+          "alert": "Corrija os campos numéricos: notes interval."
+        },
+        "puts": 0
+      }
+    }
+  ],
+  "network": [
+    {
+      "method": "GET",
+      "path": "/layouts"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_src_app_15unuaifn5x8m._.css"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1anvha4rlo79g._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/turbopack-apps_web_06rkbud3pyrlm._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1cy5vtpz5-fey._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_20wefz_f1k6jn._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0u9akzw7bed-i._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0gjffvb6t1n5h._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_0ihh5tnjuo6_8._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_classic_1vfk8f730hcy9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_core_14qn2mg1f8pkp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_locales_1-ided7izgr--._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_0e5asv8fpnavi._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsayzyj2p6._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/favicon.ico"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i07d002vlgtoxl90d6nw/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i07a002ulgtopqusgfjt/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i078002tlgto9p4vlpj9/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i076002slgtoptfibggu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i074002rlgto98n32f3q/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i072002qlgto0dqp0q4r/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i070002plgto23biih5h/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06y002olgtolymu1l1p/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06w002nlgtogthrqw3w/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06u002mlgtorttd8o5w/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06s002llgtocx5cf2oz/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06q002klgtokcstla91/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06o002jlgto3q52f8l0/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06m002ilgtomuc299ef/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06k002hlgtokp2p3d1s/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06h002glgtoqhpwfrxe/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06e002flgto37a8pjmm/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i06c002elgtou4orosdv/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68i00s0000lgto9d1ovy0g/image"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js"
+    },
+    {
+      "method": "GET",
+      "path": "image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNSIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBmaWxsPSJXaW5kb3dUZXh0IiBkPSJNMjAgM2gtMVYxaC0ydjJIN1YxSDV2Mkg0Yy0xLjEgMC0yIC45LTIgMnYxNmMwIDEuMS45IDIgMiAyaDE2YzEuMSAwIDItLjkgMi0yVjVjMC0xLjEtLjktMi0yLTJ6bTAgMThINFY4aDE2djEzeiIvPjxwYXRoIGZpbGw9Im5vbmUiIGQ9Ik0wIDBoMjR2MjRIMHoiLz48L3N2Zz4="
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets"
+    }
+  ],
+  "errors": []
+}

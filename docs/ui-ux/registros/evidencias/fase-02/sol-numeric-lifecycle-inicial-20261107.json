@@ -1,0 +1,377 @@
+{
+  "reviewer": "Sol-6.1",
+  "date": "2026-11-07T10:16:16.907Z",
+  "checks": [
+    {
+      "name": "Poll de configuração numérica sem dirty",
+      "details": {
+        "initial": {
+          "input": "19",
+          "revision": "Rascunho r3 salvo"
+        },
+        "changed": {
+          "status": 200,
+          "draftRevision": 4,
+          "old": 19,
+          "newValue": 37
+        },
+        "after": {
+          "input": "19",
+          "revision": "Rascunho r4 salvo"
+        },
+        "displayMatchesCanonical": false
+      }
+    },
+    {
+      "name": "Remover aniversário após invalidar dia",
+      "details": {
+        "fieldExists": false,
+        "alerts": [
+          "Corrija os campos numéricos: birthdays day fixture-birthday."
+        ],
+        "status": "Alterações não salvas",
+        "puts": 0,
+        "saveBlockedByRemovedField": true
+      }
+    },
+    {
+      "name": "Ocultar/restaurar campo numérico inválido",
+      "details": {
+        "beforeToggle": {
+          "value": "2",
+          "error": "true"
+        },
+        "afterToggle": {
+          "value": "31",
+          "error": "false",
+          "inline": "",
+          "alert": "Corrija o campo notes interval: Use um valor entre 5 e 3600."
+        }
+      }
+    },
+    {
+      "name": "Sem publicação nem pareamento na revisão",
+      "details": true
+    }
+  ],
+  "network": [
+    {
+      "method": "GET",
+      "path": "/layouts"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_src_app_15unuaifn5x8m._.css"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1anvha4rlo79g._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/turbopack-apps_web_06rkbud3pyrlm._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1cy5vtpz5-fey._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_20wefz_f1k6jn._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0u9akzw7bed-i._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0gjffvb6t1n5h._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_0ihh5tnjuo6_8._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_classic_1vfk8f730hcy9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_core_14qn2mg1f8pkp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_locales_1-ided7izgr--._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_0e5asv8fpnavi._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsayzyj2p6._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/favicon.ico"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91n002vi4tonndr0p62/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91l002ui4tom5p32kk2/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91i002ti4topglshck1/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91f002si4to4jm56oue/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91c002ri4to34m310j3/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91a002qi4toiagia6ab/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w917002pi4to8vvkys2u/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w914002oi4toygfp6uya/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w911002ni4toug94t2gu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90z002mi4toaon1892z/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90w002li4topb9txjrp/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90t002ki4to9ercgal8/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90q002ji4toabbnm710/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90o002ii4to0t3v69gf/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90l002hi4to0ejihbls/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90i002gi4toxq2qejd8/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90e002fi4to4u29723i/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90b002ei4toa8cijysr/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w908002di4toou0rv0by/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8u50000i4to9xv9bw5w/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ua0001i4tommg8k2pu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8u50000i4to9xv9bw5w/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ua0001i4tommg8k2pu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    }
+  ],
+  "errors": [],
+  "browser": "Chrome/156.0.8078.4"
+}

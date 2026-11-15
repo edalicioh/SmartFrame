@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { onlineDashboardSchema } from "@smartframe/contracts";
+import { readStoredOnlineDashboard, onlineDashboardSchema } from "@smartframe/contracts";
 import { getDatabase } from "@smartframe/database";
 import { FrameError } from "@smartframe/frames";
 import { z } from "zod";
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
         {
           id: panel.id,
           name: panel.name,
-          config: onlineDashboardSchema.parse(panel.draft ?? {}),
+          config: readStoredOnlineDashboard(panel.draft ?? {}),
           draftRevision: panel.draftRevision,
         },
         { headers: privateHeaders },
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         householdId: owner.householdId,
         key: `panel:${randomUUID()}`,
         name: body.name,
-        draft: onlineDashboardSchema.parse(source?.draft ?? {}),
+        draft: readStoredOnlineDashboard(source?.draft ?? {}),
         draftRevision: 1,
       },
     });

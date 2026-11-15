@@ -45,16 +45,28 @@ em 1024×600 preservando proporção. A escolha e a publicação são explícita
 endpoints novos e limites estão descritos em [API](API.md); confirme-os na versão
 implantada e mantenha backups antes de alterações operacionais.
 
-## Fundo e tamanho dos widgets
+## Galeria de templates e grade livre modular
 
-Em **Aparência e layout → Fundo e tamanho dos widgets**, escolha uma cor para cada
-cartão e use **Usar fundo padrão** para voltar a acompanhar o tema. O tamanho pequeno,
-normal ou grande altera o espaço vertical relativo de relógio, clima, cotações e
+Em **Aparência e layout**, além do modo clássico **Painel dividido**, agora é possível:
+
+- Aplicar um dos **6 templates prontos** (_Porta-Retrato Clássico_, _Painel Familiar da Casa_, _Mesa de Foco & Pomodoro_, _Cotações & Agenda Executiva_, _Galeria Minimalista_ e _Painel Contínuo Sem Bordas_), preservando `photoIds`, eventos de calendário, recados, tarefas e demais dados cadastrados.
+- Alternar para **Grade livre modular (arrastar e redimensionar)** (`gridLayout.enabled = true`), posicionando e redimensionando os widgets ativos em grades **24×24 (paisagem)** e **12×40 (retrato)** com detecção de colisões, tamanhos mínimos por catálogo, inspetor numérico acessível (`X`, `Y`, `W`, `H`) e botão **Organizar automaticamente sem colisões**.
+
+## Fundo, aparência e tamanho dos widgets
+
+Em **Aparência e layout → Estilo e superfície do painel** e **Fundo e tamanho dos widgets**,
+escolha presets visuais (_Original_, _Cartões arredondados_, _Superfícies planas_,
+_Somente conteúdo_ e _Painel contínuo_), ajuste cantos, espaçamentos, bordas, sombras e
+cores por cartão com herança do painel para cada widget (veja [Aparência em camadas](APPEARANCE.md)
+e o [Roadmap PhoneBox](PHONEBOX-ROADMAP.md)). Use **Usar fundo padrão** para voltar a acompanhar o
+tema e **Redefinir para aparência herdada** para limpar sobrescritas individuais. O tamanho
+pequeno, normal ou grande altera o espaço vertical relativo de relógio, clima, cotações e
 calendário; o espaço é compartilhado entre os cartões ativos. O tamanho dos números
 do relógio é independente. A largura das fotos continua sendo ajustada na opção de
 layout existente. O fundo das fotos aparece quando a imagem não cobre a área; no modo
-conter, a cópia desfocada pode cobri-lo. Para cores personalizadas, o texto dos cartões
-usa contraste automático, exceto se a cor dos números do relógio for definida à parte.
+conter, a cópia desfocada pode cobri-lo (exceto no preset _Superfícies planas_). Para cores
+personalizadas, o texto dos cartões usa contraste automático, exceto se a cor dos números do
+relógio for definida à parte.
 
 ## Registro histórico do modo Foto v0.3
 

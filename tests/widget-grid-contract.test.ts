@@ -1,15 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
+  autoArrangeDashboardGrid,
   convertOnlineDashboardToGrid,
+  createDefaultDashboardGridLayout,
   createGridWidget,
   dashboardPhotoIds,
+  dashboardWidgetKeys,
   defaultOnlineDashboard,
   findGridPosition,
   gridItemsOverlap,
   gridWidgetSchema,
   onlineDashboardSchema,
   readOnlineDashboard,
+  readStoredOnlineDashboard,
   widgetGridDashboardSchema,
+  type DashboardGridItem,
+  type OnlineDashboard,
 } from "@smartframe/contracts";
 
 describe("contrato da grade modular", () => {
@@ -232,5 +238,206 @@ describe("contrato da grade modular", () => {
     expect(dashboardPhotoIds(old)).toEqual(["a", "b"]);
     expect(() => readOnlineDashboard({ ...grid, schemaVersion: 3 })).toThrow();
     expect(() => readOnlineDashboard({ schemaVersion: 1 })).toThrow();
+  });
+
+  it("preserva aparência em camadas na conversão e ignora campos de página no widget", () => {
+    const source = onlineDashboardSchema.parse({
+      appearance: { preset: "seamless", cornerRadius: 0, widgetSpacing: 0, pageEdgePadding: 0 },
+      widgets: {
+        clock: {
+          backgroundColor: "#112233",
+          appearance: { preset: "flat", cornerRadius: 12, border: false },
+        },
+      },
+    });
+    const grid = convertOnlineDashboardToGrid(source);
+    expect(grid.appearance).toMatchObject({
+      preset: "seamless",
+      cornerRadius: 0,
+      widgetSpacing: 0,
+      pageEdgePadding: 0,
+    });
+    const clockWidget = grid.widgets.find((widget) => widget.type === "clock");
+    expect(clockWidget?.appearance).toEqual({
+      backgroundColor: "#112233",
+      preset: "flat",
+      cornerRadius: 12,
+      border: false,
+    });
+
+    const stripped = gridWidgetSchema.parse({
+      id: "w-clock",
+      type: "clock",
+      enabled: true,
+      appearance: {
+        backgroundColor: "",
+        cornerRadius: 6,
+        widgetSpacing: 20,
+        pageEdgePadding: 24,
+      },
+      settings: {
+        cardSize: "normal",
+        format: "24h",
+        showDate: false,
+        size: "normal",
+        color: "",
+      },
+    });
+    expect(stripped.appearance).toEqual({ backgroundColor: "", cornerRadius: 6 });
+    expect(
+      gridWidgetSchema.safeParse({
+        ...stripped,
+        appearance: { backgroundColor: "", unknownField: true },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("gera grade padrão válida para todos os 10 widgets e reorganiza colisões", () => {
+    const defaultGrid = createDefaultDashboardGridLayout(defaultOnlineDashboard);
+    expect(defaultGrid.landscape).toHaveLength(dashboardWidgetKeys.length);
+    expect(defaultGrid.portrait).toHaveLength(dashboardWidgetKeys.length);
+
+    //Mesmo ativando todos os 10 widgets simultaneamente, o layout padrão continua válido e sem sobreposições.
+    const allEnabled = onlineDashboardSchema.parse({
+      widgets: Object.fromEntries(dashboardWidgetKeys.map((key) => [key, { enabled: true }])),
+      gridLayout: { ...defaultGrid, enabled: true },
+    });
+    expect(allEnabled.gridLayout?.enabled).toBe(true);
+
+    // Introduz colisões propositais e reorganiza sem colisões nas duas orientações.
+    const conflicted = {
+      ...allEnabled,
+      gridLayout: {
+        enabled: true,
+        landscape: dashboardWidgetKeys.map((widgetId) => ({
+          widgetId,
+          x: 0,
+          y: 0,
+          w: 6,
+          h: 4,
+        })),
+        portrait: dashboardWidgetKeys.map((widgetId) => ({
+          widgetId,
+          x: 0,
+          y: 0,
+          w: 6,
+          h: 4,
+        })),
+      },
+    };
+    const arranged = autoArrangeDashboardGrid(conflicted);
+    expect(() => onlineDashboardSchema.parse(arranged)).not.toThrow();
+    expect(arranged.gridLayout?.landscape).toHaveLength(dashboardWidgetKeys.length);
+    expect(arranged.gridLayout?.portrait).toHaveLength(dashboardWidgetKeys.length);
+  });
+
+  it("organiza a grade sem validar campos do rascunho que ainda estão sendo editados", () => {
+    const base = onlineDashboardSchema.parse({});
+    const draft = {
+      ...base,
+      widgets: {
+        ...base.widgets,
+        weather: { ...base.widgets.weather, city: "" },
+      },
+    };
+    expect(() => onlineDashboardSchema.parse(draft)).toThrow();
+
+    const arranged = autoArrangeDashboardGrid(draft);
+    expect(arranged.widgets.weather.city).toBe("");
+    expect(() => onlineDashboardSchema.parse(arranged)).toThrow();
+    for (const orientation of ["landscape", "portrait"] as const) {
+      const items = arranged.gridLayout![orientation];
+      for (const key of dashboardWidgetKeys.filter((key) => arranged.widgets[key].enabled)) {
+        expect(items.some((item) => item.widgetId === key)).toBe(true);
+      }
+    }
+  });
+
+  it("preserva posições salvas de widgets desativados ao organizar", () => {
+    const base = onlineDashboardSchema.parse({});
+    const defaultGrid = createDefaultDashboardGridLayout(base);
+    const customLandscape: DashboardGridItem = { widgetId: "clock", x: 18, y: 10, w: 5, h: 8 };
+    const customPortrait: DashboardGridItem = { widgetId: "clock", x: 6, y: 30, w: 6, h: 8 };
+    const disabled: OnlineDashboard = {
+      ...base,
+      widgets: { ...base.widgets, clock: { ...base.widgets.clock, enabled: false } },
+      gridLayout: {
+        enabled: true,
+        landscape: defaultGrid.landscape.map((item) =>
+          item.widgetId === "clock" ? customLandscape : item,
+        ),
+        portrait: defaultGrid.portrait.map((item) =>
+          item.widgetId === "clock" ? customPortrait : item,
+        ),
+      },
+    };
+
+    const arranged = autoArrangeDashboardGrid(disabled);
+    for (const orientation of ["landscape", "portrait"] as const) {
+      const items = arranged.gridLayout![orientation];
+      const saved = items.filter((item) => item.widgetId === "clock");
+      expect(saved).toEqual([orientation === "landscape" ? customLandscape : customPortrait]);
+      for (const key of dashboardWidgetKeys.filter((key) => arranged.widgets[key].enabled)) {
+        expect(items.some((item) => item.widgetId === key)).toBe(true);
+      }
+    }
+
+    const allDisabled: OnlineDashboard = {
+      ...base,
+      widgets: Object.fromEntries(
+        dashboardWidgetKeys.map((key) => [key, { ...base.widgets[key], enabled: false }]),
+      ) as OnlineDashboard["widgets"],
+      gridLayout: { ...defaultGrid, enabled: true },
+    };
+    const preserved = autoArrangeDashboardGrid(allDisabled);
+    expect(preserved.gridLayout!.landscape).toEqual(defaultGrid.landscape);
+    expect(preserved.gridLayout!.portrait).toEqual(defaultGrid.portrait);
+  });
+
+  it("repara na leitura apenas grades ativas incompletas ou sobrepostas", () => {
+    const broken = {
+      widgets: { notes: { enabled: true } },
+      gridLayout: { enabled: true, landscape: [], portrait: [] },
+    };
+    // A gravação continua estrita: a configuração incompleta não passa no schema.
+    expect(() => onlineDashboardSchema.parse(broken)).toThrow();
+
+    const repaired = readStoredOnlineDashboard(broken);
+    expect(() => onlineDashboardSchema.parse(repaired)).not.toThrow();
+    for (const orientation of ["landscape", "portrait"] as const) {
+      const items = repaired.gridLayout![orientation];
+      for (const key of dashboardWidgetKeys.filter((key) => repaired.widgets[key].enabled)) {
+        expect(items.some((item) => item.widgetId === key)).toBe(true);
+      }
+    }
+
+    const base = createDefaultDashboardGridLayout(defaultOnlineDashboard);
+    const overlapping = readStoredOnlineDashboard({
+      gridLayout: {
+        enabled: true,
+        landscape: base.landscape.map((item) =>
+          item.widgetId === "clock" ? { ...item, x: 0, y: 0 } : item,
+        ),
+        portrait: base.portrait,
+      },
+    });
+    expect(() => onlineDashboardSchema.parse(overlapping)).not.toThrow();
+
+    // Configurações válidas voltam intactas.
+    const valid = onlineDashboardSchema.parse({
+      gridLayout: { ...createDefaultDashboardGridLayout(defaultOnlineDashboard), enabled: true },
+    });
+    expect(readStoredOnlineDashboard(valid)).toEqual(valid);
+
+    // Modo clássico e entradas estruturalmente inválidas continuam sendo rejeitados.
+    expect(() =>
+      readStoredOnlineDashboard({
+        gridLayout: {
+          enabled: false,
+          landscape: [{ widgetId: "photos", x: 23, y: 0, w: 4, h: 4 }],
+        },
+      }),
+    ).toThrow();
+    expect(() => readStoredOnlineDashboard({ theme: "neon" })).toThrow();
   });
 });

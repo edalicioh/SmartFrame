@@ -5,20 +5,50 @@ export type { PhotoFrame } from "./photo-frame";
 export { widgetDataSchema, defaultWidgetSettings } from "./photo-frame";
 export type { WidgetData } from "./photo-frame";
 export { onlineDashboardSchema, defaultOnlineDashboard } from "./online-dashboard";
-export type { OnlineDashboard, OnlineDashboardState } from "./online-dashboard";
+export type { GridBox, OnlineDashboard, OnlineDashboardState } from "./online-dashboard";
 export {
+  appearancePresets,
+  appearancePresetSchema,
+  resolveScopedAppearance,
+  scopedAppearanceSchema,
+  widgetAppearanceOverrideSchema,
+} from "./widget-style";
+export type {
+  AppearancePreset,
+  ResolvedScopedAppearance,
+  ScopedAppearance,
+  WidgetAppearanceOverride,
+} from "./widget-style";
+export {
+  applyPanelTemplate,
+  autoArrangeDashboardGrid,
   convertOnlineDashboardToGrid,
+  createDefaultDashboardGridLayout,
   createGridWidget,
+  dashboardGridItemSchema,
+  dashboardGridLayoutSchema,
   dashboardPhotoIds,
+  dashboardWidgetKeys,
   findGridPosition,
   gridDimensions,
   gridItemsOverlap,
   gridWidgetCatalog,
   gridWidgetSchema,
+  panelTemplates,
   readOnlineDashboard,
+  readStoredOnlineDashboard,
   widgetGridDashboardSchema,
 } from "./widget-grid";
-export type { GridItem, GridWidget, WidgetGridDashboard } from "./widget-grid";
+export type {
+  DashboardGridItem,
+  DashboardGridLayout,
+  DashboardWidgetKey,
+  GridItem,
+  GridWidget,
+  PanelTemplate,
+  PanelTemplateId,
+  WidgetGridDashboard,
+} from "./widget-grid";
 export {
   currencyCodes,
   defaultCurrencyPairs,

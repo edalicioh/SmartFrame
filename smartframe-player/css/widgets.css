@@ -1,8 +1,9 @@
 .photo-panel {
   position: relative;
-  border-radius: 18px;
+  border-radius: var(--widget-radius, 18px);
   background: var(--widget-background, #26384b);
-  box-shadow: var(--shadow);
+  box-shadow: var(--widget-shadow, var(--shadow));
+  border: var(--widget-border, none);
   overflow: hidden;
 }
 .photo-stage,
@@ -33,6 +34,12 @@
 }
 .photo-panel.fit-contain .photo-backdrop {
   display: block;
+}
+.photo-panel.surface-flat .photo-backdrop {
+  filter: none;
+}
+.photo-panel.surface-borderless:not(.has-custom-bg) {
+  background: transparent;
 }
 .photo-image {
   z-index: 1;
@@ -95,14 +102,15 @@
   background: white;
 }
 .card {
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-  padding: clamp(8px, 1.3vw, 16px);
+  border-radius: var(--widget-radius, 18px);
+  box-shadow: var(--widget-shadow, var(--shadow));
+  padding: var(--widget-padding, clamp(8px, 1.3vw, 16px));
+  border: var(--widget-border, none);
 }
 .local-card {
   overflow: auto;
-  background: var(--surface, #fff);
-  color: var(--text, #172033);
+  background: var(--widget-background, var(--surface, #fff));
+  color: var(--widget-foreground, var(--text, #172033));
   text-align: center;
 }
 .local-widget-title {
@@ -163,8 +171,6 @@
   align-items: center;
   text-align: center;
   gap: 4px;
-  padding-top: 6px;
-  padding-bottom: 6px;
   line-height: 1.15;
 }
 .card-label {
@@ -202,11 +208,13 @@
   color: var(--widget-foreground, white);
   display: flex;
   padding: 0;
+  border: 0;
+  border-radius: 0;
   box-shadow: none;
 }
 .currency-list {
   display: flex;
-  gap: 8px;
+  gap: var(--widget-spacing, 8px);
   width: 100%;
   min-height: 0;
 }
@@ -217,12 +225,24 @@
   flex-direction: column;
   justify-content: center;
   gap: clamp(5px, 1vh, 12px);
-  padding: clamp(8px, 1.3vw, 16px);
-  border: 1px solid #3a3b3f;
-  border-radius: 18px;
+  padding: var(--widget-padding, clamp(8px, 1.3vw, 16px));
+  border: var(--widget-border, 1px solid #3a3b3f);
+  border-radius: var(--widget-radius, 18px);
+  box-shadow: var(--widget-shadow, none);
   background: var(--widget-background, #222326);
   text-align: left;
   overflow: hidden;
+}
+.card.surface-borderless:not(.currencies-card):not(.has-custom-bg) {
+  background: transparent;
+  color: var(--text);
+}
+.currencies-card.surface-borderless:not(.has-custom-bg) .currency-item {
+  background: transparent;
+  color: var(--text);
+}
+.currencies-card.surface-borderless:not(.has-custom-bg) .currency-code {
+  color: var(--text);
 }
 .currency-header,
 .currency-body {

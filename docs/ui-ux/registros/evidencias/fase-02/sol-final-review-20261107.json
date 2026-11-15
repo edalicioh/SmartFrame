@@ -1,0 +1,1268 @@
+{
+  "reviewer": "Sol-6.1",
+  "date": "2026-11-07T10:30:48.288Z",
+  "checks": [
+    {
+      "name": "Estados pendentes/falha/desconhecidos não selecionáveis nem consultados como imagem",
+      "details": [
+        {
+          "text": "▧\nFailed fixture.png\nFalha no processamento\nSelecionar",
+          "disabled": true,
+          "images": 0
+        },
+        {
+          "text": "▧\nUnknown state fixture.png\nEstado desconhecido — indisponível\nSelecionar",
+          "disabled": true,
+          "images": 0
+        },
+        {
+          "text": "▧\nProcessing fixture.webp\nProcessando — ainda não selecionável\nSelecionar",
+          "disabled": true,
+          "images": 0
+        },
+        {
+          "text": "▧\nPending fixture.jpeg\nAguardando processamento\nSelecionar",
+          "disabled": true,
+          "images": 0
+        }
+      ]
+    },
+    {
+      "name": "Erro real de miniatura tem fallback declarativo acessível",
+      "details": true
+    },
+    {
+      "name": "Foco por ID preservado ao mover nome duplicado para extremidade via teclado",
+      "details": true
+    },
+    {
+      "name": "100 IDs únicos, tentativa 101 recusada e explicada",
+      "details": true
+    },
+    {
+      "name": "Poll de configuração numérica sem dirty",
+      "details": {
+        "initial": {
+          "input": "37",
+          "revision": "Rascunho r1 salvo"
+        },
+        "changed": {
+          "status": 200,
+          "draftRevision": 2,
+          "old": 37,
+          "newValue": 38
+        },
+        "after": {
+          "input": "38",
+          "revision": "Rascunho r2 salvo"
+        },
+        "displayMatchesCanonical": true
+      }
+    },
+    {
+      "name": "Remover aniversário após invalidar dia",
+      "details": {
+        "fieldExists": false,
+        "alerts": [],
+        "status": "Rascunho r3 salvo",
+        "puts": 1,
+        "saveBlockedByRemovedField": false
+      }
+    },
+    {
+      "name": "Ocultar/restaurar campo numérico inválido",
+      "details": {
+        "beforeToggle": {
+          "value": "2",
+          "error": "true"
+        },
+        "afterToggle": {
+          "value": "2",
+          "error": "true",
+          "inline": "Use um valor entre 5 e 3600.",
+          "alert": "Corrija os campos numéricos: notes interval."
+        }
+      }
+    },
+    {
+      "name": "Corrigir número recupera salvamento; painel B original intacto",
+      "details": {
+        "notes": 36,
+        "bBirthdays": 1
+      }
+    },
+    {
+      "name": "Prévia portrait 1440, proporcional e sem overflow",
+      "details": {
+        "w": 437.5,
+        "h": 700,
+        "scrollWidth": 1425,
+        "viewport": 1440,
+        "same": true
+      }
+    },
+    {
+      "name": "Prévia landscape 1440, proporcional e sem overflow",
+      "details": {
+        "w": 745.25,
+        "h": 465.78125,
+        "scrollWidth": 1425,
+        "viewport": 1440,
+        "same": true
+      }
+    },
+    {
+      "name": "Prévia portrait 390, proporcional e sem overflow",
+      "details": {
+        "w": 370,
+        "h": 592,
+        "scrollWidth": 390,
+        "viewport": 390,
+        "same": true
+      }
+    },
+    {
+      "name": "Prévia landscape 390, proporcional e sem overflow",
+      "details": {
+        "w": 370,
+        "h": 231.25,
+        "scrollWidth": 390,
+        "viewport": 390,
+        "same": true
+      }
+    },
+    {
+      "name": "postMessage de rascunho com origem estrita e sem credencial",
+      "details": [
+        {
+          "origin": "http://127.0.0.1:43197",
+          "type": "smartframe:online-preview",
+          "credentials": false
+        },
+        {
+          "origin": "http://127.0.0.1:43197",
+          "type": "smartframe:online-preview",
+          "credentials": false
+        },
+        {
+          "origin": "http://127.0.0.1:43197",
+          "type": "smartframe:online-preview",
+          "credentials": false
+        },
+        {
+          "origin": "http://127.0.0.1:43197",
+          "type": "smartframe:online-preview",
+          "credentials": false
+        },
+        {
+          "origin": "http://127.0.0.1:43197",
+          "type": "smartframe:online-preview",
+          "credentials": false
+        }
+      ]
+    },
+    {
+      "name": "Ajuda Preencher/Conter associada e completa",
+      "details": {
+        "id": "photos-fit-help",
+        "text": "Preencher ocupa toda a área e pode cortar as bordas da foto. Conter mostra a imagem inteira; se as proporções forem diferentes, podem sobrar áreas com a cor de fundo."
+      }
+    },
+    {
+      "name": "Sem publicação nem pareamento na revisão",
+      "details": true
+    }
+  ],
+  "network": [
+    {
+      "method": "GET",
+      "path": "/layouts"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_src_app_15unuaifn5x8m._.css"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1anvha4rlo79g._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/turbopack-apps_web_06rkbud3pyrlm._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1cy5vtpz5-fey._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_20wefz_f1k6jn._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0u9akzw7bed-i._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0gjffvb6t1n5h._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_0ihh5tnjuo6_8._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_classic_1vfk8f730hcy9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_core_14qn2mg1f8pkp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_locales_1-ided7izgr--._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_0e5asv8fpnavi._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsayzyj2p6._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/favicon.ico"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "POST",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/layouts"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_src_app_15unuaifn5x8m._.css"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1anvha4rlo79g._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/turbopack-apps_web_06rkbud3pyrlm._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1cy5vtpz5-fey._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_20wefz_f1k6jn._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0u9akzw7bed-i._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0gjffvb6t1n5h._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_0ihh5tnjuo6_8._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_classic_1vfk8f730hcy9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_core_14qn2mg1f8pkp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_locales_1-ided7izgr--._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_0e5asv8fpnavi._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsayzyj2p6._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91n002vi4tonndr0p62/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91l002ui4tom5p32kk2/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91i002ti4topglshck1/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91f002si4to4jm56oue/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91c002ri4to34m310j3/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91a002qi4toiagia6ab/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w917002pi4to8vvkys2u/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w914002oi4toygfp6uya/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w911002ni4toug94t2gu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90z002mi4toaon1892z/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90w002li4topb9txjrp/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90t002ki4to9ercgal8/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90q002ji4toabbnm710/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90o002ii4to0t3v69gf/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90l002hi4to0ejihbls/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90i002gi4toxq2qejd8/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90e002fi4to4u29723i/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90b002ei4toa8cijysr/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w908002di4toou0rv0by/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8u50000i4to9xv9bw5w/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ua0001i4tommg8k2pu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vh000li4tof2hk1s8b/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vf000ki4topzl9ax0i/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vc000ji4toc249jl21/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8va000ii4to4fpho4pa/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8v8000hi4to36qt5f7i/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8v6000gi4tocnexqqk4/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8v4000fi4to2o94g75h/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8v2000ei4toyfre58jb/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8v0000di4to8f7yccds/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8uy000ci4too8gcd3ws/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8uw000bi4tobn5546by/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8uu000ai4tofcgydszn/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8us0009i4to52e22xj5/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8up0008i4to9gzmvby1/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8un0007i4ton3v749dd/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ul0006i4to9uz3hw98/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ui0005i4tozh4yfm1o/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ug0004i4tog4ibgb0i/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ud0002i4tocwbvn19h/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ud0003i4toa1zb8crs/image"
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ua0001i4tommg8k2pu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/__nextjs_font/geist-latin.woff2"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w905002ci4totk9hihgs/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w902002bi4toft47ror7/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zz002ai4to70aptwbw/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zx0029i4to1ar4roai/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zu0028i4touub8ngrx/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zs0027i4to1rfm87cb/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zp0026i4to7ust8nir/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zm0025i4tosuktburz/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zj0024i4toklk78nqk/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zh0023i4toy2ty74ul/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ze0022i4toe8as0ey7/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8zb0021i4to5oq981lg/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8z80020i4toqr0g8nts/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8z5001zi4to93wk4luj/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8z2001yi4towc9612bw/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8yz001xi4tovk30rdxl/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8yw001wi4topm772kdq/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8yt001vi4tog98yobw8/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8yq001ui4to9vn7fkho/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ym001ti4toxfs93gpz/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8yi001si4to34vw1er6/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8yf001ri4tomqxoxhno/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8yc001qi4to4qhaxd26/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ya001pi4toiqclp277/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8y7001oi4tof629ecy3/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8y4001ni4to0l28myze/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8y1001mi4togiv7zyji/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xy001li4toaasdhovj/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xu001ki4todoaja6mg/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xr001ji4too9lj0nwo/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xp001ii4tojk3m3ndv/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xn001hi4toqb6qwms5/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xk001gi4to96nynjpd/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xi001fi4tot8hwvbks/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xf001ei4tovd0bltee/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xc001di4to6u8xlxlm/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8xa001ci4to12a2x00o/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8x7001bi4todkddpur1/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8x4001ai4to6qq4p4v1/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8x20019i4torlv8ibcn/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wz0018i4toe32nccvx/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wx0017i4toov12nc3v/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wv0016i4toloaqeko0/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ws0015i4toy0hl4xpq/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wq0014i4toapgb7pe1/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wo0013i4tolgqkvcdy/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wm0012i4to9ynkmyek/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wk0011i4toejglzd1r/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wi0010i4to02hli9ud/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wg000zi4toxxq9vq71/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8we000yi4tow7en15in/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8wb000xi4toax276480/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8w9000wi4toern3wg94/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8w6000vi4tojfjo1cpu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8w3000ui4tosrvwmtcs/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vz000ti4toh7defct3/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vx000si4togebm1cwr/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vu000ri4toxb26fg1j/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vs000qi4tom4bqk880/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vq000pi4toqoef4k4r/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vo000oi4to22urkgzt/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vl000ni4to89ihqe72/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8vj000mi4tova4wgn8r/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/layouts"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_src_app_15unuaifn5x8m._.css"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0qva5cupmdgep._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1daa_next_dist_compiled_react-dom_cjs_react-dom-client_development_0mp0cp_t-ezj9.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/1q96_modules_next_dist_compiled_react-dom_cjs_react-dom_development_1sqry0_53krp4.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-dom_0grqycjrj6mju._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_164kp-67asdr9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_090k2jmam7qwg.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_compiled_1amofcmz--cdp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_05y3oi5z9mc_3._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_%40swc_helpers_cjs_1r9vbqwj2323d._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1anvha4rlo79g._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/turbopack-apps_web_06rkbud3pyrlm._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/apps_web_1cy5vtpz5-fey._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_dist_20wefz_f1k6jn._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0u9akzw7bed-i._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/_0gjffvb6t1n5h._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_next_0ihh5tnjuo6_8._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_classic_1vfk8f730hcy9._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_core_14qn2mg1f8pkp._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_zod_v4_locales_1-ided7izgr--._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/node_modules_0e5asv8fpnavi._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsayzyj2p6._.js"
+    },
+    {
+      "method": "GET",
+      "path": "/__nextjs_font/geist-latin.woff2"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/index.html"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91n002vi4tonndr0p62/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91l002ui4tom5p32kk2/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91i002ti4topglshck1/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91f002si4to4jm56oue/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91c002ri4to34m310j3/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w91a002qi4toiagia6ab/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w917002pi4to8vvkys2u/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w914002oi4toygfp6uya/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w911002ni4toug94t2gu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90z002mi4toaon1892z/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90w002li4topb9txjrp/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90t002ki4to9ercgal8/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90q002ji4toabbnm710/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90o002ii4to0t3v69gf/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90l002hi4to0ejihbls/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90i002gi4toxq2qejd8/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90e002fi4to4u29723i/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w90b002ei4toa8cijysr/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w908002di4toou0rv0by/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8u50000i4to9xv9bw5w/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ua0001i4tommg8k2pu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/base.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/layout.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/widgets.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/css/themes.css"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/config.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/carousel.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/clock.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/calendar.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/weather.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/currencies.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/local-widgets.js"
+    },
+    {
+      "method": "GET",
+      "path": "/player-dashboard/js/app.js"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8u50000i4to9xv9bw5w/image"
+    },
+    {
+      "method": "POST",
+      "path": "/api/online-frame/widgets"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos/cmw68w8ua0001i4tommg8k2pu/image"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/panels"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/panels"
+    },
+    {
+      "method": "GET",
+      "path": "/api/photos"
+    }
+  ],
+  "errors": [],
+  "browser": "Chrome/156.0.8078.4"
+}

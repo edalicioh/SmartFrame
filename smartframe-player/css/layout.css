@@ -3,10 +3,10 @@
   width: 100%;
   height: 100vh;
   height: 100dvh;
-  padding: 10px;
+  padding: var(--page-edge-padding, 10px);
   display: grid;
   grid-template-columns: minmax(0, var(--photo-width, 62fr)) minmax(0, var(--widget-width, 38fr));
-  gap: 8px;
+  gap: var(--widget-spacing, 8px);
 }
 .dashboard.photo-right:not(.no-photos):not(.no-widgets) {
   grid-template-columns: minmax(0, var(--widget-width, 38fr)) minmax(0, var(--photo-width, 62fr));
@@ -14,8 +14,8 @@
 .dashboard.photo-right .photo-panel {
   order: 1;
 }
-.dashboard.no-photos,
-.dashboard.no-widgets {
+.dashboard.no-photos:not(.grid-mode),
+.dashboard.no-widgets:not(.grid-mode) {
   grid-template-columns: minmax(0, 1fr);
 }
 .photo-panel,
@@ -47,7 +47,7 @@
   grid-row: auto / span 20;
 }
 .widget-stack > .card:not([hidden]) {
-  margin-bottom: 8px;
+  margin-bottom: var(--widget-spacing, 8px);
 }
 .widget-stack > .card:last-child,
 .widget-stack > .card.last-visible {
@@ -64,8 +64,48 @@
   .dashboard.photo-right .photo-panel {
     order: 0;
   }
-  .dashboard.no-photos,
-  .dashboard.no-widgets {
+  .dashboard.no-photos:not(.grid-mode),
+  .dashboard.no-widgets:not(.grid-mode) {
     grid-template-rows: minmax(0, 1fr);
+  }
+}
+/*
+ * Grid mode places widgets by the positions configured for the panel. The
+ * #dashboard prefix outranks the classic #clock/#weather/#currencies/#calendar
+ * row spans, which would otherwise win on ID specificity and auto-place cards.
+ */
+#dashboard.grid-mode {
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-template-rows: repeat(24, minmax(0, 1fr));
+  /* Spacing is applied once per widget boundary, not on every logical track. */
+  gap: 0;
+}
+#dashboard.grid-mode > .widget-stack {
+  display: contents;
+}
+#dashboard.grid-mode .photo-panel,
+#dashboard.grid-mode .widget-stack > .card:not([hidden]) {
+  order: 0;
+  grid-column: var(--grid-col-landscape, auto);
+  grid-row: var(--grid-row-landscape, auto);
+  margin: calc(var(--widget-spacing, 8px) * var(--grid-margin-top-landscape, 0.5))
+    calc(var(--widget-spacing, 8px) * var(--grid-margin-right-landscape, 0.5))
+    calc(var(--widget-spacing, 8px) * var(--grid-margin-bottom-landscape, 0.5))
+    calc(var(--widget-spacing, 8px) * var(--grid-margin-left-landscape, 0.5));
+}
+/* The active grid follows the screen orientation, not the saved panel setting. */
+@media (orientation: portrait) {
+  #dashboard.grid-mode {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: repeat(40, minmax(0, 1fr));
+  }
+  #dashboard.grid-mode .photo-panel,
+  #dashboard.grid-mode .widget-stack > .card:not([hidden]) {
+    grid-column: var(--grid-col-portrait, auto);
+    grid-row: var(--grid-row-portrait, auto);
+    margin: calc(var(--widget-spacing, 8px) * var(--grid-margin-top-portrait, 0.5))
+      calc(var(--widget-spacing, 8px) * var(--grid-margin-right-portrait, 0.5))
+      calc(var(--widget-spacing, 8px) * var(--grid-margin-bottom-portrait, 0.5))
+      calc(var(--widget-spacing, 8px) * var(--grid-margin-left-portrait, 0.5));
   }
 }

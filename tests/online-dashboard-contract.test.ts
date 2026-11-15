@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defaultOnlineDashboard, onlineDashboardSchema } from "@smartframe/contracts";
+import {
+  applyPanelTemplate,
+  defaultOnlineDashboard,
+  onlineDashboardSchema,
+  panelTemplates,
+  resolveScopedAppearance,
+} from "@smartframe/contracts";
 
 describe("contrato do dashboard online", () => {
   it("define defaults de layout e atualização", () => {
@@ -93,5 +99,260 @@ describe("contrato do dashboard online", () => {
       onlineDashboardSchema.safeParse({ layoutOptions: { photoWidthPercent: 39 } }).success,
     ).toBe(false);
     expect(onlineDashboardSchema.safeParse({ credential: "secret" }).success).toBe(false);
+  });
+
+  it("valida aparência em camadas, limites, descarte no widget e resolução de herança", () => {
+    for (const preset of ["default", "cards", "flat", "borderless", "seamless"] as const) {
+      const parsed = onlineDashboardSchema.parse({
+        appearance: {
+          preset,
+          cornerRadius: 0,
+          widgetSpacing: 24,
+          innerPadding: 0,
+          pageEdgePadding: 32,
+          border: false,
+          shadow: true,
+        },
+        widgets: {
+          clock: {
+            appearance: { preset, cornerRadius: 32, innerPadding: 24, border: true, shadow: false },
+          },
+          notes: { backgroundColor: "#112233", appearance: { preset: "default" } },
+        },
+      });
+      expect(parsed.appearance.preset).toBe(preset);
+      expect(parsed.appearance.cornerRadius).toBe(0);
+      expect(parsed.appearance.border).toBe(false);
+      expect(parsed.widgets.clock.appearance?.cornerRadius).toBe(32);
+      expect(parsed.widgets.notes.backgroundColor).toBe("#112233");
+    }
+
+    for (const bad of [
+      { appearance: { cornerRadius: -1 } },
+      { appearance: { cornerRadius: 33 } },
+      { appearance: { widgetSpacing: 25 } },
+      { appearance: { innerPadding: -1 } },
+      { appearance: { pageEdgePadding: 33 } },
+      { appearance: { preset: "glass" } },
+      { widgets: { clock: { appearance: { cornerRadius: 33 } } } },
+      { widgets: { clock: { appearance: { unknownField: 1 } } } },
+    ]) {
+      expect(onlineDashboardSchema.safeParse(bad).success).toBe(false);
+    }
+
+    const stripped = onlineDashboardSchema.parse({
+      widgets: {
+        clock: {
+          appearance: {
+            cornerRadius: 8,
+            widgetSpacing: 20,
+            pageEdgePadding: 16,
+          },
+        },
+      },
+    });
+    expect(stripped.widgets.clock.appearance).toEqual({ cornerRadius: 8 });
+
+    const cards = resolveScopedAppearance({ preset: "cards" });
+    expect(cards).toMatchObject({
+      preset: "cards",
+      surfaceMode: "cards",
+      cornerRadius: 18,
+      widgetSpacing: 12,
+      innerPadding: 12,
+      pageEdgePadding: 12,
+      border: true,
+      shadow: false,
+    });
+
+    const explicitZeroFalse = resolveScopedAppearance(
+      { preset: "cards", cornerRadius: 0, border: false },
+      { shadow: true },
+    );
+    expect(explicitZeroFalse).toMatchObject({
+      preset: "cards",
+      cornerRadius: 0,
+      border: false,
+      shadow: true,
+      widgetSpacing: 12,
+    });
+
+    const restoredWidget = resolveScopedAppearance(
+      { preset: "flat", cornerRadius: 20, widgetSpacing: 16, pageEdgePadding: 24 },
+      { preset: "default" },
+    );
+    expect(restoredWidget).toEqual({
+      preset: "default",
+      surfaceMode: "default",
+      cornerRadius: null,
+      widgetSpacing: 16,
+      innerPadding: null,
+      pageEdgePadding: 24,
+      border: null,
+      shadow: null,
+    });
+  });
+
+  it("valida grade livre opcional (limites, mínimos e colisão apenas entre ativos)", () => {
+    const valid = onlineDashboardSchema.parse({
+      gridLayout: {
+        enabled: true,
+        landscape: [
+          { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+          { widgetId: "clock", x: 14, y: 0, w: 10, h: 6 },
+          { widgetId: "weather", x: 14, y: 6, w: 10, h: 6 },
+          { widgetId: "currencies", x: 14, y: 12, w: 10, h: 6 },
+          { widgetId: "calendar", x: 14, y: 18, w: 10, h: 6 },
+          // Posição armazenada de widget desativado pode sobrepor sem bloquear.
+          { widgetId: "notes", x: 0, y: 0, w: 4, h: 3 },
+        ],
+        portrait: [
+          { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+          { widgetId: "clock", x: 0, y: 20, w: 12, h: 5 },
+          { widgetId: "weather", x: 0, y: 25, w: 12, h: 5 },
+          { widgetId: "currencies", x: 0, y: 30, w: 12, h: 5 },
+          { widgetId: "calendar", x: 0, y: 35, w: 12, h: 5 },
+          { widgetId: "notes", x: 0, y: 0, w: 4, h: 3 },
+        ],
+      },
+    });
+    expect(valid.gridLayout?.enabled).toBe(true);
+    expect(onlineDashboardSchema.parse(valid)).toEqual(valid);
+
+    // Colisão entre widgets ativos quando gridLayout.enabled === true deve falhar.
+    expect(
+      onlineDashboardSchema.safeParse({
+        gridLayout: {
+          enabled: true,
+          landscape: [
+            { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+            { widgetId: "clock", x: 10, y: 0, w: 10, h: 6 },
+          ],
+        },
+      }).success,
+    ).toBe(false);
+
+    // Quando gridLayout.enabled === false (modo clássico), manter posições antigas não bloqueia.
+    expect(
+      onlineDashboardSchema.safeParse({
+        gridLayout: {
+          enabled: false,
+          landscape: [
+            { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+            { widgetId: "clock", x: 10, y: 0, w: 10, h: 6 },
+          ],
+        },
+      }).success,
+    ).toBe(true);
+
+    // Limites da grade e tamanhos mínimos do catálogo (incluindo Pomodoro 3x3).
+    for (const invalid of [
+      {
+        gridLayout: { enabled: true, landscape: [{ widgetId: "photos", x: 21, y: 0, w: 4, h: 4 }] },
+      },
+      { gridLayout: { enabled: true, portrait: [{ widgetId: "clock", x: 0, y: 39, w: 4, h: 2 }] } },
+      {
+        gridLayout: {
+          enabled: true,
+          landscape: [{ widgetId: "pomodoro", x: 0, y: 0, w: 3, h: 2 }],
+        },
+      },
+      {
+        gridLayout: { enabled: true, landscape: [{ widgetId: "photos", x: 0, y: 0, w: 3, h: 4 }] },
+      },
+    ]) {
+      expect(onlineDashboardSchema.safeParse(invalid).success).toBe(false);
+    }
+  });
+
+  it("exige posição para todo widget ativado quando a grade está em uso", () => {
+    const landscape = [
+      { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+      { widgetId: "clock", x: 14, y: 0, w: 10, h: 6 },
+      { widgetId: "weather", x: 14, y: 6, w: 10, h: 6 },
+      { widgetId: "currencies", x: 14, y: 12, w: 10, h: 6 },
+      { widgetId: "calendar", x: 14, y: 18, w: 10, h: 6 },
+    ];
+    const portrait = [
+      { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+      { widgetId: "clock", x: 0, y: 20, w: 12, h: 5 },
+      { widgetId: "weather", x: 0, y: 25, w: 12, h: 5 },
+      { widgetId: "currencies", x: 0, y: 30, w: 12, h: 5 },
+      { widgetId: "calendar", x: 0, y: 35, w: 12, h: 5 },
+    ];
+
+    expect(
+      onlineDashboardSchema.safeParse({ gridLayout: { enabled: true, landscape, portrait } })
+        .success,
+    ).toBe(true);
+
+    // Falta um widget ativado em apenas uma das orientações.
+    for (const { grid, missing } of [
+      { grid: { enabled: true, landscape: landscape.slice(1), portrait }, missing: "landscape" },
+      { grid: { enabled: true, landscape, portrait: portrait.slice(1) }, missing: "portrait" },
+      { grid: { enabled: true, landscape: [], portrait: [] }, missing: "ambas" },
+    ] as const) {
+      const result = onlineDashboardSchema.safeParse({ gridLayout: grid });
+      expect(result.success).toBe(false);
+      const messages = result.error?.issues.map((issue) => issue.message) ?? [];
+      const orientations = missing === "ambas" ? ["landscape", "portrait"] : [missing];
+      for (const orientation of orientations) {
+        expect(messages).toContain(`Widget ativado sem posição na grade de ${orientation}`);
+      }
+      if (missing !== "ambas") {
+        const other = missing === "landscape" ? "portrait" : "landscape";
+        expect(messages).not.toContain(`Widget ativado sem posição na grade de ${other}`);
+      }
+    }
+
+    // Widget local ativado também precisa de posição nas duas orientações.
+    expect(
+      onlineDashboardSchema.safeParse({
+        widgets: { notes: { enabled: true } },
+        gridLayout: { enabled: true, landscape, portrait },
+      }).success,
+    ).toBe(false);
+
+    // Widget desativado pode manter (ou não) posições armazenadas.
+    expect(
+      onlineDashboardSchema.safeParse({
+        gridLayout: { enabled: false, landscape: [], portrait: [] },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("valida todos os 6 templates e preserva dados do usuário ao aplicar", () => {
+    expect(panelTemplates).toHaveLength(6);
+
+    const base = onlineDashboardSchema.parse({
+      timezone: "America/Manaus",
+      widgets: {
+        photos: { photoIds: ["foto-1", "foto-2"], intervalSeconds: 30, fit: "contain" },
+        clock: { format: "12h", backgroundColor: "#112233" },
+        weather: { city: "Florianópolis" },
+        calendar: { highlightToday: false },
+        notes: { messages: [{ id: "m1", text: "Buscar pão" }], intervalSeconds: 20 },
+        tasks: { items: [{ id: "t1", text: "Regar plantas", completed: false }] },
+        pomodoro: { workMinutes: 40, breakMinutes: 10 },
+      },
+    });
+
+    for (const template of panelTemplates) {
+      const applied = applyPanelTemplate(base, template.id);
+      expect(() => onlineDashboardSchema.parse(applied)).not.toThrow();
+      expect(applied.gridLayout?.enabled).toBe(true);
+      expect(applied.timezone).toBe("America/Manaus");
+      expect(applied.widgets.photos.photoIds).toEqual(["foto-1", "foto-2"]);
+      expect(applied.widgets.photos.intervalSeconds).toBe(30);
+      expect(applied.widgets.clock.format).toBe("12h");
+      expect(applied.widgets.clock.backgroundColor).toBe("#112233");
+      expect(applied.widgets.weather.city).toBe("Florianópolis");
+      expect(applied.widgets.calendar.highlightToday).toBe(false);
+      expect(applied.widgets.notes.messages).toEqual([{ id: "m1", text: "Buscar pão" }]);
+      expect(applied.widgets.tasks.items).toEqual([
+        { id: "t1", text: "Regar plantas", completed: false },
+      ]);
+      expect(applied.widgets.pomodoro.workMinutes).toBe(40);
+    }
   });
 });

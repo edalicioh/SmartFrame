@@ -28,9 +28,11 @@
   function changed(a, b) {
     return JSON.stringify(a) !== JSON.stringify(b);
   }
-  function styleWidget(name, value) {
-    var element = document.getElementById(name),
-      background = value.backgroundColor || "";
+  function styleWidget(name, value, globalAppearance) {
+    var element = document.getElementById(name);
+    if (!element) return;
+    var background = value.backgroundColor || "";
+    element.classList.toggle("has-custom-bg", Boolean(background));
     if (background) {
       var hex = background.slice(1);
       if (hex.length === 3)
@@ -56,6 +58,36 @@
         element.style.removeProperty("--widget-" + key);
       });
     }
+    var resolved = app.resolveAppearance
+      ? app.resolveAppearance(globalAppearance, value.appearance)
+      : null;
+    if (resolved) {
+      if (resolved.cornerRadius !== null)
+        element.style.setProperty("--widget-radius", resolved.cornerRadius + "px");
+      else element.style.removeProperty("--widget-radius");
+      if (name !== "photos" && resolved.innerPadding !== null)
+        element.style.setProperty("--widget-padding", resolved.innerPadding + "px");
+      else element.style.removeProperty("--widget-padding");
+      if (resolved.border === true)
+        element.style.setProperty(
+          "--widget-border",
+          "1px solid var(--widget-border-color, rgba(148, 163, 184, 0.38))",
+        );
+      else if (resolved.border === false)
+        element.style.setProperty("--widget-border", "0px solid transparent");
+      else element.style.removeProperty("--widget-border");
+      if (resolved.shadow === true) element.style.setProperty("--widget-shadow", "var(--shadow)");
+      else if (resolved.shadow === false) element.style.setProperty("--widget-shadow", "none");
+      else element.style.removeProperty("--widget-shadow");
+      element.classList.toggle("surface-flat", resolved.surfaceMode === "flat");
+      element.classList.toggle("surface-borderless", resolved.surfaceMode === "borderless");
+      element.classList.toggle("surface-seamless", resolved.surfaceMode === "seamless");
+    } else {
+      ["radius", "padding", "border", "shadow"].forEach(function (key) {
+        element.style.removeProperty("--widget-" + key);
+      });
+      element.classList.remove("surface-flat", "surface-borderless", "surface-seamless");
+    }
     if (name !== "photos") {
       var rows = {
         clock: [14, 18, 23],
@@ -63,9 +95,64 @@
         currencies: [15, 19, 24],
         calendar: [38, 47, 59],
       };
-      var size = value.cardSize === "small" ? 0 : value.cardSize === "large" ? 2 : 1;
-      element.style.setProperty("--widget-rows", rows[name][size]);
+      if (rows[name]) {
+        var size = value.cardSize === "small" ? 0 : value.cardSize === "large" ? 2 : 1;
+        element.style.setProperty("--widget-rows", rows[name][size]);
+      }
     }
+  }
+  function indexGridItems(items) {
+    var map = {};
+    if (!Array.isArray(items)) return map;
+    items.forEach(function (item) {
+      if (item && typeof item.widgetId === "string") map[item.widgetId] = item;
+    });
+    return map;
+  }
+  var gridTracks = {
+      landscape: { columns: 24, rows: 24 },
+      portrait: { columns: 12, rows: 40 },
+    },
+    gridSides = ["top", "right", "bottom", "left"];
+  function gridMarginFactor(item, side, tracks) {
+    if (side === "top") return item.y === 0 ? 0 : 0.5;
+    if (side === "bottom") return item.y + item.h >= tracks.rows ? 0 : 0.5;
+    if (side === "left") return item.x === 0 ? 0 : 0.5;
+    return item.x + item.w >= tracks.columns ? 0 : 0.5;
+  }
+  function applyGridItem(element, orientation, item) {
+    var suffix = "-" + orientation;
+    if (!item) {
+      element.style.removeProperty("--grid-col" + suffix);
+      element.style.removeProperty("--grid-row" + suffix);
+      gridSides.forEach(function (side) {
+        element.style.removeProperty("--grid-margin-" + side + suffix);
+      });
+      return;
+    }
+    element.style.setProperty("--grid-col" + suffix, item.x + 1 + " / span " + item.w);
+    element.style.setProperty("--grid-row" + suffix, item.y + 1 + " / span " + item.h);
+    gridSides.forEach(function (side) {
+      element.style.setProperty(
+        "--grid-margin-" + side + suffix,
+        gridMarginFactor(item, side, gridTracks[orientation]),
+      );
+    });
+  }
+  function applyGridLayout(gridLayout) {
+    var enabled = Boolean(gridLayout && gridLayout.enabled);
+    dashboard.classList.toggle("grid-mode", enabled);
+    var maps = {
+      landscape: enabled ? indexGridItems(gridLayout.landscape) : {},
+      portrait: enabled ? indexGridItems(gridLayout.portrait) : {},
+    };
+    names.concat(localNames).forEach(function (name) {
+      var element = document.getElementById(name);
+      if (!element) return;
+      ["landscape", "portrait"].forEach(function (orientation) {
+        applyGridItem(element, orientation, maps[orientation][name]);
+      });
+    });
   }
   function applyConfig(input) {
     if (!input || typeof input !== "object" || Array.isArray(input)) return config;
@@ -84,8 +171,27 @@
       if (entry[1]) document.body.style.setProperty(entry[0], entry[1]);
       else document.body.style.removeProperty(entry[0]);
     });
+    var globalResolved = app.resolveAppearance ? app.resolveAppearance(appearance, null) : null;
+    if (globalResolved) {
+      if (globalResolved.pageEdgePadding !== null)
+        dashboard.style.setProperty("--page-edge-padding", globalResolved.pageEdgePadding + "px");
+      else dashboard.style.removeProperty("--page-edge-padding");
+      if (globalResolved.widgetSpacing !== null)
+        dashboard.style.setProperty("--widget-spacing", globalResolved.widgetSpacing + "px");
+      else dashboard.style.removeProperty("--widget-spacing");
+      if (dashboard.dataset) dashboard.dataset.surfaceMode = globalResolved.surfaceMode;
+      dashboard.classList.toggle("surface-seamless", globalResolved.surfaceMode === "seamless");
+    } else {
+      dashboard.style.removeProperty("--page-edge-padding");
+      dashboard.style.removeProperty("--widget-spacing");
+      if (dashboard.dataset) delete dashboard.dataset.surfaceMode;
+      dashboard.classList.remove("surface-seamless");
+    }
     if (!old || old.theme !== next.theme)
       document.body.classList.toggle("theme-dark", next.theme === "dark");
+    if (!old || old.orientation !== next.orientation)
+      dashboard.classList.toggle("orientation-portrait", next.orientation === "portrait");
+    if (!old || changed(old.gridLayout, next.gridLayout)) applyGridLayout(next.gridLayout);
     if (!old || changed(old.layoutOptions, next.layoutOptions)) {
       dashboard.classList.toggle("photo-right", next.layoutOptions.photoPosition === "right");
       dashboard.style.setProperty("--photo-width", next.layoutOptions.photoWidthPercent + "fr");
@@ -106,23 +212,30 @@
         (100 - next.layoutOptions.photoWidthPercent) * 0.15 + "vw",
       );
     }
+    var appearanceChanged = !old || changed(old.appearance, next.appearance);
     names.forEach(function (name) {
       var value = next.widgets[name];
-      if (!old || changed(old.widgets[name], value)) {
+      var widgetChanged = !old || changed(old.widgets[name], value);
+      if (widgetChanged || appearanceChanged) {
         document.getElementById(name).hidden = !value.enabled;
-        styleWidget(name, value);
-        app[name === "photos" ? "carousel" : name].update(value);
+        styleWidget(name, value, appearance);
+        if (widgetChanged) app[name === "photos" ? "carousel" : name].update(value);
       }
     });
     if (app.localWidgets)
       localNames.forEach(function (name) {
         var value = next.widgets[name];
-        if (!old || changed(old.widgets[name], value) || old.timezone !== next.timezone) {
+        var widgetChanged =
+          !old || changed(old.widgets[name], value) || old.timezone !== next.timezone;
+        if (widgetChanged || appearanceChanged) {
           document.getElementById(name).hidden = !value.enabled;
-          if (value.enabled) {
-            localRenderers[name].update(value);
-            localRenderers[name].resume();
-          } else localRenderers[name].pause();
+          styleWidget(name, value, appearance);
+          if (widgetChanged) {
+            if (value.enabled) {
+              localRenderers[name].update(value);
+              localRenderers[name].resume();
+            } else localRenderers[name].pause();
+          }
         }
       });
     if (old && old.timezone !== next.timezone) {
@@ -149,6 +262,8 @@
     if (visible.length) visible[visible.length - 1].classList.add("last-visible");
     if (
       !old ||
+      old.orientation !== next.orientation ||
+      changed(old.gridLayout, next.gridLayout) ||
       changed(old.layoutOptions, next.layoutOptions) ||
       names.some(function (name) {
         return old.widgets[name].enabled !== next.widgets[name].enabled;

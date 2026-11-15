@@ -2,12 +2,213 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocalWidgetEditor } from "./local-widget-editor";
+import { PhotoLibrary } from "./online-editor/photo-library";
+import { ValidatedNumberField } from "./online-editor/validated-number-field";
 import {
-  defaultOnlineDashboard,
-  onlineDashboardSchema,
-  type OnlineDashboard,
+  addPhotoSelection,
+  movePhotoSelection,
+  removePhotoSelection,
+} from "@/lib/online-editor/photos";
+import { ensureGridLayoutValid } from "@/lib/online-editor/grid-layout";
+import { clearNumericIssuesForDisabledWidgets } from "@/lib/online-editor/numeric-issues";
+import {
+  appearancePresets,
+  applyPanelTemplate,
+  autoArrangeDashboardGrid,
+  createDefaultDashboardGridLayout,
   currencyCodes,
+  defaultOnlineDashboard,
+  gridDimensions,
+  gridItemsOverlap,
+  gridWidgetCatalog,
+  onlineDashboardSchema,
+  panelTemplates,
+  resolveScopedAppearance,
+  type AppearancePreset,
+  type DashboardGridItem,
+  type DashboardWidgetKey,
+  type OnlineDashboard,
+  type PanelTemplateId,
+  type ScopedAppearance,
+  type WidgetAppearanceOverride,
 } from "@smartframe/contracts";
+
+const APPEARANCE_PRESET_LABELS: Record<AppearancePreset, string> = {
+  default: "Original do SmartFrame",
+  cards: "Cartões arredondados (18px, borda, sem sombra)",
+  flat: "Superfícies planas (12px, sem borda/sombra/blur)",
+  borderless: "Somente conteúdo (transparente, cantos retos)",
+  seamless: "Painel contínuo (sem espaçamento, cantos retos)",
+};
+
+type ScopedNumericKey = "cornerRadius" | "widgetSpacing" | "innerPadding" | "pageEdgePadding";
+type ScopedBooleanKey = "border" | "shadow";
+
+function cleanWidgetAppearance(
+  next: WidgetAppearanceOverride,
+): WidgetAppearanceOverride | undefined {
+  const cleaned: WidgetAppearanceOverride = {};
+  if (next.preset !== undefined && next.preset !== null) cleaned.preset = next.preset;
+  if (next.cornerRadius !== undefined && next.cornerRadius !== null)
+    cleaned.cornerRadius = next.cornerRadius;
+  if (next.innerPadding !== undefined && next.innerPadding !== null)
+    cleaned.innerPadding = next.innerPadding;
+  if (next.border !== undefined && next.border !== null) cleaned.border = next.border;
+  if (next.shadow !== undefined && next.shadow !== null) cleaned.shadow = next.shadow;
+  return Object.keys(cleaned).length ? cleaned : undefined;
+}
+
+function ScopedAppearanceControls({
+  scope,
+  value,
+  resolved,
+  hideInnerPadding = false,
+  onPresetChange,
+  onFieldChange,
+  onReset,
+}: {
+  scope: "global" | "widget";
+  value: ScopedAppearance | WidgetAppearanceOverride | undefined;
+  resolved: ReturnType<typeof resolveScopedAppearance>;
+  hideInnerPadding?: boolean;
+  onPresetChange: (preset: AppearancePreset | null) => void;
+  onFieldChange: (key: ScopedNumericKey | ScopedBooleanKey, next: number | boolean | null) => void;
+  onReset: () => void;
+}) {
+  const ranges: Array<{
+    key: ScopedNumericKey;
+    label: string;
+    min: number;
+    max: number;
+    fallback: number;
+    globalOnly?: boolean;
+    hidden?: boolean;
+  }> = [
+    { key: "cornerRadius", label: "Raio dos cantos (px)", min: 0, max: 32, fallback: 18 },
+    {
+      key: "widgetSpacing",
+      label: "Espaçamento entre widgets (px)",
+      min: 0,
+      max: 24,
+      fallback: 8,
+      globalOnly: true,
+    },
+    {
+      key: "innerPadding",
+      label: "Espaçamento interno dos widgets (px)",
+      min: 0,
+      max: 24,
+      fallback: 12,
+      hidden: hideInnerPadding,
+    },
+    {
+      key: "pageEdgePadding",
+      label: "Margem da borda do painel (px)",
+      min: 0,
+      max: 32,
+      fallback: 10,
+      globalOnly: true,
+    },
+  ];
+
+  const valueObj = (value ?? {}) as Record<string, unknown>;
+  const hasAnyOverride =
+    valueObj.preset !== undefined ||
+    valueObj.cornerRadius !== undefined ||
+    valueObj.widgetSpacing !== undefined ||
+    valueObj.innerPadding !== undefined ||
+    valueObj.pageEdgePadding !== undefined ||
+    valueObj.border !== undefined ||
+    valueObj.shadow !== undefined;
+
+  return (
+    <>
+      <label>
+        {scope === "global" ? "Preset de aparência" : "Preset do widget"}
+        <select
+          value={(valueObj.preset as string | undefined) ?? (scope === "global" ? "default" : "")}
+          onChange={(event) => {
+            const selected = event.target.value;
+            onPresetChange(selected ? (selected as AppearancePreset) : null);
+          }}
+        >
+          {scope === "widget" && <option value="">Herdar do painel</option>}
+          {appearancePresets.map((preset) => (
+            <option key={preset} value={preset}>
+              {APPEARANCE_PRESET_LABELS[preset]}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {ranges
+        .filter((item) => !item.hidden && (scope === "global" || !item.globalOnly))
+        .map((item) => {
+          const explicit = valueObj[item.key] as number | null | undefined;
+          const isExplicit = explicit !== undefined && explicit !== null;
+          const effective = resolved[item.key];
+          const display = isExplicit
+            ? `${explicit} px (personalizado)`
+            : effective !== null
+              ? `${effective} px (${scope === "global" ? "do preset" : "herdado"})`
+              : "Padrão original";
+          return (
+            <div key={item.key}>
+              <label>
+                {item.label} · {display}
+                <input
+                  type="range"
+                  min={item.min}
+                  max={item.max}
+                  value={isExplicit ? explicit : (effective ?? item.fallback)}
+                  onChange={(event) => onFieldChange(item.key, Number(event.target.value))}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={!isExplicit}
+                onClick={() => onFieldChange(item.key, null)}
+              >
+                {scope === "global" ? "Herdar do preset" : "Herdar"}
+              </button>
+            </div>
+          );
+        })}
+
+      {(
+        [
+          ["border", scope === "global" ? "Borda dos cartões" : "Borda"],
+          ["shadow", scope === "global" ? "Sombra dos cartões" : "Sombra"],
+        ] as const
+      ).map(([key, label]) => {
+        const explicit = valueObj[key] as boolean | null | undefined;
+        const selectValue = explicit === true ? "on" : explicit === false ? "off" : "";
+        return (
+          <label key={key}>
+            {label}
+            <select
+              value={selectValue}
+              onChange={(event) => {
+                const next = event.target.value;
+                onFieldChange(key, next === "on" ? true : next === "off" ? false : null);
+              }}
+            >
+              <option value="">{scope === "global" ? "Herdar do preset" : "Herdar"}</option>
+              <option value="on">Ativada</option>
+              <option value="off">Desativada</option>
+            </select>
+          </label>
+        );
+      })}
+
+      <button type="button" disabled={!hasAnyOverride} onClick={onReset}>
+        {scope === "global"
+          ? "Restaurar aparência original do painel"
+          : "Redefinir para aparência herdada"}
+      </button>
+    </>
+  );
+}
 
 type Device = {
   id: string;
@@ -18,6 +219,330 @@ type Device = {
   activePanelVersionId: string | null;
 };
 type Panel = { id: string; name: string };
+
+type GridDragState = {
+  widgetId: DashboardWidgetKey;
+  mode: "move" | "resize";
+  startX: number;
+  startY: number;
+  origin: DashboardGridItem;
+  blocked: boolean;
+};
+
+function clampGridValue(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function GridLayoutEditor({
+  config,
+  disabled,
+  onChange,
+}: {
+  config: OnlineDashboard;
+  disabled: boolean;
+  onChange: (next: OnlineDashboard) => void;
+}) {
+  const gridLayout = config.gridLayout;
+  const orientation = config.orientation;
+  const dims = gridDimensions[orientation];
+  const allItems = useMemo(
+    () => (gridLayout ? gridLayout[orientation] : []),
+    [gridLayout, orientation],
+  );
+  const activeItems = useMemo(
+    () => allItems.filter((item) => config.widgets[item.widgetId].enabled),
+    [allItems, config.widgets],
+  );
+  const [selectedId, setSelectedId] = useState<DashboardWidgetKey>("photos");
+  const [gridFeedback, setGridFeedback] = useState("");
+  const [dragState, setDragState] = useState<GridDragState | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+
+  const resolvedSelectedId = activeItems.some((item) => item.widgetId === selectedId)
+    ? selectedId
+    : (activeItems[0]?.widgetId ?? "photos");
+  const selectedItem =
+    activeItems.find((item) => item.widgetId === resolvedSelectedId) ?? activeItems[0] ?? null;
+
+  function commitOrientationItems(nextActive: DashboardGridItem[]) {
+    if (!gridLayout) return;
+    const inactive = allItems.filter((item) => !config.widgets[item.widgetId].enabled);
+    onChange({
+      ...config,
+      gridLayout: {
+        ...gridLayout,
+        [orientation]: [...nextActive, ...inactive],
+      },
+    });
+  }
+
+  function tryUpdateItem(candidate: DashboardGridItem): { ok: boolean; error?: string } {
+    const min = gridWidgetCatalog[candidate.widgetId];
+    if (candidate.w < min.minWidth || candidate.h < min.minHeight) {
+      return {
+        ok: false,
+        error: `${min.label}: tamanho mínimo de ${min.minWidth}×${min.minHeight} células.`,
+      };
+    }
+    if (
+      candidate.x < 0 ||
+      candidate.y < 0 ||
+      candidate.x + candidate.w > dims.columns ||
+      candidate.y + candidate.h > dims.rows
+    ) {
+      return { ok: false, error: `${min.label}: fora dos limites da grade.` };
+    }
+    const blocker = activeItems.find(
+      (other) => other.widgetId !== candidate.widgetId && gridItemsOverlap(candidate, other),
+    );
+    if (blocker) {
+      return {
+        ok: false,
+        error: `Conflito de espaço com ${gridWidgetCatalog[blocker.widgetId].label}.`,
+      };
+    }
+    const current = activeItems.find((item) => item.widgetId === candidate.widgetId);
+    if (
+      current &&
+      current.x === candidate.x &&
+      current.y === candidate.y &&
+      current.w === candidate.w &&
+      current.h === candidate.h
+    ) {
+      return { ok: true };
+    }
+    commitOrientationItems(
+      activeItems.map((item) => (item.widgetId === candidate.widgetId ? candidate : item)),
+    );
+    return { ok: true };
+  }
+
+  function startPointerInteraction(
+    event: React.PointerEvent,
+    item: DashboardGridItem,
+    mode: "move" | "resize",
+  ) {
+    if (disabled || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(item.widgetId);
+    setGridFeedback("");
+    try {
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic pointer events in tests may omit capture support.
+    }
+    setDragState({
+      widgetId: item.widgetId,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: { ...item },
+      blocked: false,
+    });
+  }
+
+  function movePointerInteraction(event: React.PointerEvent) {
+    if (!dragState || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dx = Math.round(((event.clientX - dragState.startX) / rect.width) * dims.columns);
+    const dy = Math.round(((event.clientY - dragState.startY) / rect.height) * dims.rows);
+    const min = gridWidgetCatalog[dragState.widgetId];
+    const origin = dragState.origin;
+    const candidate: DashboardGridItem =
+      dragState.mode === "move"
+        ? {
+            widgetId: origin.widgetId,
+            x: clampGridValue(origin.x + dx, 0, dims.columns - origin.w),
+            y: clampGridValue(origin.y + dy, 0, dims.rows - origin.h),
+            w: origin.w,
+            h: origin.h,
+          }
+        : {
+            widgetId: origin.widgetId,
+            x: origin.x,
+            y: origin.y,
+            w: clampGridValue(origin.w + dx, min.minWidth, dims.columns - origin.x),
+            h: clampGridValue(origin.h + dy, min.minHeight, dims.rows - origin.y),
+          };
+    const result = tryUpdateItem(candidate);
+    if (!result.ok && result.error) setGridFeedback(result.error);
+    else setGridFeedback("");
+    if (dragState.blocked !== !result.ok) {
+      setDragState((current) => (current ? { ...current, blocked: !result.ok } : null));
+    }
+  }
+
+  function endPointerInteraction(event: React.PointerEvent) {
+    if (!dragState) return;
+    try {
+      if ((event.currentTarget as HTMLElement).hasPointerCapture?.(event.pointerId)) {
+        (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // Ignore synthetic cleanup errors.
+    }
+    setDragState(null);
+  }
+
+  if (!gridLayout) return null;
+
+  return (
+    <div className="online-grid-editor">
+      <div className="online-grid-toolbar">
+        <label>
+          Orientação da grade
+          <select
+            value={orientation}
+            onChange={(event) => {
+              setGridFeedback("");
+              onChange({
+                ...config,
+                orientation: event.target.value as "landscape" | "portrait",
+              });
+            }}
+          >
+            <option value="landscape">Paisagem (24×24)</option>
+            <option value="portrait">Retrato (12×40)</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => {
+            setGridFeedback("");
+            onChange(autoArrangeDashboardGrid(config, orientation));
+          }}
+        >
+          Organizar automaticamente sem colisões
+        </button>
+      </div>
+      <small>
+        Arraste os blocos para posicionar, puxe o canto inferior direito para redimensionar ou use o
+        inspetor numérico abaixo. Grade atual: {dims.columns} colunas × {dims.rows} linhas.
+      </small>
+      {gridFeedback && (
+        <div className="online-error" role="alert">
+          {gridFeedback}
+        </div>
+      )}
+      <div
+        ref={canvasRef}
+        className="online-grid-canvas"
+        data-orientation={orientation}
+        style={
+          {
+            aspectRatio: `${dims.columns} / ${dims.rows}`,
+            "--grid-cols": String(dims.columns),
+            "--grid-rows": String(dims.rows),
+          } as React.CSSProperties
+        }
+        onPointerMove={movePointerInteraction}
+        onPointerUp={endPointerInteraction}
+        onPointerCancel={endPointerInteraction}
+      >
+        {activeItems.map((item) => {
+          const isSelected = selectedItem?.widgetId === item.widgetId;
+          const isBlocked = dragState?.widgetId === item.widgetId && dragState.blocked;
+          return (
+            <div
+              key={item.widgetId}
+              role="button"
+              tabIndex={disabled ? -1 : 0}
+              aria-label={`${gridWidgetCatalog[item.widgetId].label} (${item.w}×${item.h} em ${item.x},${item.y})`}
+              aria-pressed={isSelected}
+              className={`online-grid-item${isSelected ? " is-selected" : ""}${isBlocked ? " is-blocked" : ""}`}
+              style={{
+                left: `${(item.x / dims.columns) * 100}%`,
+                top: `${(item.y / dims.rows) * 100}%`,
+                width: `${(item.w / dims.columns) * 100}%`,
+                height: `${(item.h / dims.rows) * 100}%`,
+              }}
+              onClick={() => {
+                setSelectedId(item.widgetId);
+                setGridFeedback("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedId(item.widgetId);
+                }
+              }}
+              onPointerDown={(event) => startPointerInteraction(event, item, "move")}
+            >
+              <strong>{gridWidgetCatalog[item.widgetId].label}</strong>
+              <span>
+                {item.w}×{item.h} · ({item.x},{item.y})
+              </span>
+              <span
+                className="online-grid-resize-handle"
+                title={`Redimensionar ${gridWidgetCatalog[item.widgetId].label}`}
+                aria-hidden="true"
+                onPointerDown={(event) => startPointerInteraction(event, item, "resize")}
+              />
+            </div>
+          );
+        })}
+      </div>
+      {selectedItem && (
+        <div className="online-grid-inspector">
+          <label>
+            Widget selecionado
+            <select
+              value={selectedItem.widgetId}
+              onChange={(event) => {
+                setSelectedId(event.target.value as DashboardWidgetKey);
+                setGridFeedback("");
+              }}
+            >
+              {activeItems.map((item) => (
+                <option key={item.widgetId} value={item.widgetId}>
+                  {gridWidgetCatalog[item.widgetId].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(
+            [
+              ["x", "Coluna (X)", 0, dims.columns - selectedItem.w],
+              ["y", "Linha (Y)", 0, dims.rows - selectedItem.h],
+              [
+                "w",
+                "Largura (W)",
+                gridWidgetCatalog[selectedItem.widgetId].minWidth,
+                dims.columns - selectedItem.x,
+              ],
+              [
+                "h",
+                "Altura (H)",
+                gridWidgetCatalog[selectedItem.widgetId].minHeight,
+                dims.rows - selectedItem.y,
+              ],
+            ] as const
+          ).map(([field, label, minVal, maxVal]) => (
+            <label key={field}>
+              {label}
+              <input
+                type="number"
+                min={minVal}
+                max={maxVal}
+                step={1}
+                value={selectedItem[field]}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (!Number.isInteger(parsed)) return;
+                  const result = tryUpdateItem({ ...selectedItem, [field]: parsed });
+                  setGridFeedback(result.ok ? "" : (result.error ?? ""));
+                }}
+              />
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type PanelAccess = { panelId: string; versionId: string };
 type PanelState = Panel & { config: OnlineDashboard; draftRevision: number };
 type Photo = {
@@ -29,6 +554,52 @@ type Photo = {
 };
 type Pairing = { code: string; expiresAt: string; serverURL: string };
 type WidgetData = Awaited<ReturnType<typeof import("@smartframe/widgets").onlineWidgetData>>;
+type ListStatus = "loading" | "ready" | "error";
+
+function EditorFeedback({ error, notice }: { error: string; notice: string }) {
+  return (
+    <>
+      {error && (
+        <div className="online-error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="online-notice" role="status" aria-live="polite" aria-atomic="true">
+        {notice}
+      </div>
+    </>
+  );
+}
+
+function EditorSectionNavigation({
+  value,
+  onChange,
+}: {
+  value: "photos" | "widgets" | "appearance";
+  onChange: (value: "photos" | "widgets" | "appearance") => void;
+}) {
+  return (
+    <nav className="online-section-nav" aria-label="Seções de edição">
+      {(
+        [
+          ["photos", "Fotos"],
+          ["widgets", "Widgets"],
+          ["appearance", "Aparência"],
+        ] as const
+      ).map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          className={value === key ? "is-active" : ""}
+          aria-pressed={value === key}
+          onClick={() => onChange(key)}
+        >
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+}
 
 async function api(path: string, options?: RequestInit) {
   const response = await fetch(path, { ...options, cache: "no-store" });
@@ -54,12 +625,23 @@ export function OnlineFrameEditor() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [listStatus, setListStatus] = useState({
+    devices: "loading" as ListStatus,
+    panels: "loading" as ListStatus,
+    photos: "loading" as ListStatus,
+  });
   const [pairing, setPairing] = useState<Pairing | null>(null);
   const [photoPollExpired, setPhotoPollExpired] = useState(false);
   const [photoPollRetry, setPhotoPollRetry] = useState(0);
   const [widgetData, setWidgetData] = useState<WidgetData | null>(null);
   const [currencyBase, setCurrencyBase] = useState("USD");
   const [currencyTarget, setCurrencyTarget] = useState("BRL");
+  const [editorSection, setEditorSection] = useState<"photos" | "widgets" | "appearance">("photos");
+  const [mobilePane, setMobilePane] = useState<"configure" | "preview">("configure");
+  const [photoAnnouncement, setPhotoAnnouncement] = useState("");
+  const [photoUploadStatus, setPhotoUploadStatus] = useState("");
+  const [numericIssues, setNumericIssues] = useState<Record<string, string>>({});
+  const photoInput = useRef<HTMLInputElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const operation = useRef(false);
   const selectedId = useRef(panelId);
@@ -157,14 +739,17 @@ export function OnlineFrameEditor() {
   const refreshDevices = useCallback(async () => {
     const result = await api("/api/devices");
     setDevices(result.data ?? []);
+    setListStatus((current) => ({ ...current, devices: "ready" }));
   }, []);
   const refreshPanels = useCallback(async () => {
     const result = await api("/api/panels");
     setPanels(result.panels ?? []);
+    setListStatus((current) => ({ ...current, panels: "ready" }));
   }, []);
   const refreshPhotos = useCallback(async () => {
     const result = await api("/api/photos");
     setPhotos(result.photos ?? []);
+    setListStatus((current) => ({ ...current, photos: "ready" }));
     return (result.photos ?? []) as Photo[];
   }, []);
 
@@ -193,25 +778,43 @@ export function OnlineFrameEditor() {
 
   useEffect(() => {
     let active = true;
-    api("/api/devices")
-      .then((result) => {
-        if (active) setDevices(result.data ?? []);
-      })
-      .catch((failure) => {
-        if (active) setError(failure.message);
-      });
-    api("/api/photos")
-      .then((result) => {
-        if (active) setPhotos(result.photos ?? []);
-      })
-      .catch(() => {});
-    api("/api/panels")
-      .then((result) => {
-        if (active) setPanels(result.panels ?? []);
-      })
-      .catch((failure) => {
-        if (active) setError(failure.message);
-      });
+    const load = <T,>(
+      key: keyof typeof listStatus,
+      request: () => Promise<T>,
+      apply: (data: T) => void,
+    ) => {
+      setListStatus((current) => ({ ...current, [key]: "loading" }));
+      request()
+        .then((data) => {
+          if (active) {
+            apply(data);
+            setListStatus((current) => ({ ...current, [key]: "ready" }));
+          }
+        })
+        .catch((failure: unknown) => {
+          if (active) {
+            setListStatus((current) => ({ ...current, [key]: "error" }));
+            setError(
+              failure instanceof Error ? failure.message : "Não foi possível carregar os dados.",
+            );
+          }
+        });
+    };
+    load(
+      "devices",
+      () => api("/api/devices"),
+      (result) => setDevices(result.data ?? []),
+    );
+    load(
+      "photos",
+      () => api("/api/photos"),
+      (result) => setPhotos(result.photos ?? []),
+    );
+    load(
+      "panels",
+      () => api("/api/panels"),
+      (result) => setPanels(result.panels ?? []),
+    );
     return () => {
       active = false;
     };
@@ -333,9 +936,31 @@ export function OnlineFrameEditor() {
   }, [hasPendingPhotos, photoPollRetry, refreshPhotos]);
 
   function change(next: OnlineDashboard) {
-    setConfig(next);
+    const arranged = ensureGridLayoutValid(next);
+    setConfig(arranged);
+    // Widgets whose numeric fields unmount when disabled must not keep
+    // blocking save with an error the user can no longer see. Always-mounted
+    // fields keep their issue because the invalid draft stays visible.
+    setNumericIssues((current) =>
+      clearNumericIssuesForDisabledWidgets(current, config.widgets, arranged.widgets),
+    );
     setDirty(true);
     setNotice("");
+  }
+  function setNumericIssue(id: string, message: string | null) {
+    setNumericIssues((current) => {
+      const next = { ...current };
+      if (message) next[id] = message;
+      else delete next[id];
+      return next;
+    });
+    if (message) setDirty(true);
+  }
+  function clearNumericIssues(ids: string[]) {
+    const removed = new Set(ids);
+    setNumericIssues((current) =>
+      Object.fromEntries(Object.entries(current).filter(([id]) => !removed.has(id))),
+    );
   }
   function changeTheme(theme: OnlineDashboard["theme"]) {
     const palettes = {
@@ -359,6 +984,8 @@ export function OnlineFrameEditor() {
       return;
     selectedId.current = nextId;
     setPanelId(nextId);
+    setNumericIssues({});
+    setError("");
     setState(null);
     setDirty(false);
   }
@@ -411,6 +1038,8 @@ export function OnlineFrameEditor() {
         const nextId = action === "delete" ? "" : result.id;
         selectedId.current = nextId;
         setPanelId(nextId);
+        setNumericIssues({});
+        setError("");
         setState(null);
         setDirty(false);
       }
@@ -431,6 +1060,14 @@ export function OnlineFrameEditor() {
 
   async function save(publish: boolean, activate = true) {
     if (!state || !panelId || (publish && !deviceId) || operation.current) return;
+    if (Object.keys(numericIssues).length) {
+      setError(
+        `Corrija os campos numéricos: ${Object.keys(numericIssues)
+          .map((id) => id.replaceAll(".", " "))
+          .join(", ")}.`,
+      );
+      return;
+    }
     const parsed = onlineDashboardSchema.safeParse(config);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
@@ -515,37 +1152,48 @@ export function OnlineFrameEditor() {
   async function upload(files: FileList | null) {
     if (!files || operation.current) return;
     operation.current = true;
+    const batch = Array.from(files);
+    setPhotoUploadStatus(`Enviando ${batch.length} ${batch.length === 1 ? "foto" : "fotos"}…`);
     setBusy("Enviando fotos…");
     setError("");
+    const failures: string[] = [];
+    let successes = 0;
     try {
-      for (const file of Array.from(files)) {
-        if (file.size > 12 * 1024 ** 2)
-          throw new Error(`${file.name}: escolha uma imagem de até 12 MB.`);
+      for (const file of batch) {
+        if (file.size > 12 * 1024 ** 2) {
+          failures.push(`${file.name}: excede 12 MB`);
+          continue;
+        }
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+          failures.push(`${file.name}: formato não aceito`);
+          continue;
+        }
         const form = new FormData();
         form.set("photo", file);
-        const added: Photo = await api("/api/photos", { method: "POST", body: form });
+        setPhotoUploadStatus(`Enviando ${file.name}…`);
+        let added: Photo;
+        try {
+          added = await api("/api/photos", { method: "POST", body: form });
+        } catch (failure) {
+          failures.push(
+            `${file.name}: ${failure instanceof Error ? failure.message : "falha no envio"}`,
+          );
+          continue;
+        }
         setPhotos((current) => [{ ...added }, ...current.filter((photo) => photo.id !== added.id)]);
-        if (added.status === "ready")
-          setConfig((current) => ({
-            ...current,
-            widgets: {
-              ...current.widgets,
-              photos: {
-                ...current.widgets.photos,
-                photoIds: [...current.widgets.photos.photoIds, added.id],
-              },
-            },
-          }));
-        setDirty(true);
+        successes++;
       }
-      setNotice(
-        "Fotos enviadas. As que estão sendo processadas serão selecionáveis quando prontas.",
-      );
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Falha ao enviar fotos.");
+      if (successes) {
+        await refreshPhotos().catch(() => undefined);
+        setNotice(
+          `${successes} ${successes === 1 ? "foto enviada" : "fotos enviadas"}. Selecione as que estiverem prontas para incluí-las no rascunho.`,
+        );
+      }
+      if (failures.length) setError(`Alguns arquivos não foram enviados: ${failures.join("; ")}`);
     } finally {
       operation.current = false;
       setBusy("");
+      setPhotoUploadStatus("");
     }
   }
 
@@ -586,22 +1234,32 @@ export function OnlineFrameEditor() {
       ...config,
       widgets: { ...config.widgets, [key]: { ...config.widgets[key], enabled } },
     });
-  const movePhoto = (index: number, delta: number) => {
-    const ids = [...config.widgets.photos.photoIds];
-    const target = index + delta;
-    if (target < 0 || target >= ids.length) return;
-    [ids[index], ids[target]] = [ids[target], ids[index]];
+  const movePhoto = (_id: string, index: number, delta: number) => {
+    const ids = movePhotoSelection(config.widgets.photos.photoIds, index, delta);
+    if (ids === config.widgets.photos.photoIds) return;
     change({
       ...config,
       widgets: { ...config.widgets, photos: { ...config.widgets.photos, photoIds: ids } },
     });
+    const moved = photos.find((photo) => photo.id === _id);
+    setPhotoAnnouncement(
+      moved
+        ? `${moved.filename} movida para a posição ${index + delta + 1} de ${ids.length}.`
+        : "Ordem atualizada.",
+    );
   };
   const controlsDisabled = !!busy || loading || !state;
   const selectedPhotoIds = config.widgets.photos.photoIds;
-  const orderedSelected = selectedPhotoIds.flatMap((id) => {
-    const photo = photos.find((item) => item.id === id);
-    return photo ? [photo] : [];
-  });
+  const numericError = Object.keys(numericIssues).length
+    ? `Corrija os campos numéricos: ${Object.keys(numericIssues)
+        .map((id) => id.replaceAll(".", " "))
+        .join(", ")}.`
+    : "";
+  const feedbackError =
+    numericError ||
+    (error.startsWith("Corrija o campo ") || error.startsWith("Corrija os campos numéricos:")
+      ? ""
+      : error);
 
   return (
     <main className="online-editor">
@@ -611,21 +1269,30 @@ export function OnlineFrameEditor() {
           <h1>Meus painéis</h1>
           <p>Crie seus painéis e escolha qual exibir em cada dispositivo.</p>
         </div>
-        <label>
-          Dispositivo
-          <select
-            disabled={!!busy || loading}
-            value={deviceId}
-            onChange={(event) => chooseDevice(event.target.value)}
-          >
-            <option value="">Selecione um dispositivo</option>
-            {devices.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="online-editor-heading-actions">
+          <span className={`online-draft-status${dirty ? " is-dirty" : ""}`}>
+            {dirty
+              ? "Alterações não salvas"
+              : state
+                ? `Rascunho r${state.draftRevision} salvo`
+                : "Selecione ou crie um painel"}
+          </span>
+          <label>
+            Dispositivo
+            <select
+              disabled={!!busy || loading}
+              value={deviceId}
+              onChange={(event) => chooseDevice(event.target.value)}
+            >
+              <option value="">Selecione um dispositivo</option>
+              {devices.map((device) => (
+                <option key={device.id} value={device.id}>
+                  {device.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
       <div className="online-panel-actions">
         <label>
@@ -643,116 +1310,167 @@ export function OnlineFrameEditor() {
             ))}
           </select>
         </label>
-        <button disabled={!!busy || loading} onClick={() => void managePanel("create")}>
+        <button
+          className="online-primary"
+          disabled={!!busy || loading}
+          onClick={() => void managePanel("create")}
+        >
           Criar painel
         </button>
-        <button
-          disabled={!!busy || loading || !state}
-          onClick={() => void managePanel("duplicate")}
-        >
-          Duplicar
-        </button>
-        <button disabled={!!busy || loading || !state} onClick={() => void managePanel("rename")}>
-          Renomear
-        </button>
-        <button
-          className="online-danger"
-          disabled={!!busy || loading || !state}
-          onClick={() => void managePanel("delete")}
-        >
-          Excluir
-        </button>
-      </div>
-      {selectedDevice && (
-        <p className="online-device-status">
-          Dispositivo: <strong>{selectedDevice.name}</strong> · Painel enviado:{" "}
-          <strong>{activePanel?.name ?? "Nenhum"}</strong>
-        </p>
-      )}
-      {selectedDevice && (
-        <section className="online-callout" aria-label="Painéis disponíveis no dispositivo">
-          <h2>Painéis disponíveis neste dispositivo</h2>
-          <p>
-            Somente publicações disponibilizadas aqui podem ser escolhidas no tablet. Rascunhos não
-            ficam acessíveis.
-          </p>
-          {accessDevice !== deviceId ? (
-            <p>Carregando permissões…</p>
-          ) : (
-            <ul>
-              {panels.map((panel) => {
-                const allowed = access.some((item) => item.panelId === panel.id);
-                return (
-                  <li key={panel.id}>
-                    {panel.name} — {allowed ? "disponível" : "não disponível"}
-                    {selectedDevice.activePanelId === panel.id
-                      ? " (painel enviado)"
-                      : allowed && (
-                          <button disabled={!!busy} onClick={() => void removeAccess(panel.id)}>
-                            Remover acesso
-                          </button>
-                        )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <p>
-            Selecione um painel em edição e disponibilize a versão atual sem trocar a tela do
-            tablet.
-          </p>
-          <button
-            disabled={!!busy || loading || !state || accessDevice !== deviceId}
-            onClick={() => void save(true, false)}
-          >
-            Disponibilizar painel em edição
-          </button>
-        </section>
-      )}
-      {!devices.length && (
-        <div className="online-callout">
-          Nenhum dispositivo vinculado. Você já pode criar painéis; vincule um dispositivo para
-          exibi-los.
-          <button disabled={!!busy} onClick={() => void pair()}>
-            Vincular dispositivo
-          </button>
-        </div>
-      )}
-      {pairing && (
-        <div className="online-callout">
-          Código <strong>{pairing.code}</strong> · expira{" "}
-          {new Date(pairing.expiresAt).toLocaleTimeString("pt-BR")} · Servidor:{" "}
-          <strong>{pairing.serverURL}</strong>
-          <button disabled={!!busy} onClick={() => setPairing(null)}>
-            Fechar
-          </button>
-        </div>
-      )}
-      {devices.length > 0 && (
-        <div className="online-device-actions">
-          <button disabled={!!busy} onClick={() => void pair()}>
-            Gerar código para novo dispositivo
-          </button>
-          {deviceId && (
+        <details className="online-secondary-actions">
+          <summary>Ações do painel</summary>
+          <div>
             <button
-              disabled={!!busy}
+              disabled={!!busy || loading || !state}
+              onClick={() => void managePanel("duplicate")}
+            >
+              Duplicar
+            </button>
+            <button
+              disabled={!!busy || loading || !state}
+              onClick={() => void managePanel("rename")}
+            >
+              Renomear
+            </button>
+            <button
               className="online-danger"
+              disabled={!!busy || loading || !state}
+              onClick={() => void managePanel("delete")}
+            >
+              Excluir
+            </button>
+          </div>
+        </details>
+      </div>
+      <details className="online-secondary-area">
+        <summary>Dispositivos, permissões e pareamento</summary>
+        {selectedDevice && (
+          <p className="online-device-status">
+            Dispositivo: <strong>{selectedDevice.name}</strong> · Painel enviado:{" "}
+            <strong>{activePanel?.name ?? "Nenhum"}</strong>
+          </p>
+        )}
+        {selectedDevice && (
+          <section className="online-callout" aria-label="Painéis disponíveis no dispositivo">
+            <h2>Painéis disponíveis neste dispositivo</h2>
+            <p>
+              Somente publicações disponibilizadas aqui podem ser escolhidas no tablet. Rascunhos
+              não ficam acessíveis.
+            </p>
+            {accessDevice !== deviceId ? (
+              <p>Carregando permissões…</p>
+            ) : (
+              <ul>
+                {panels.map((panel) => {
+                  const allowed = access.some((item) => item.panelId === panel.id);
+                  return (
+                    <li key={panel.id}>
+                      {panel.name} — {allowed ? "disponível" : "não disponível"}
+                      {selectedDevice.activePanelId === panel.id
+                        ? " (painel enviado)"
+                        : allowed && (
+                            <button disabled={!!busy} onClick={() => void removeAccess(panel.id)}>
+                              Remover acesso
+                            </button>
+                          )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p>
+              Selecione um painel em edição e disponibilize a versão atual sem trocar a tela do
+              tablet.
+            </p>
+            <button
+              disabled={!!busy || loading || !state || accessDevice !== deviceId}
+              onClick={() => void save(true, false)}
+            >
+              Disponibilizar painel em edição
+            </button>
+          </section>
+        )}
+        {listStatus.devices === "loading" && (
+          <p className="online-empty">Carregando dispositivos…</p>
+        )}
+        {listStatus.devices === "error" && (
+          <div className="online-error">
+            Não foi possível carregar dispositivos.{" "}
+            <button
               onClick={() => {
-                const device = devices.find((item) => item.id === deviceId);
-                if (device) void revoke(device);
+                setError("");
+                setListStatus((s) => ({ ...s, devices: "loading" }));
+                void refreshDevices().catch((failure) => {
+                  setError(failure.message);
+                  setListStatus((s) => ({ ...s, devices: "error" }));
+                });
               }}
             >
-              Desvincular selecionado
+              Tentar novamente
             </button>
-          )}
+          </div>
+        )}
+        {listStatus.devices === "ready" && !devices.length && (
+          <div className="online-callout">
+            Nenhum dispositivo vinculado. Você já pode criar painéis; vincule um dispositivo para
+            exibi-los.
+            <button disabled={!!busy} onClick={() => void pair()}>
+              Vincular dispositivo
+            </button>
+          </div>
+        )}
+        {pairing && (
+          <div className="online-callout">
+            Código <strong>{pairing.code}</strong> · expira{" "}
+            {new Date(pairing.expiresAt).toLocaleTimeString("pt-BR")} · Servidor:{" "}
+            <strong>{pairing.serverURL}</strong>
+            <button disabled={!!busy} onClick={() => setPairing(null)}>
+              Fechar
+            </button>
+          </div>
+        )}
+        {devices.length > 0 && (
+          <div className="online-device-actions">
+            <button disabled={!!busy} onClick={() => void pair()}>
+              Gerar código para novo dispositivo
+            </button>
+            {deviceId && (
+              <button
+                disabled={!!busy}
+                className="online-danger"
+                onClick={() => {
+                  const device = devices.find((item) => item.id === deviceId);
+                  if (device) void revoke(device);
+                }}
+              >
+                Desvincular selecionado
+              </button>
+            )}
+          </div>
+        )}
+      </details>
+      <EditorFeedback error={feedbackError} notice={notice} />
+      {listStatus.panels === "loading" && <p className="online-empty">Carregando painéis…</p>}
+      {listStatus.panels === "error" && (
+        <div className="online-error">
+          Não foi possível carregar painéis.{" "}
+          <button
+            onClick={() => {
+              setError("");
+              setListStatus((s) => ({ ...s, panels: "loading" }));
+              void refreshPanels().catch((failure) => {
+                setError(failure.message);
+                setListStatus((s) => ({ ...s, panels: "error" }));
+              });
+            }}
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
-      {error && (
-        <div className="online-error" role="alert">
-          {error}
-        </div>
+      {listStatus.panels === "ready" && !panels.length && (
+        <p className="online-empty">Nenhum painel criado. Use “Criar painel” para começar.</p>
       )}
-      {notice && <div className="online-notice">{notice}</div>}
       {!panelId ? (
         <p className="online-empty">Crie ou selecione um painel para editar.</p>
       ) : loading ? (
@@ -763,602 +1481,837 @@ export function OnlineFrameEditor() {
         </p>
       ) : (
         <div className="online-grid">
-          <section className="online-controls">
+          <div className="mobile-preview-switch" role="group" aria-label="Alternar área do editor">
+            <button
+              type="button"
+              aria-pressed={mobilePane === "configure"}
+              onClick={() => setMobilePane("configure")}
+            >
+              Configurar
+            </button>
+            <button
+              type="button"
+              aria-pressed={mobilePane === "preview"}
+              onClick={() => setMobilePane("preview")}
+            >
+              Visualizar
+            </button>
+          </div>
+          <section className={`online-controls mobile-pane-${mobilePane}`}>
             {busy && <p className="online-busy">{busy}</p>}
-            <fieldset disabled={controlsDisabled}>
-              <legend>Fotos</legend>
-              <label className="online-upload">
-                Adicionar várias fotos
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  onChange={(event) => {
-                    void upload(event.target.files);
-                    event.currentTarget.value = "";
+            <EditorSectionNavigation value={editorSection} onChange={setEditorSection} />
+            <div className="online-editor-section" hidden={editorSection !== "photos"}>
+              <fieldset disabled={controlsDisabled}>
+                <legend>Fotos</legend>
+                {listStatus.photos === "loading" && (
+                  <p className="online-empty">Carregando fotos…</p>
+                )}
+                {listStatus.photos === "error" && (
+                  <p className="online-error">
+                    Não foi possível carregar fotos.{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError("");
+                        setListStatus((s) => ({ ...s, photos: "loading" }));
+                        void refreshPhotos().catch((failure) => {
+                          setError(failure.message);
+                          setListStatus((s) => ({ ...s, photos: "error" }));
+                        });
+                      }}
+                    >
+                      Tentar novamente
+                    </button>
+                  </p>
+                )}
+                {listStatus.photos === "ready" && photos.length === 0 && (
+                  <p className="online-empty">
+                    Ainda não há fotos. Adicione arquivos para usá-los no painel.
+                  </p>
+                )}
+                <PhotoLibrary
+                  photos={photos}
+                  selectedIds={selectedPhotoIds}
+                  disabled={controlsDisabled}
+                  uploadBusy={photoUploadStatus}
+                  inputRef={photoInput}
+                  onUpload={(files) => void upload(files)}
+                  onToggle={(photo, selected) => {
+                    const result = selected
+                      ? addPhotoSelection(selectedPhotoIds, photo.id)
+                      : { ids: removePhotoSelection(selectedPhotoIds, photo.id), reason: null };
+                    if (result.reason === "limit") {
+                      setPhotoAnnouncement("O painel já atingiu o limite de 100 fotos.");
+                      return;
+                    }
+                    if (result.reason === "duplicate") return;
+                    change({
+                      ...config,
+                      widgets: {
+                        ...config.widgets,
+                        photos: { ...config.widgets.photos, photoIds: result.ids },
+                      },
+                    });
+                    setPhotoAnnouncement(
+                      selected
+                        ? `${photo.filename} adicionada ao rascunho.`
+                        : `${photo.filename} retirada somente deste painel.`,
+                    );
                   }}
+                  onRemove={(id) => {
+                    const photo = photos.find((item) => item.id === id);
+                    change({
+                      ...config,
+                      widgets: {
+                        ...config.widgets,
+                        photos: {
+                          ...config.widgets.photos,
+                          photoIds: removePhotoSelection(selectedPhotoIds, id),
+                        },
+                      },
+                    });
+                    setPhotoAnnouncement(
+                      `${photo?.filename ?? "Foto"} retirada somente deste painel.`,
+                    );
+                  }}
+                  onMove={movePhoto}
                 />
-              </label>
-              <div className="online-photo-list">
-                {photos.map((photo) => (
-                  <div className="online-photo" key={photo.id}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        disabled={controlsDisabled || photo.status !== "ready"}
-                        checked={selectedPhotoIds.includes(photo.id)}
-                        onChange={(event) => {
-                          const ids = event.target.checked
-                            ? [...selectedPhotoIds, photo.id]
-                            : selectedPhotoIds.filter((id) => id !== photo.id);
-                          change({
-                            ...config,
-                            widgets: {
-                              ...config.widgets,
-                              photos: { ...config.widgets.photos, photoIds: ids },
-                            },
-                          });
-                        }}
-                      />
-                      {photo.filename}
-                      <small>
-                        {photo.status === "ready"
-                          ? `${photo.width ?? ""} × ${photo.height ?? ""}`
-                          : `${photo.status} — indisponível até concluir`}
-                      </small>
-                    </label>
-                  </div>
-                ))}
-              </div>
-              <div className="online-ordered-photos">
-                <strong>Ordem do painel</strong>
-                {orderedSelected.map((photo, index) => (
-                  <div className="online-photo" key={photo.id}>
-                    <span>
-                      {index + 1}. {photo.filename}
-                    </span>
-                    <span>
-                      <button
-                        disabled={controlsDisabled || index === 0}
-                        onClick={() => movePhoto(index, -1)}
-                        aria-label="Mover foto para cima"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        disabled={controlsDisabled || index === orderedSelected.length - 1}
-                        onClick={() => movePhoto(index, 1)}
-                        aria-label="Mover foto para baixo"
-                      >
-                        ↓
-                      </button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <label>
-                Troca de foto (segundos)
-                <input
-                  type="number"
-                  min="5"
-                  max="3600"
+                {photoAnnouncement && (
+                  <p
+                    className="online-callout photo-selection-status"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {photoAnnouncement}
+                  </p>
+                )}
+                <ValidatedNumberField
+                  id="photos.interval"
+                  label="Troca de foto (segundos)"
                   value={config.widgets.photos.intervalSeconds}
-                  onChange={(event) =>
+                  min={5}
+                  max={3600}
+                  onInvalidChange={setNumericIssue}
+                  onChange={(intervalSeconds) =>
                     change({
                       ...config,
                       widgets: {
                         ...config.widgets,
-                        photos: {
-                          ...config.widgets.photos,
-                          intervalSeconds: Number(event.target.value),
-                        },
+                        photos: { ...config.widgets.photos, intervalSeconds },
                       },
                     })
                   }
                 />
-              </label>
-              <label>
-                Ajuste da imagem
-                <select
-                  value={config.widgets.photos.fit}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        photos: {
-                          ...config.widgets.photos,
-                          fit: event.target.value as "cover" | "contain",
-                        },
-                      },
-                    })
-                  }
-                >
-                  <option value="cover">Preencher</option>
-                  <option value="contain">Conter</option>
-                </select>
-              </label>
-            </fieldset>
-            {photoPollExpired && (
-              <div className="online-callout">
-                O processamento continua pendente após 90 segundos.
-                <button
-                  disabled={!!busy}
-                  onClick={() => {
-                    setPhotoPollExpired(false);
-                    setPhotoPollRetry((retry) => retry + 1);
-                    void refreshPhotos().catch((failure) => setError(failure.message));
-                  }}
-                >
-                  Atualizar fotos
-                </button>
-              </div>
-            )}
-            <fieldset disabled={controlsDisabled}>
-              <legend>Widgets</legend>
-              {(
-                [
-                  ["clock", "Relógio"],
-                  ["weather", "Clima"],
-                  ["currencies", "Moedas"],
-                  ["calendar", "Calendário"],
-                ] as const
-              ).map(([key, label]) => (
-                <label className="online-toggle" key={key}>
-                  <input
-                    type="checkbox"
-                    checked={config.widgets[key].enabled}
-                    onChange={(event) => widget(key, event.target.checked)}
-                  />
-                  {label}
-                </label>
-              ))}
-              <label className="online-toggle">
-                <input
-                  type="checkbox"
-                  checked={config.widgets.photos.enabled}
-                  onChange={(event) => widget("photos", event.target.checked)}
-                />
-                Fotos
-              </label>
-              <label>
-                Formato do relógio
-                <select
-                  value={config.widgets.clock.format}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        clock: {
-                          ...config.widgets.clock,
-                          format: event.target.value as "12h" | "24h",
-                        },
-                      },
-                    })
-                  }
-                >
-                  <option value="24h">24 horas</option>
-                  <option value="12h">12 horas</option>
-                </select>
-              </label>
-              <label>
-                Tamanho dos números do relógio
-                <select
-                  value={config.widgets.clock.size}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        clock: {
-                          ...config.widgets.clock,
-                          size: event.target.value as "small" | "normal" | "large",
-                        },
-                      },
-                    })
-                  }
-                >
-                  <option value="small">Pequeno</option>
-                  <option value="normal">Normal</option>
-                  <option value="large">Grande</option>
-                </select>
-              </label>
-              <label>
-                Cor dos números do relógio
-                <input
-                  type="color"
-                  value={config.widgets.clock.color || config.appearance.textColor}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        clock: { ...config.widgets.clock, color: event.target.value },
-                      },
-                    })
-                  }
-                />
-              </label>
-              <label>
-                Cidade do clima
-                <input
-                  value={config.widgets.weather.city}
-                  maxLength={80}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        weather: { ...config.widgets.weather, city: event.target.value },
-                      },
-                    })
-                  }
-                />
-              </label>
-              <fieldset>
-                <legend>Pares de moedas ({config.widgets.currencies.pairs.length}/20)</legend>
                 <label>
-                  Moeda de origem
+                  Ajuste da imagem
                   <select
-                    value={currencyBase}
-                    onChange={(event) => {
-                      setCurrencyBase(event.target.value);
-                      if (event.target.value === currencyTarget) setCurrencyTarget(currencyBase);
-                    }}
-                  >
-                    {currencyCodes.map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Moeda de destino
-                  <select
-                    value={currencyTarget}
-                    onChange={(event) => setCurrencyTarget(event.target.value)}
-                  >
-                    {currencyCodes
-                      .filter((code) => code !== currencyBase)
-                      .map((code) => (
-                        <option key={code} value={code}>
-                          {code}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  disabled={
-                    currencyBase === currencyTarget ||
-                    config.widgets.currencies.pairs.length >= 20 ||
-                    config.widgets.currencies.pairs.includes(`${currencyBase}/${currencyTarget}`)
-                  }
-                  onClick={() =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        currencies: {
-                          ...config.widgets.currencies,
-                          pairs: [
-                            ...config.widgets.currencies.pairs,
-                            `${currencyBase}/${currencyTarget}`,
-                          ],
-                        },
-                      },
-                    })
-                  }
-                >
-                  Adicionar par
-                </button>
-                <ul className="currency-pairs">
-                  {config.widgets.currencies.pairs.map((pair) => (
-                    <li key={pair}>
-                      <span>{pair}</span>
-                      <button
-                        type="button"
-                        aria-label={`Remover ${pair}`}
-                        disabled={config.widgets.currencies.pairs.length === 1}
-                        onClick={() =>
-                          change({
-                            ...config,
-                            widgets: {
-                              ...config.widgets,
-                              currencies: {
-                                ...config.widgets.currencies,
-                                pairs: config.widgets.currencies.pairs.filter(
-                                  (value) => value !== pair,
-                                ),
-                              },
-                            },
-                          })
-                        }
-                      >
-                        Remover
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <small>
-                  Selecione de 1 a 20 pares. Cotações indicativas da Coinbase, consultadas a cada 30
-                  minutos; não são preços de execução.
-                </small>
-              </fieldset>
-              <label>
-                Cotações por vez
-                <select
-                  value={config.widgets.currencies.displayCount}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        currencies: {
-                          ...config.widgets.currencies,
-                          displayCount: Number(event.target.value),
-                        },
-                      },
-                    })
-                  }
-                >
-                  {[1, 2, 3, 4].map((count) => (
-                    <option key={count} value={count}>
-                      {count}
-                    </option>
-                  ))}
-                </select>
-                <small>
-                  Em telas pequenas, a quantidade se adapta ao espaço e os demais pares alternam.
-                </small>
-              </label>
-              <label>
-                Alternar pares a cada (segundos)
-                <input
-                  type="number"
-                  min="5"
-                  max="3600"
-                  value={config.widgets.currencies.intervalSeconds}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        currencies: {
-                          ...config.widgets.currencies,
-                          intervalSeconds: Number(event.target.value),
-                        },
-                      },
-                    })
-                  }
-                />
-              </label>
-              <label className="online-toggle">
-                <input
-                  type="checkbox"
-                  checked={config.widgets.calendar.highlightToday}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      widgets: {
-                        ...config.widgets,
-                        calendar: {
-                          ...config.widgets.calendar,
-                          highlightToday: event.target.checked,
-                        },
-                      },
-                    })
-                  }
-                />
-                Destacar o dia atual
-              </label>
-            </fieldset>
-            <fieldset disabled={controlsDisabled}>
-              <legend>Widgets adicionais</legend>
-              <LocalWidgetEditor
-                widgets={config.widgets}
-                onChange={(widgets) => change({ ...config, widgets })}
-              />
-            </fieldset>
-            <fieldset disabled={controlsDisabled}>
-              <legend>Aparência e layout</legend>
-              <label>
-                Tema
-                <select
-                  value={config.theme}
-                  onChange={(event) => changeTheme(event.target.value as "light" | "dark")}
-                >
-                  <option value="light">Claro</option>
-                  <option value="dark">Escuro</option>
-                </select>
-              </label>
-              {(
-                [
-                  ["backgroundColor", "Fundo"],
-                  ["accentColor", "Destaque"],
-                  ["textColor", "Texto"],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key}>
-                  {label}
-                  <input
-                    type="color"
-                    value={config.appearance[key]}
+                    value={config.widgets.photos.fit}
+                    aria-describedby="photos-fit-help"
                     onChange={(event) =>
+                      event.target.value !== "" &&
                       change({
                         ...config,
-                        appearance: { ...config.appearance, [key]: event.target.value },
+                        widgets: {
+                          ...config.widgets,
+                          photos: {
+                            ...config.widgets.photos,
+                            fit: event.target.value as "cover" | "contain",
+                          },
+                        },
+                      })
+                    }
+                  >
+                    <option value="cover">Preencher</option>
+                    <option value="contain">Conter</option>
+                  </select>
+                </label>
+                <small id="photos-fit-help" className="field-help">
+                  Preencher ocupa toda a área e pode cortar as bordas da foto. Conter mostra a
+                  imagem inteira; se as proporções forem diferentes, podem sobrar áreas com a cor de
+                  fundo.
+                </small>
+              </fieldset>
+              {photoPollExpired && (
+                <div className="online-callout">
+                  O processamento continua pendente após 90 segundos.
+                  <button
+                    disabled={!!busy}
+                    onClick={() => {
+                      setPhotoPollExpired(false);
+                      setPhotoPollRetry((retry) => retry + 1);
+                      void refreshPhotos().catch((failure) => setError(failure.message));
+                    }}
+                  >
+                    Atualizar fotos
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="online-editor-section" hidden={editorSection !== "widgets"}>
+              <fieldset disabled={controlsDisabled}>
+                <legend>Widgets</legend>
+                {(
+                  [
+                    ["clock", "Relógio"],
+                    ["weather", "Clima"],
+                    ["currencies", "Moedas"],
+                    ["calendar", "Calendário"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div className="widget-choice" key={key}>
+                    <label className="online-toggle">
+                      <input
+                        type="checkbox"
+                        checked={config.widgets[key].enabled}
+                        onChange={(event) => widget(key, event.target.checked)}
+                      />
+                      {label}
+                    </label>
+                    <small>
+                      {key === "clock"
+                        ? "Hora atual e formato do relógio."
+                        : key === "weather"
+                          ? "Condições do clima para a cidade escolhida."
+                          : key === "currencies"
+                            ? "Cotações indicativas dos pares configurados."
+                            : "Calendário mensal e destaque do dia."}
+                    </small>
+                  </div>
+                ))}
+                <div className="widget-choice">
+                  <label className="online-toggle">
+                    <input
+                      type="checkbox"
+                      checked={config.widgets.photos.enabled}
+                      onChange={(event) => widget("photos", event.target.checked)}
+                    />
+                    Fotos
+                  </label>
+                  <small>Escolha a biblioteca e a ordem na seção Fotos.</small>
+                </div>
+                <details className="online-advanced">
+                  <summary>Relógio — opções</summary>
+                  <label>
+                    Formato do relógio
+                    <select
+                      value={config.widgets.clock.format}
+                      onChange={(event) =>
+                        change({
+                          ...config,
+                          widgets: {
+                            ...config.widgets,
+                            clock: {
+                              ...config.widgets.clock,
+                              format: event.target.value as "12h" | "24h",
+                            },
+                          },
+                        })
+                      }
+                    >
+                      <option value="24h">24 horas</option>
+                      <option value="12h">12 horas</option>
+                    </select>
+                  </label>
+                  <label>
+                    Tamanho dos números do relógio
+                    <select
+                      value={config.widgets.clock.size}
+                      onChange={(event) =>
+                        change({
+                          ...config,
+                          widgets: {
+                            ...config.widgets,
+                            clock: {
+                              ...config.widgets.clock,
+                              size: event.target.value as "small" | "normal" | "large",
+                            },
+                          },
+                        })
+                      }
+                    >
+                      <option value="small">Pequeno</option>
+                      <option value="normal">Normal</option>
+                      <option value="large">Grande</option>
+                    </select>
+                  </label>
+                  <label>
+                    Cor dos números do relógio
+                    <input
+                      type="color"
+                      value={config.widgets.clock.color || config.appearance.textColor}
+                      onChange={(event) =>
+                        change({
+                          ...config,
+                          widgets: {
+                            ...config.widgets,
+                            clock: { ...config.widgets.clock, color: event.target.value },
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                </details>
+                <details className="online-advanced">
+                  <summary>Clima — opções</summary>
+                  <label>
+                    Cidade do clima
+                    <input
+                      value={config.widgets.weather.city}
+                      maxLength={80}
+                      onChange={(event) =>
+                        change({
+                          ...config,
+                          widgets: {
+                            ...config.widgets,
+                            weather: { ...config.widgets.weather, city: event.target.value },
+                          },
+                        })
+                      }
+                    />
+                  </label>
+                </details>
+                <details className="online-advanced">
+                  <summary>Moedas — opções</summary>
+                  <fieldset>
+                    <legend>Pares de moedas ({config.widgets.currencies.pairs.length}/20)</legend>
+                    <label>
+                      Moeda de origem
+                      <select
+                        value={currencyBase}
+                        onChange={(event) => {
+                          setCurrencyBase(event.target.value);
+                          if (event.target.value === currencyTarget)
+                            setCurrencyTarget(currencyBase);
+                        }}
+                      >
+                        {currencyCodes.map((code) => (
+                          <option key={code} value={code}>
+                            {code}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Moeda de destino
+                      <select
+                        value={currencyTarget}
+                        onChange={(event) => setCurrencyTarget(event.target.value)}
+                      >
+                        {currencyCodes
+                          .filter((code) => code !== currencyBase)
+                          .map((code) => (
+                            <option key={code} value={code}>
+                              {code}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={
+                        currencyBase === currencyTarget ||
+                        config.widgets.currencies.pairs.length >= 20 ||
+                        config.widgets.currencies.pairs.includes(
+                          `${currencyBase}/${currencyTarget}`,
+                        )
+                      }
+                      onClick={() =>
+                        change({
+                          ...config,
+                          widgets: {
+                            ...config.widgets,
+                            currencies: {
+                              ...config.widgets.currencies,
+                              pairs: [
+                                ...config.widgets.currencies.pairs,
+                                `${currencyBase}/${currencyTarget}`,
+                              ],
+                            },
+                          },
+                        })
+                      }
+                    >
+                      Adicionar par
+                    </button>
+                    <ul className="currency-pairs">
+                      {config.widgets.currencies.pairs.map((pair) => (
+                        <li key={pair}>
+                          <span>{pair}</span>
+                          <button
+                            type="button"
+                            aria-label={`Remover ${pair}`}
+                            disabled={config.widgets.currencies.pairs.length === 1}
+                            onClick={() =>
+                              change({
+                                ...config,
+                                widgets: {
+                                  ...config.widgets,
+                                  currencies: {
+                                    ...config.widgets.currencies,
+                                    pairs: config.widgets.currencies.pairs.filter(
+                                      (value) => value !== pair,
+                                    ),
+                                  },
+                                },
+                              })
+                            }
+                          >
+                            Remover
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <small>
+                      Selecione de 1 a 20 pares. Cotações indicativas da Coinbase, consultadas a
+                      cada 30 minutos; não são preços de execução.
+                    </small>
+                  </fieldset>
+                  <label>
+                    Cotações por vez
+                    <select
+                      value={config.widgets.currencies.displayCount}
+                      onChange={(event) =>
+                        change({
+                          ...config,
+                          widgets: {
+                            ...config.widgets,
+                            currencies: {
+                              ...config.widgets.currencies,
+                              displayCount: Number(event.target.value),
+                            },
+                          },
+                        })
+                      }
+                    >
+                      {[1, 2, 3, 4].map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                    <small>
+                      Em telas pequenas, a quantidade se adapta ao espaço e os demais pares
+                      alternam.
+                    </small>
+                  </label>
+                  <ValidatedNumberField
+                    id="currencies.interval"
+                    label="Alternar pares a cada (segundos)"
+                    value={config.widgets.currencies.intervalSeconds}
+                    min={5}
+                    max={3600}
+                    onInvalidChange={setNumericIssue}
+                    onChange={(intervalSeconds) =>
+                      change({
+                        ...config,
+                        widgets: {
+                          ...config.widgets,
+                          currencies: { ...config.widgets.currencies, intervalSeconds },
+                        },
                       })
                     }
                   />
+                </details>
+                <details className="online-advanced">
+                  <summary>Calendário — opções</summary>
+                  <label className="online-toggle">
+                    <input
+                      type="checkbox"
+                      checked={config.widgets.calendar.highlightToday}
+                      onChange={(event) =>
+                        change({
+                          ...config,
+                          widgets: {
+                            ...config.widgets,
+                            calendar: {
+                              ...config.widgets.calendar,
+                              highlightToday: event.target.checked,
+                            },
+                          },
+                        })
+                      }
+                    />
+                    Destacar o dia atual
+                  </label>
+                </details>
+              </fieldset>
+              <fieldset disabled={controlsDisabled}>
+                <legend>Widgets adicionais</legend>
+                <LocalWidgetEditor
+                  widgets={config.widgets}
+                  onChange={(widgets) => change({ ...config, widgets })}
+                  onNumericInvalid={setNumericIssue}
+                  onNumericIssuesRemove={clearNumericIssues}
+                />
+              </fieldset>
+            </div>
+            <div className="online-editor-section" hidden={editorSection !== "appearance"}>
+              <fieldset disabled={controlsDisabled}>
+                <legend>Aparência e layout</legend>
+                <fieldset>
+                  <legend>Galeria de templates prontos</legend>
+                  <small>
+                    Aplique um visual completo (tema, superfície e distribuição na grade)
+                    preservando suas fotos, calendário, notas, tarefas e listas configuradas.
+                  </small>
+                  <div className="online-template-grid">
+                    {panelTemplates.map((template) => (
+                      <article key={template.id} className="online-template-card">
+                        <strong>{template.name}</strong>
+                        <small>{template.description}</small>
+                        <div className="online-template-meta">
+                          <span>{template.theme === "dark" ? "Escuro" : "Claro"}</span>
+                          <span>{template.appearance.preset}</span>
+                          <span>{template.enabledWidgets.length} widgets</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            change(applyPanelTemplate(config, template.id as PanelTemplateId));
+                            setNotice(`Template "${template.name}" aplicado ao rascunho.`);
+                          }}
+                        >
+                          Aplicar template
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                </fieldset>
+                <fieldset>
+                  <legend>Disposição do painel e grade livre</legend>
+                  <label>
+                    Modo de organização dos blocos
+                    <select
+                      value={config.gridLayout?.enabled ? "grid" : "split"}
+                      onChange={(event) => {
+                        const enableGrid = event.target.value === "grid";
+                        const baseGrid =
+                          config.gridLayout ?? createDefaultDashboardGridLayout(config);
+                        change({
+                          ...config,
+                          gridLayout: {
+                            ...baseGrid,
+                            enabled: enableGrid,
+                          },
+                        });
+                      }}
+                    >
+                      <option value="split">Painel dividido (clássico)</option>
+                      <option value="grid">Grade livre modular (arrastar e redimensionar)</option>
+                    </select>
+                  </label>
+                  {config.gridLayout?.enabled && (
+                    <GridLayoutEditor
+                      config={config}
+                      disabled={controlsDisabled}
+                      onChange={change}
+                    />
+                  )}
+                </fieldset>
+                <label>
+                  Tema
+                  <select
+                    value={config.theme}
+                    onChange={(event) => changeTheme(event.target.value as "light" | "dark")}
+                  >
+                    <option value="light">Claro</option>
+                    <option value="dark">Escuro</option>
+                  </select>
                 </label>
-              ))}
-              <fieldset>
-                <legend>Fundo e tamanho dos widgets</legend>
-                <small>
-                  O tamanho controla o espaço vertical relativo de cada cartão. A largura das fotos
-                  é ajustada separadamente abaixo. O texto acompanha a cor do fundo, exceto se os
-                  números do relógio tiverem uma cor personalizada.
-                </small>
                 {(
                   [
-                    ["clock", "Relógio", config.theme === "dark" ? "#0b1d30" : "#102a43"],
-                    ["weather", "Clima", config.appearance.accentColor],
-                    ["currencies", "Cotações", "#222326"],
-                    ["calendar", "Calendário", config.theme === "dark" ? "#1d3045" : "#ffffff"],
-                    ["photos", "Fotos", "#26384b"],
+                    ["backgroundColor", "Fundo"],
+                    ["accentColor", "Destaque"],
+                    ["textColor", "Texto"],
                   ] as const
-                ).map(([key, label, fallback]) => {
-                  const background = config.widgets[key].backgroundColor || fallback;
-                  const colorValue =
-                    background.length === 4
-                      ? `#${background
-                          .slice(1)
-                          .split("")
-                          .map((character) => character + character)
-                          .join("")}`
-                      : background;
-                  return (
-                    <fieldset key={key}>
-                      <legend>{label}</legend>
-                      <label>
-                        Cor de fundo
-                        <input
-                          type="color"
-                          value={colorValue}
-                          onChange={(event) =>
-                            change({
-                              ...config,
-                              widgets: {
-                                ...config.widgets,
-                                [key]: {
-                                  ...config.widgets[key],
-                                  backgroundColor: event.target.value,
-                                },
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        disabled={!config.widgets[key].backgroundColor}
-                        onClick={() =>
-                          change({
-                            ...config,
-                            widgets: {
-                              ...config.widgets,
-                              [key]: { ...config.widgets[key], backgroundColor: "" },
-                            },
-                          })
-                        }
-                      >
-                        Usar fundo padrão
-                      </button>
-                      {key !== "photos" && (
+                ).map(([key, label]) => (
+                  <label key={key}>
+                    {label}
+                    <input
+                      type="color"
+                      value={config.appearance[key]}
+                      onChange={(event) =>
+                        change({
+                          ...config,
+                          appearance: { ...config.appearance, [key]: event.target.value },
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+                <fieldset>
+                  <legend>Estilo e superfície do painel</legend>
+                  <small>
+                    Defina um preset visual ou ajuste cantos, espaçamentos, bordas e sombras. Os
+                    valores escolhidos aqui valem para todos os widgets, salvo quando sobrepostos
+                    individualmente abaixo.
+                  </small>
+                  <ScopedAppearanceControls
+                    scope="global"
+                    value={config.appearance}
+                    resolved={resolveScopedAppearance(config.appearance)}
+                    onPresetChange={(preset) => {
+                      const { backgroundColor, accentColor, textColor } = config.appearance;
+                      change({
+                        ...config,
+                        appearance: preset
+                          ? { backgroundColor, accentColor, textColor, preset }
+                          : { backgroundColor, accentColor, textColor },
+                      });
+                    }}
+                    onFieldChange={(key, next) => {
+                      const nextAppearance = { ...config.appearance } as Record<string, unknown>;
+                      if (next === null) delete nextAppearance[key];
+                      else nextAppearance[key] = next;
+                      change({
+                        ...config,
+                        appearance: nextAppearance as OnlineDashboard["appearance"],
+                      });
+                    }}
+                    onReset={() => {
+                      const { backgroundColor, accentColor, textColor } = config.appearance;
+                      change({
+                        ...config,
+                        appearance: { backgroundColor, accentColor, textColor },
+                      });
+                    }}
+                  />
+                </fieldset>
+                <fieldset>
+                  <legend>Fundo e tamanho dos widgets</legend>
+                  <small>
+                    O tamanho controla o espaço vertical relativo dos cartões principais. A largura
+                    das fotos é ajustada separadamente abaixo. O texto acompanha a cor do fundo,
+                    exceto se os números do relógio tiverem uma cor personalizada.
+                  </small>
+                  {(
+                    [
+                      ["clock", "Relógio", config.theme === "dark" ? "#0b1d30" : "#102a43"],
+                      ["weather", "Clima", config.appearance.accentColor],
+                      ["currencies", "Cotações", "#222326"],
+                      ["calendar", "Calendário", config.theme === "dark" ? "#1d3045" : "#ffffff"],
+                      ["photos", "Fotos", "#26384b"],
+                      ["notes", "Recados", config.theme === "dark" ? "#1d3045" : "#ffffff"],
+                      [
+                        "countdown",
+                        "Contagem regressiva",
+                        config.theme === "dark" ? "#1d3045" : "#ffffff",
+                      ],
+                      [
+                        "birthdays",
+                        "Aniversários",
+                        config.theme === "dark" ? "#1d3045" : "#ffffff",
+                      ],
+                      ["tasks", "Tarefas", config.theme === "dark" ? "#1d3045" : "#ffffff"],
+                      ["pomodoro", "Pomodoro", config.theme === "dark" ? "#1d3045" : "#ffffff"],
+                    ] as const
+                  ).map(([key, label, fallback]) => {
+                    const widgetEntry = config.widgets[key];
+                    const background = widgetEntry.backgroundColor || fallback;
+                    const colorValue =
+                      background.length === 4
+                        ? `#${background
+                            .slice(1)
+                            .split("")
+                            .map((character) => character + character)
+                            .join("")}`
+                        : background;
+                    const hasCardSize =
+                      key === "clock" ||
+                      key === "weather" ||
+                      key === "currencies" ||
+                      key === "calendar";
+                    return (
+                      <fieldset key={key}>
+                        <legend>{label}</legend>
                         <label>
-                          Tamanho do cartão
-                          <select
-                            value={config.widgets[key].cardSize}
+                          Cor de fundo
+                          <input
+                            type="color"
+                            value={colorValue}
                             onChange={(event) =>
                               change({
                                 ...config,
                                 widgets: {
                                   ...config.widgets,
                                   [key]: {
-                                    ...config.widgets[key],
-                                    cardSize: event.target.value as "small" | "normal" | "large",
+                                    ...widgetEntry,
+                                    backgroundColor: event.target.value,
                                   },
                                 },
                               })
                             }
-                          >
-                            <option value="small">Pequeno</option>
-                            <option value="normal">Normal</option>
-                            <option value="large">Grande</option>
-                          </select>
+                          />
                         </label>
-                      )}
-                    </fieldset>
-                  );
-                })}
+                        <button
+                          type="button"
+                          disabled={!widgetEntry.backgroundColor}
+                          onClick={() =>
+                            change({
+                              ...config,
+                              widgets: {
+                                ...config.widgets,
+                                [key]: { ...widgetEntry, backgroundColor: "" },
+                              },
+                            })
+                          }
+                        >
+                          Usar fundo padrão
+                        </button>
+                        {hasCardSize && (
+                          <label>
+                            Tamanho do cartão
+                            <select
+                              value={config.widgets[key].cardSize}
+                              onChange={(event) =>
+                                change({
+                                  ...config,
+                                  widgets: {
+                                    ...config.widgets,
+                                    [key]: {
+                                      ...config.widgets[key],
+                                      cardSize: event.target.value as "small" | "normal" | "large",
+                                    },
+                                  },
+                                })
+                              }
+                            >
+                              <option value="small">Pequeno</option>
+                              <option value="normal">Normal</option>
+                              <option value="large">Grande</option>
+                            </select>
+                          </label>
+                        )}
+                        <details className="online-advanced">
+                          <summary>Aparência individual (sobrepor painel)</summary>
+                          <ScopedAppearanceControls
+                            scope="widget"
+                            value={widgetEntry.appearance}
+                            resolved={resolveScopedAppearance(
+                              config.appearance,
+                              widgetEntry.appearance,
+                            )}
+                            hideInnerPadding={key === "photos"}
+                            onPresetChange={(preset) => {
+                              const nextWidget = { ...widgetEntry };
+                              if (preset === null) delete nextWidget.appearance;
+                              else nextWidget.appearance = { preset };
+                              change({
+                                ...config,
+                                widgets: { ...config.widgets, [key]: nextWidget },
+                              });
+                            }}
+                            onFieldChange={(fieldKey, next) => {
+                              const currentOverride = {
+                                ...(widgetEntry.appearance ?? {}),
+                              } as Record<string, unknown>;
+                              if (next === null) delete currentOverride[fieldKey];
+                              else currentOverride[fieldKey] = next;
+                              const cleaned = cleanWidgetAppearance(
+                                currentOverride as WidgetAppearanceOverride,
+                              );
+                              const nextWidget = { ...widgetEntry };
+                              if (cleaned) nextWidget.appearance = cleaned;
+                              else delete nextWidget.appearance;
+                              change({
+                                ...config,
+                                widgets: { ...config.widgets, [key]: nextWidget },
+                              });
+                            }}
+                            onReset={() => {
+                              const nextWidget = { ...widgetEntry };
+                              delete nextWidget.appearance;
+                              change({
+                                ...config,
+                                widgets: { ...config.widgets, [key]: nextWidget },
+                              });
+                            }}
+                          />
+                        </details>
+                      </fieldset>
+                    );
+                  })}
+                </fieldset>
+                <label>
+                  Orientação do painel
+                  <select
+                    value={config.orientation}
+                    onChange={(event) =>
+                      change({
+                        ...config,
+                        orientation: event.target.value as "landscape" | "portrait",
+                      })
+                    }
+                  >
+                    <option value="landscape">Paisagem</option>
+                    <option value="portrait">Retrato</option>
+                  </select>
+                  <small>
+                    A apresentação se adapta à proporção da tela; não bloqueia a orientação física.
+                  </small>
+                </label>
+                <label>
+                  Proporção da foto · {config.layoutOptions.photoWidthPercent}%
+                  <input
+                    type="range"
+                    min="40"
+                    max="75"
+                    disabled={controlsDisabled || Boolean(config.gridLayout?.enabled)}
+                    value={config.layoutOptions.photoWidthPercent}
+                    onChange={(event) =>
+                      change({
+                        ...config,
+                        layoutOptions: {
+                          ...config.layoutOptions,
+                          photoWidthPercent: Number(event.target.value),
+                        },
+                      })
+                    }
+                  />
+                  {config.gridLayout?.enabled && (
+                    <small>Controlado diretamente na grade livre acima.</small>
+                  )}
+                </label>
+                <label>
+                  Posição da foto
+                  <select
+                    disabled={controlsDisabled || Boolean(config.gridLayout?.enabled)}
+                    value={config.layoutOptions.photoPosition}
+                    onChange={(event) =>
+                      change({
+                        ...config,
+                        layoutOptions: {
+                          ...config.layoutOptions,
+                          photoPosition: event.target.value as "left" | "right",
+                        },
+                      })
+                    }
+                  >
+                    <option value="left">Esquerda</option>
+                    <option value="right">Direita</option>
+                  </select>
+                </label>
+                <details className="online-advanced">
+                  <summary>Opções avançadas do painel</summary>
+                  <ValidatedNumberField
+                    id="panel.refresh"
+                    label="Atualização geral (segundos)"
+                    value={config.refreshSeconds}
+                    min={10}
+                    max={3600}
+                    onInvalidChange={setNumericIssue}
+                    onChange={(refreshSeconds) => change({ ...config, refreshSeconds })}
+                  />
+                  <label>
+                    Fuso horário
+                    <input
+                      value={config.timezone}
+                      onChange={(event) => change({ ...config, timezone: event.target.value })}
+                    />
+                  </label>
+                </details>
               </fieldset>
-              <label>
-                Orientação do painel
-                <select
-                  value={config.orientation}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      orientation: event.target.value as "landscape" | "portrait",
-                    })
-                  }
-                >
-                  <option value="landscape">Paisagem</option>
-                  <option value="portrait">Retrato</option>
-                </select>
-                <small>
-                  A apresentação se adapta à proporção da tela; não bloqueia a orientação física.
-                </small>
-              </label>
-              <label>
-                Proporção da foto · {config.layoutOptions.photoWidthPercent}%
-                <input
-                  type="range"
-                  min="40"
-                  max="75"
-                  value={config.layoutOptions.photoWidthPercent}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      layoutOptions: {
-                        ...config.layoutOptions,
-                        photoWidthPercent: Number(event.target.value),
-                      },
-                    })
-                  }
-                />
-              </label>
-              <label>
-                Posição da foto
-                <select
-                  value={config.layoutOptions.photoPosition}
-                  onChange={(event) =>
-                    change({
-                      ...config,
-                      layoutOptions: {
-                        ...config.layoutOptions,
-                        photoPosition: event.target.value as "left" | "right",
-                      },
-                    })
-                  }
-                >
-                  <option value="left">Esquerda</option>
-                  <option value="right">Direita</option>
-                </select>
-              </label>
-              <label>
-                Atualização geral (segundos)
-                <input
-                  type="number"
-                  min="10"
-                  max="3600"
-                  value={config.refreshSeconds}
-                  onChange={(event) =>
-                    change({ ...config, refreshSeconds: Number(event.target.value) })
-                  }
-                />
-              </label>
-              <label>
-                Fuso horário
-                <input
-                  value={config.timezone}
-                  onChange={(event) => change({ ...config, timezone: event.target.value })}
-                />
-              </label>
-            </fieldset>
+            </div>
             <div className="online-save">
               <button disabled={controlsDisabled} onClick={() => void save(false)}>
                 Salvar painel
@@ -1376,21 +2329,23 @@ export function OnlineFrameEditor() {
               {dirty && <small>Alterações não salvas</small>}
             </div>
           </section>
-          <section className="online-preview">
+          <section className={`online-preview mobile-pane-${mobilePane}`}>
             <header>
-              <strong>Prévia ao vivo</strong>
+              <strong>Prévia do rascunho</strong>
               <span>{state.name}</span>
             </header>
             <iframe
               ref={frame}
               onLoad={sendPreview}
               src="/player-dashboard/index.html?preview=1"
-              title="Prévia do painel"
+              title="Prévia do rascunho do painel"
+              className={`draft-preview ${config.orientation}`}
             />
             <p>
               Rascunho r{state.draftRevision} · Enviado ao dispositivo {publishedRevision ?? "—"} ·
               Aplicado {selectedDevice?.appliedRevision ?? "—"}
             </p>
+            <small>A prévia é aproximada e pode não reproduzir exatamente todos os tablets.</small>
             {selectedDevice?.lastSeenAt && (
               <small>
                 Visto por último: {new Date(selectedDevice.lastSeenAt).toLocaleString("pt-BR")}
