@@ -52,26 +52,31 @@ class DownloadDeadlineTest {
                 val finished = CountDownLatch(1)
                 val cancelled = CountDownLatch(1)
                 try {
-                    DownloadDeadline.run(500, onCancel = {
-                        cancelled.countDown()
-                        connection.get()?.disconnect()
-                    }) {
-                        val client = URL("http://127.0.0.1:${server.localPort}/").openConnection() as HttpURLConnection
-                        connection.set(client)
-                        try {
-                            client.connectTimeout = 1000
-                            client.readTimeout = 1000
-                            client.inputStream.use { it.readBytes() }
-                        } finally { client.disconnect(); finished.countDown() }
-                    }
-                    throw AssertionError("Download deveria expirar")
-                } catch (_: TimeoutException) { }
-                assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) < 2500)
-                assertTrue(connected.await(1, TimeUnit.SECONDS))
-                assertTrue(cancelled.await(2, TimeUnit.SECONDS))
+                    try {
+                        DownloadDeadline.run(500, onCancel = {
+                            cancelled.countDown()
+                            connection.get()?.disconnect()
+                        }) {
+                            val client = URL("http://127.0.0.1:${server.localPort}/").openConnection() as HttpURLConnection
+                            connection.set(client)
+                            try {
+                                client.connectTimeout = 1000
+                                client.readTimeout = 1000
+                                client.inputStream.use { it.readBytes() }
+                            } finally { client.disconnect(); finished.countDown() }
+                        }
+                        throw AssertionError("Download deveria expirar")
+                    } catch (_: TimeoutException) { }
+                    assertTrue(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) < 2500)
+                    assertTrue(connected.await(1, TimeUnit.SECONDS))
+                    assertTrue(cancelled.await(2, TimeUnit.SECONDS))
+                } finally {
+                    // HttpURLConnection.disconnect() can block while another thread reads.
+                    // Close the test server so that both the read and cleanup can finish.
+                    worker.interrupt()
+                    worker.join(2000)
+                }
                 assertTrue(finished.await(2, TimeUnit.SECONDS))
-                worker.interrupt()
-                worker.join(2000)
             }
         }
     }
