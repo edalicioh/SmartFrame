@@ -3,16 +3,22 @@ import { currencyPairSchema } from "./currencies";
 import {
   dashboardGridItemSchema,
   dashboardGridLayoutSchema,
+  dashboardPageSchema,
   dashboardWidgetKeys,
   defaultOnlineDashboard,
   gridDimensions,
   gridItemsOverlap,
   gridWidgetCatalog,
   onlineDashboardSchema,
+  pageSettingsSchema,
+  smartStackSchema,
   type DashboardGridItem,
   type DashboardGridLayout,
+  type DashboardPage,
   type DashboardWidgetKey,
   type OnlineDashboard,
+  type PageSettings,
+  type SmartStackConfig,
 } from "./online-dashboard";
 import {
   stripPageOnlyAppearanceFields,
@@ -25,12 +31,22 @@ import {
 export {
   dashboardGridItemSchema,
   dashboardGridLayoutSchema,
+  dashboardPageSchema,
   dashboardWidgetKeys,
   gridDimensions,
   gridItemsOverlap,
   gridWidgetCatalog,
+  pageSettingsSchema,
+  smartStackSchema,
 };
-export type { DashboardGridItem, DashboardGridLayout, DashboardWidgetKey };
+export type {
+  DashboardGridItem,
+  DashboardGridLayout,
+  DashboardPage,
+  DashboardWidgetKey,
+  PageSettings,
+  SmartStackConfig,
+};
 
 /** The grid contract is separate from the deployed photo-dashboard contract. */
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -808,18 +824,23 @@ function defaultWidgetBoxSize(
     : { w: 6, h: 4 };
 }
 
-function arrangeOrientationItems(
+function arrangeOrientationItemsForScope(
+  enabledKeys: readonly DashboardWidgetKey[],
+  photoWidthPercent: number,
   config: OnlineDashboard,
   orientation: keyof typeof gridDimensions,
   existingItems: readonly DashboardGridItem[],
+  smartStack?: SmartStackConfig,
+  fallbackPass = false,
 ): DashboardGridItem[] {
   const { columns, rows } = gridDimensions[orientation];
+  const enabledSet = new Set(enabledKeys);
   const existingMap = new Map(existingItems.map((item) => [item.widgetId, item]));
   // Disabled widgets are hidden in the player, but their saved position must
   // survive arrangement so re-enabling them restores the customized box.
   // Invalid legacy boxes are clamped instead of dropped.
   const inactiveItems = [...existingMap.values()]
-    .filter((item) => !config.widgets[item.widgetId].enabled)
+    .filter((item) => !enabledSet.has(item.widgetId))
     .map((item) => {
       const minimum = gridWidgetCatalog[item.widgetId];
       const w = clampInt(item.w, minimum.minWidth, columns);
@@ -832,10 +853,20 @@ function arrangeOrientationItems(
         h,
       };
     });
-  const enabledKeys = dashboardWidgetKeys.filter((key) => config.widgets[key].enabled);
   if (enabledKeys.length === 0) return inactiveItems;
 
-  const orderedKeys = [...enabledKeys].sort((a, b) => {
+  const activeStackKeys = smartStack?.enabled
+    ? smartStack.widgets.filter((key) => enabledSet.has(key))
+    : [];
+  const hasActiveStack = activeStackKeys.length >= 2;
+  const stackAnchor = hasActiveStack ? activeStackKeys[0] : null;
+  const secondaryStackSet = hasActiveStack ? new Set(activeStackKeys.slice(1)) : null;
+
+  const packableKeys = secondaryStackSet
+    ? enabledKeys.filter((key) => !secondaryStackSet.has(key))
+    : [...enabledKeys];
+
+  const orderedKeys = [...packableKeys].sort((a, b) => {
     const itemA = existingMap.get(a);
     const itemB = existingMap.get(b);
     if (a === "photos" && b !== "photos") return -1;
@@ -850,14 +881,27 @@ function arrangeOrientationItems(
   let failedToPack = false;
 
   for (const key of orderedKeys) {
-    const minimum = gridWidgetCatalog[key];
+    const isStackAnchor = key === stackAnchor;
+    const minWidth = isStackAnchor
+      ? Math.max(...activeStackKeys.map((stackKey) => gridWidgetCatalog[stackKey].minWidth))
+      : gridWidgetCatalog[key].minWidth;
+    const minHeight = isStackAnchor
+      ? Math.max(...activeStackKeys.map((stackKey) => gridWidgetCatalog[stackKey].minHeight))
+      : gridWidgetCatalog[key].minHeight;
     const current = existingMap.get(key);
+    const defaultSize =
+      key === "photos" && orientation === "landscape"
+        ? { w: clampInt((photoWidthPercent * columns) / 100, 8, 16), h: 16 }
+        : defaultWidgetBoxSize(key, orientation, config);
     const preferred = current
       ? {
-          w: clampInt(current.w, minimum.minWidth, columns),
-          h: clampInt(current.h, minimum.minHeight, rows),
+          w: clampInt(current.w, minWidth, columns),
+          h: clampInt(current.h, minHeight, rows),
         }
-      : defaultWidgetBoxSize(key, orientation, config);
+      : {
+          w: clampInt(defaultSize.w, minWidth, columns),
+          h: clampInt(defaultSize.h, minHeight, rows),
+        };
 
     if (current) {
       const x = clampInt(current.x, 0, columns - preferred.w);
@@ -872,12 +916,12 @@ function arrangeOrientationItems(
     const sizesToTry: Array<{ w: number; h: number }> = [
       preferred,
       {
-        w: Math.max(minimum.minWidth, Math.floor(preferred.w * 0.75)),
-        h: Math.max(minimum.minHeight, Math.floor(preferred.h * 0.75)),
+        w: Math.max(minWidth, Math.floor(preferred.w * 0.75)),
+        h: Math.max(minHeight, Math.floor(preferred.h * 0.75)),
       },
-      { w: minimum.minWidth, h: preferred.h },
-      { w: preferred.w, h: minimum.minHeight },
-      { w: minimum.minWidth, h: minimum.minHeight },
+      { w: minWidth, h: preferred.h },
+      { w: preferred.w, h: minHeight },
+      { w: minWidth, h: minHeight },
     ];
 
     let found: DashboardGridItem | null = null;
@@ -896,9 +940,49 @@ function arrangeOrientationItems(
     placed.push(found);
   }
 
-  if (!failedToPack) return [...placed, ...inactiveItems];
-  const fallback = createDefaultDashboardGridLayout(config)[orientation];
-  return [...fallback.filter((item) => config.widgets[item.widgetId].enabled), ...inactiveItems];
+  let finalPlaced: DashboardGridItem[];
+  if (!failedToPack) {
+    finalPlaced = placed;
+  } else {
+    if (fallbackPass) throw new Error("Não foi possível organizar os widgets na grade.");
+    const fallback = createDefaultDashboardGridLayout(config)[orientation];
+    const repacked = arrangeOrientationItemsForScope(
+      enabledKeys,
+      photoWidthPercent,
+      config,
+      orientation,
+      fallback,
+      smartStack,
+      true,
+    );
+    return [
+      ...repacked.filter((item) => enabledSet.has(item.widgetId)),
+      ...inactiveItems,
+    ];
+  }
+
+  if (hasActiveStack && stackAnchor) {
+    const anchorBox = finalPlaced.find((item) => item.widgetId === stackAnchor);
+    if (anchorBox) {
+      const minW = Math.max(...activeStackKeys.map((k) => gridWidgetCatalog[k].minWidth));
+      const minH = Math.max(...activeStackKeys.map((k) => gridWidgetCatalog[k].minHeight));
+      anchorBox.w = clampInt(anchorBox.w, minW, columns);
+      anchorBox.h = clampInt(anchorBox.h, minH, rows);
+      anchorBox.x = clampInt(anchorBox.x, 0, columns - anchorBox.w);
+      anchorBox.y = clampInt(anchorBox.y, 0, rows - anchorBox.h);
+      for (const secondaryKey of activeStackKeys.slice(1)) {
+        finalPlaced.push({
+          widgetId: secondaryKey,
+          x: anchorBox.x,
+          y: anchorBox.y,
+          w: anchorBox.w,
+          h: anchorBox.h,
+        });
+      }
+    }
+  }
+
+  return [...finalPlaced, ...inactiveItems];
 }
 
 /**
@@ -910,20 +994,157 @@ function arrangeOrientationItems(
 export function autoArrangeDashboardGrid(
   config: OnlineDashboard,
   orientation?: keyof typeof gridDimensions,
+  pageId?: string,
 ): OnlineDashboard {
+  if (pageId && config.pages?.length) {
+    const nextPages = config.pages.map((page) => {
+      if (page.id !== pageId) return page;
+      const base = page.gridLayout ?? config.gridLayout ?? createDefaultDashboardGridLayout(config);
+      const photoPct = (page.layoutOptions ?? config.layoutOptions).photoWidthPercent;
+      const stack = page.smartStack ?? config.smartStack;
+      return {
+        ...page,
+        gridLayout: {
+          enabled: page.gridLayout?.enabled ?? true,
+          landscape:
+            !orientation || orientation === "landscape"
+              ? arrangeOrientationItemsForScope(
+                  page.enabledWidgets,
+                  photoPct,
+                  config,
+                  "landscape",
+                  base.landscape,
+                  stack,
+                )
+              : base.landscape.map((item) => ({ ...item })),
+          portrait:
+            !orientation || orientation === "portrait"
+              ? arrangeOrientationItemsForScope(
+                  page.enabledWidgets,
+                  photoPct,
+                  config,
+                  "portrait",
+                  base.portrait,
+                  stack,
+                )
+              : base.portrait.map((item) => ({ ...item })),
+        },
+      };
+    });
+    return { ...config, pages: nextPages };
+  }
+
   const base = config.gridLayout ?? createDefaultDashboardGridLayout(config);
+  const enabledKeys = dashboardWidgetKeys.filter((key) => config.widgets[key].enabled);
   const nextGridLayout: DashboardGridLayout = {
     enabled: config.gridLayout?.enabled ?? true,
     landscape:
       !orientation || orientation === "landscape"
-        ? arrangeOrientationItems(config, "landscape", base.landscape)
+        ? arrangeOrientationItemsForScope(
+            enabledKeys,
+            config.layoutOptions.photoWidthPercent,
+            config,
+            "landscape",
+            base.landscape,
+            config.smartStack,
+          )
         : base.landscape.map((item) => ({ ...item })),
     portrait:
       !orientation || orientation === "portrait"
-        ? arrangeOrientationItems(config, "portrait", base.portrait)
+        ? arrangeOrientationItemsForScope(
+            enabledKeys,
+            config.layoutOptions.photoWidthPercent,
+            config,
+            "portrait",
+            base.portrait,
+            config.smartStack,
+          )
         : base.portrait.map((item) => ({ ...item })),
   };
   return { ...config, gridLayout: nextGridLayout };
+}
+
+export type ResolvedPageConfig = {
+  page: DashboardPage | null;
+  pageIndex: number;
+  enabledWidgets: readonly DashboardWidgetKey[];
+  layoutOptions: OnlineDashboard["layoutOptions"];
+  gridLayout: DashboardGridLayout | undefined;
+  smartStack: SmartStackConfig | undefined;
+};
+
+/** Resolve effective configuration for one active page (or fallback to single-page panel). */
+export function resolveActivePageConfig(
+  config: OnlineDashboard,
+  pageId?: string,
+): ResolvedPageConfig {
+  if (!config.pages || config.pages.length === 0) {
+    return {
+      page: null,
+      pageIndex: 0,
+      enabledWidgets: dashboardWidgetKeys.filter((key) => config.widgets[key].enabled),
+      layoutOptions: config.layoutOptions,
+      gridLayout: config.gridLayout,
+      smartStack: config.smartStack,
+    };
+  }
+  let pageIndex = pageId ? config.pages.findIndex((page) => page.id === pageId) : 0;
+  if (pageIndex < 0) pageIndex = 0;
+  const page = config.pages[pageIndex];
+  return {
+    page,
+    pageIndex,
+    enabledWidgets: page.enabledWidgets,
+    layoutOptions: page.layoutOptions ?? config.layoutOptions,
+    gridLayout: page.gridLayout ?? config.gridLayout,
+    smartStack: page.smartStack ?? config.smartStack,
+  };
+}
+
+/** Create a new page initialized cleanly from the current dashboard layout. */
+export function createDashboardPage(
+  config: OnlineDashboard,
+  index: number,
+  title?: string,
+): DashboardPage {
+  const existingEnabled = dashboardWidgetKeys.filter((key) => config.widgets[key].enabled);
+  const enabledWidgets: DashboardWidgetKey[] =
+    existingEnabled.length > 0 ? existingEnabled : ["photos", "clock", "weather"];
+  const baseGrid = config.gridLayout
+    ? structuredClone(config.gridLayout)
+    : createDefaultDashboardGridLayout(config);
+  const cleanPageGrid: DashboardGridLayout = {
+    enabled: baseGrid.enabled,
+    landscape: arrangeOrientationItemsForScope(
+      enabledWidgets,
+      config.layoutOptions.photoWidthPercent,
+      config,
+      "landscape",
+      baseGrid.landscape,
+      config.smartStack,
+    ),
+    portrait: arrangeOrientationItemsForScope(
+      enabledWidgets,
+      config.layoutOptions.photoWidthPercent,
+      config,
+      "portrait",
+      baseGrid.portrait,
+      config.smartStack,
+    ),
+  };
+
+  const usedIds = new Set((config.pages ?? []).map((page) => page.id));
+  let pageNumber = index;
+  while (usedIds.has(`page-${pageNumber}`)) pageNumber += 1;
+
+  return {
+    id: `page-${pageNumber}`,
+    title: title?.trim() || `Página ${pageNumber}`,
+    enabledWidgets,
+    layoutOptions: { ...config.layoutOptions },
+    gridLayout: cleanPageGrid,
+    ...(config.smartStack ? { smartStack: structuredClone(config.smartStack) } : {}),
+  };
 }
 
 function validStoredGridItems(value: unknown): DashboardGridItem[] {

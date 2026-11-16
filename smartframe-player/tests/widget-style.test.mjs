@@ -179,4 +179,90 @@ test("scoped appearance normalizes presets, bounds, resets and inheritance", () 
     ],
     portrait: [{ widgetId: "photos", x: 0, y: 0, w: 12, h: 18 }],
   });
+
+  assert.equal(normalize({}).smartStack, null);
+  assert.equal(normalize({}).pages, null);
+  assert.equal(normalize({}).pageSettings, null);
+
+  const phase3Normalized = normalize({
+    layout: "photo-dashboard",
+    smartStack: {
+      enabled: true,
+      title: "  Minha Pilha  ",
+      widgets: ["clock", "clock", "unknown", "weather"],
+      intervalSeconds: 3,
+      showIndicators: false,
+    },
+    pageSettings: {
+      autoRotateSeconds: 20,
+      showIndicators: false,
+      swipeEnabled: true,
+    },
+    pages: [
+      {
+        id: "p1",
+        title: "  Principal ",
+        enabledWidgets: ["photos", "invalid", "clock"],
+        smartStack: {
+          enabled: true,
+          title: "Pilha 1",
+          widgets: ["weather", "weather"],
+          intervalSeconds: 0,
+          showIndicators: true,
+        },
+        gridLayout: {
+          enabled: true,
+          landscape: [{ widgetId: "photos", x: 0, y: 0, w: 12, h: 24 }],
+          portrait: [],
+        },
+      },
+      {
+        id: "p2",
+        title: "Secundária",
+        enabledWidgets: ["weather"],
+        layoutOptions: { photoPosition: "right", photoWidthPercent: 48 },
+      },
+      { id: "p1", title: "Duplicada", enabledWidgets: ["clock"] },
+    ],
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(phase3Normalized.smartStack)), {
+    enabled: true,
+    title: "Minha Pilha",
+    widgets: ["clock", "weather"],
+    intervalSeconds: 10,
+    showIndicators: false,
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(phase3Normalized.pageSettings)), {
+    autoRotateSeconds: 20,
+    showIndicators: false,
+    swipeEnabled: true,
+  });
+  assert.equal(phase3Normalized.pages.length, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(phase3Normalized.pages[0])), {
+    id: "p1",
+    title: "Principal",
+    enabledWidgets: ["photos", "clock"],
+    smartStack: {
+      enabled: true,
+      title: "Pilha 1",
+      widgets: ["weather"],
+      intervalSeconds: 0,
+      showIndicators: true,
+    },
+    gridLayout: {
+      enabled: true,
+      landscape: [{ widgetId: "photos", x: 0, y: 0, w: 12, h: 24 }],
+      portrait: [],
+    },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(phase3Normalized.pages[1])), {
+    id: "p2",
+    title: "Secundária",
+    enabledWidgets: ["weather"],
+    layoutOptions: {
+      photoPosition: "right",
+      photoWidthPercent: 48,
+    },
+  });
 });

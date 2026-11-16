@@ -77,6 +77,146 @@ export const dashboardGridLayoutSchema = z
 
 export type DashboardGridLayout = z.infer<typeof dashboardGridLayoutSchema>;
 
+export const dashboardLayoutOptionsSchema = z
+  .object({
+    photoPosition: z.enum(["left", "right"]).default("left"),
+    photoWidthPercent: z.number().int().min(40).max(75).default(62),
+  })
+  .strict();
+
+export const smartStackSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    title: z.string().trim().min(1).max(60).default("Smart Stack"),
+    widgets: z
+      .array(dashboardWidgetKeySchema)
+      .max(12)
+      .refine((keys) => new Set(keys).size === keys.length, "Widgets duplicados no Smart Stack")
+      .default([]),
+    intervalSeconds: z
+      .number()
+      .int()
+      .min(0)
+      .max(3600)
+      .refine((value) => value === 0 || value >= 5, "Intervalo do Smart Stack deve ser 0 ou >= 5s")
+      .default(10),
+    showIndicators: z.boolean().default(true),
+  })
+  .strict();
+
+export type SmartStackConfig = z.infer<typeof smartStackSchema>;
+
+export const dashboardPageSchema = z
+  .object({
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+    title: z.string().trim().min(1).max(60),
+    enabledWidgets: z
+      .array(dashboardWidgetKeySchema)
+      .max(dashboardWidgetKeys.length)
+      .refine((keys) => new Set(keys).size === keys.length, "Widgets duplicados na página"),
+    layoutOptions: dashboardLayoutOptionsSchema.optional(),
+    gridLayout: dashboardGridLayoutSchema.optional(),
+    smartStack: smartStackSchema.optional(),
+  })
+  .strict();
+
+export type DashboardPage = z.infer<typeof dashboardPageSchema>;
+
+export const pageSettingsSchema = z
+  .object({
+    autoRotateSeconds: z
+      .number()
+      .int()
+      .min(0)
+      .max(600)
+      .refine((value) => value === 0 || value >= 5, "Intervalo entre páginas deve ser 0 ou >= 5s")
+      .default(0),
+    showIndicators: z.boolean().default(true),
+    swipeEnabled: z.boolean().default(true),
+  })
+  .strict();
+
+export type PageSettings = z.infer<typeof pageSettingsSchema>;
+
+function validateGridLayoutForScope(
+  gridLayout: DashboardGridLayout | undefined,
+  isEnabledWidget: (key: DashboardWidgetKey) => boolean,
+  smartStack: SmartStackConfig | undefined,
+  basePath: (string | number)[],
+  ctx: z.RefinementCtx,
+) {
+  if (!gridLayout) return;
+  const activeStackKeys = smartStack?.enabled
+    ? smartStack.widgets.filter((key) => isEnabledWidget(key))
+    : [];
+  const stackSet = activeStackKeys.length >= 2 ? new Set(activeStackKeys) : null;
+
+  for (const orientation of ["landscape", "portrait"] as const) {
+    const { columns, rows } = gridDimensions[orientation];
+    const items = gridLayout[orientation];
+    const seen = new Set<DashboardWidgetKey>();
+    const stackAnchor = stackSet
+      ? items.find((item) => item.widgetId === activeStackKeys[0])
+      : undefined;
+    const effectiveItem = (item: DashboardGridItem) =>
+      stackSet && stackSet.has(item.widgetId) && stackAnchor
+        ? { ...stackAnchor, widgetId: item.widgetId }
+        : item;
+    if (stackAnchor) {
+      const minWidth = Math.max(...activeStackKeys.map((key) => gridWidgetCatalog[key].minWidth));
+      const minHeight = Math.max(...activeStackKeys.map((key) => gridWidgetCatalog[key].minHeight));
+      if (stackAnchor.w < minWidth || stackAnchor.h < minHeight) {
+        ctx.addIssue({
+          code: "custom",
+          message: "A âncora do Smart Stack é menor que o tamanho mínimo dos widgets",
+          path: [...basePath, orientation, items.indexOf(stackAnchor)],
+        });
+      }
+    }
+    items.forEach((item, index) => {
+      const path = [...basePath, orientation, index];
+      if (seen.has(item.widgetId))
+        ctx.addIssue({ code: "custom", message: "Posição duplicada", path });
+      seen.add(item.widgetId);
+      if (item.x + item.w > columns || item.y + item.h > rows)
+        ctx.addIssue({ code: "custom", message: "Widget fora da grade", path });
+      const minimum = gridWidgetCatalog[item.widgetId];
+      if (item.w < minimum.minWidth || item.h < minimum.minHeight)
+        ctx.addIssue({
+          code: "custom",
+          message: "Widget menor que o tamanho mínimo",
+          path,
+        });
+      if (
+        gridLayout.enabled &&
+        isEnabledWidget(item.widgetId) &&
+        items.slice(0, index).some((other) => {
+          if (!isEnabledWidget(other.widgetId)) return false;
+          // Widgets stacked together share the same Smart Stack slot.
+          if (stackSet && stackSet.has(item.widgetId) && stackSet.has(other.widgetId)) {
+            return false;
+          }
+          return gridItemsOverlap(effectiveItem(item), effectiveItem(other));
+        })
+      ) {
+        ctx.addIssue({ code: "custom", message: "Widgets sobrepostos", path });
+      }
+    });
+    // A grid that is in use must position every enabled widget: the player
+    // would otherwise auto-place it and could overlap explicit positions.
+    if (gridLayout.enabled) {
+      for (const key of dashboardWidgetKeys) {
+        if (!isEnabledWidget(key) || seen.has(key)) continue;
+        ctx.addIssue({
+          code: "custom",
+          message: `Widget ativado sem posição na grade de ${orientation}`,
+          path: [...basePath, orientation],
+        });
+      }
+    }
+  }
+}
+
 /** Published online configuration contains IDs, never physical paths or credentials. */
 export const onlineDashboardSchema = z
   .object({
@@ -105,13 +245,7 @@ export const onlineDashboardSchema = z
       })
       .strict()
       .prefault({}),
-    layoutOptions: z
-      .object({
-        photoPosition: z.enum(["left", "right"]).default("left"),
-        photoWidthPercent: z.number().int().min(40).max(75).default(62),
-      })
-      .strict()
-      .prefault({}),
+    layoutOptions: dashboardLayoutOptionsSchema.prefault({}),
     widgets: z
       .object({
         photos: z
@@ -274,53 +408,63 @@ export const onlineDashboardSchema = z
       .strict()
       .prefault({}),
     gridLayout: dashboardGridLayoutSchema.optional(),
+    smartStack: smartStackSchema.optional(),
+    pages: z.array(dashboardPageSchema).min(1).max(8).optional(),
+    pageSettings: pageSettingsSchema.optional(),
   })
   .strict()
   .superRefine((dashboard, ctx) => {
-    if (!dashboard.gridLayout) return;
-    for (const orientation of ["landscape", "portrait"] as const) {
-      const { columns, rows } = gridDimensions[orientation];
-      const items = dashboard.gridLayout[orientation];
-      const seen = new Set<string>();
-      items.forEach((item, index) => {
-        const path = ["gridLayout", orientation, index];
-        if (seen.has(item.widgetId))
-          ctx.addIssue({ code: "custom", message: "Posição duplicada", path });
-        seen.add(item.widgetId);
-        if (item.x + item.w > columns || item.y + item.h > rows)
-          ctx.addIssue({ code: "custom", message: "Widget fora da grade", path });
-        const minimum = gridWidgetCatalog[item.widgetId];
-        if (item.w < minimum.minWidth || item.h < minimum.minHeight)
-          ctx.addIssue({
-            code: "custom",
-            message: "Widget menor que o tamanho mínimo",
-            path,
-          });
-        if (
-          dashboard.gridLayout?.enabled &&
-          dashboard.widgets[item.widgetId].enabled &&
-          items
-            .slice(0, index)
-            .some(
-              (other) => dashboard.widgets[other.widgetId].enabled && gridItemsOverlap(item, other),
-            )
-        ) {
-          ctx.addIssue({ code: "custom", message: "Widgets sobrepostos", path });
-        }
+    validateGridLayoutForScope(
+      dashboard.gridLayout,
+      (key) => dashboard.widgets[key].enabled,
+      dashboard.smartStack,
+      ["gridLayout"],
+      ctx,
+    );
+    const rootActiveStack = dashboard.smartStack?.enabled
+      ? dashboard.smartStack.widgets.filter((key) => dashboard.widgets[key].enabled)
+      : [];
+    if (rootActiveStack.length >= 2 && !(dashboard.gridLayout && dashboard.gridLayout.enabled)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Smart Stack requer grade livre ativada",
+        path: dashboard.gridLayout ? ["gridLayout", "enabled"] : ["smartStack", "enabled"],
       });
-      // A grid that is in use must position every enabled widget: the player
-      // would otherwise auto-place it and could overlap explicit positions.
-      if (dashboard.gridLayout.enabled) {
-        for (const key of dashboardWidgetKeys) {
-          if (!dashboard.widgets[key].enabled || seen.has(key)) continue;
-          ctx.addIssue({
-            code: "custom",
-            message: `Widget ativado sem posição na grade de ${orientation}`,
-            path: ["gridLayout", orientation],
-          });
-        }
-      }
     }
+    if (!dashboard.pages) return;
+    const seenPageIds = new Set<string>();
+    dashboard.pages.forEach((page, pageIndex) => {
+      if (seenPageIds.has(page.id)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "ID de página duplicado",
+          path: ["pages", pageIndex, "id"],
+        });
+      }
+      seenPageIds.add(page.id);
+      const enabledSet = new Set(page.enabledWidgets);
+      const effectiveGrid = page.gridLayout ?? dashboard.gridLayout;
+      const effectiveStack = page.smartStack ?? dashboard.smartStack;
+      validateGridLayoutForScope(
+        effectiveGrid,
+        (key) => enabledSet.has(key),
+        effectiveStack,
+        ["pages", pageIndex, "gridLayout"],
+        ctx,
+      );
+      const activeStack = effectiveStack?.enabled
+        ? effectiveStack.widgets.filter((key) => enabledSet.has(key))
+        : [];
+      if (activeStack.length >= 2 && !(effectiveGrid && effectiveGrid.enabled)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Smart Stack requer grade livre ativada",
+          path: page.gridLayout
+            ? ["pages", pageIndex, "gridLayout", "enabled"]
+            : ["pages", pageIndex, page.smartStack ? "smartStack" : "gridLayout"],
+        });
+      }
+    });
   });
 
 export type OnlineDashboard = z.infer<typeof onlineDashboardSchema>;

@@ -8,17 +8,26 @@ type LocalKey = "notes" | "countdown" | "birthdays" | "tasks" | "pomodoro";
 
 export function LocalWidgetEditor({
   widgets,
+  checked,
+  disabled,
+  onEnabledChange,
   onChange,
   onNumericInvalid,
   onNumericIssuesRemove,
 }: {
   widgets: Widgets;
+  checked?: (key: LocalKey) => boolean;
+  disabled?: (key: LocalKey) => boolean;
+  onEnabledChange?: (key: LocalKey, enabled: boolean) => void;
   onChange: (widgets: Widgets) => void;
   onNumericInvalid: (id: string, message: string | null) => void;
   onNumericIssuesRemove: (ids: string[]) => void;
 }) {
   function update<K extends LocalKey>(key: K, value: Partial<Widgets[K]>) {
     onChange({ ...widgets, [key]: { ...widgets[key], ...value } });
+  }
+  function isEnabled(key: LocalKey) {
+    return checked?.(key) ?? widgets[key].enabled;
   }
   const id = () =>
     Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
@@ -51,12 +60,16 @@ export function LocalWidgetEditor({
           <label className="online-toggle">
             <input
               type="checkbox"
-              checked={widgets[key].enabled}
-              onChange={(event) => update(key, { enabled: event.target.checked })}
+              checked={isEnabled(key)}
+              disabled={disabled?.(key)}
+              onChange={(event) => {
+                if (onEnabledChange) onEnabledChange(key, event.target.checked);
+                else update(key, { enabled: event.target.checked });
+              }}
             />{" "}
             Ativar {label}
           </label>
-          {widgets[key].enabled && (
+          {isEnabled(key) && (
             <div>
               <label>
                 Título

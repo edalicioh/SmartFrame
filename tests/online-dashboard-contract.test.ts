@@ -3,8 +3,10 @@ import {
   applyPanelTemplate,
   defaultOnlineDashboard,
   onlineDashboardSchema,
+  pageSettingsSchema,
   panelTemplates,
   resolveScopedAppearance,
+  smartStackSchema,
 } from "@smartframe/contracts";
 
 describe("contrato do dashboard online", () => {
@@ -354,5 +356,192 @@ describe("contrato do dashboard online", () => {
       ]);
       expect(applied.widgets.pomodoro.workMinutes).toBe(40);
     }
+  });
+
+  it("valida Smart Stack com até 12 widgets únicos, intervalo >= 5s (ou 0) e slot compartilhado na grade", () => {
+    expect(smartStackSchema.parse({})).toEqual({
+      enabled: false,
+      title: "Smart Stack",
+      widgets: [],
+      intervalSeconds: 10,
+      showIndicators: true,
+    });
+    expect(smartStackSchema.safeParse({ intervalSeconds: 0 }).success).toBe(true);
+    expect(smartStackSchema.safeParse({ intervalSeconds: 4 }).success).toBe(false);
+    expect(smartStackSchema.safeParse({ widgets: ["clock", "clock"] }).success).toBe(false);
+
+    // Membros da mesma pilha podem ocupar o mesmo slot na grade sem acusar colisão.
+    const validStacked = onlineDashboardSchema.safeParse({
+      widgets: {
+        photos: { enabled: true },
+        clock: { enabled: true },
+        weather: { enabled: true },
+        currencies: { enabled: false },
+        calendar: { enabled: false },
+      },
+      smartStack: {
+        enabled: true,
+        title: "Rotativo",
+        widgets: ["clock", "weather"],
+        intervalSeconds: 15,
+        showIndicators: true,
+      },
+      gridLayout: {
+        enabled: true,
+        landscape: [
+          { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+          { widgetId: "clock", x: 14, y: 0, w: 10, h: 12 },
+          { widgetId: "weather", x: 14, y: 0, w: 10, h: 12 },
+        ],
+        portrait: [
+          { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+          { widgetId: "clock", x: 0, y: 20, w: 12, h: 10 },
+          { widgetId: "weather", x: 0, y: 20, w: 12, h: 10 },
+        ],
+      },
+    });
+    expect(validStacked.success).toBe(true);
+
+    const undersizedAnchor = onlineDashboardSchema.safeParse({
+      widgets: {
+        photos: { enabled: true },
+        clock: { enabled: true },
+        weather: { enabled: false },
+        currencies: { enabled: false },
+        calendar: { enabled: false },
+      },
+      smartStack: { enabled: true, widgets: ["clock", "photos"] },
+      gridLayout: {
+        enabled: true,
+        landscape: [
+          { widgetId: "clock", x: 0, y: 0, w: 3, h: 2 },
+          { widgetId: "photos", x: 4, y: 0, w: 4, h: 4 },
+        ],
+        portrait: [
+          { widgetId: "clock", x: 0, y: 0, w: 3, h: 2 },
+          { widgetId: "photos", x: 4, y: 0, w: 4, h: 4 },
+        ],
+      },
+    });
+    expect(undersizedAnchor.success).toBe(false);
+
+    // A non-stack widget may occupy a secondary member's obsolete position:
+    // the player renders that member in the first stack member's anchor box.
+    const oldSecondaryPositionOverlap = onlineDashboardSchema.safeParse({
+      widgets: {
+        photos: { enabled: true },
+        clock: { enabled: true },
+        weather: { enabled: true },
+        currencies: { enabled: false },
+        calendar: { enabled: false },
+      },
+      smartStack: { enabled: true, widgets: ["clock", "weather"] },
+      gridLayout: {
+        enabled: true,
+        landscape: [
+          { widgetId: "clock", x: 0, y: 0, w: 4, h: 4 },
+          { widgetId: "weather", x: 8, y: 8, w: 4, h: 4 },
+          { widgetId: "photos", x: 8, y: 8, w: 4, h: 4 },
+        ],
+        portrait: [
+          { widgetId: "clock", x: 0, y: 0, w: 4, h: 4 },
+          { widgetId: "weather", x: 6, y: 6, w: 4, h: 4 },
+          { widgetId: "photos", x: 6, y: 6, w: 4, h: 4 },
+        ],
+      },
+    });
+    expect(oldSecondaryPositionOverlap.success).toBe(true);
+
+    // Ainda rejeita colisão entre membro da pilha e widget fora da pilha.
+    const overlappingNonStack = onlineDashboardSchema.safeParse({
+      widgets: {
+        photos: { enabled: true },
+        clock: { enabled: true },
+        weather: { enabled: true },
+        currencies: { enabled: false },
+        calendar: { enabled: false },
+      },
+      smartStack: {
+        enabled: true,
+        title: "Rotativo",
+        widgets: ["clock", "weather"],
+      },
+      gridLayout: {
+        enabled: true,
+        landscape: [
+          { widgetId: "photos", x: 0, y: 0, w: 16, h: 24 },
+          { widgetId: "clock", x: 14, y: 0, w: 10, h: 12 },
+          { widgetId: "weather", x: 14, y: 0, w: 10, h: 12 },
+        ],
+        portrait: [
+          { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+          { widgetId: "clock", x: 0, y: 20, w: 12, h: 10 },
+          { widgetId: "weather", x: 0, y: 20, w: 12, h: 10 },
+        ],
+      },
+    });
+    expect(overlappingNonStack.success).toBe(false);
+  });
+
+  it("valida múltiplas páginas (1..8) com IDs únicos e pageSettings", () => {
+    expect(pageSettingsSchema.parse({})).toEqual({
+      autoRotateSeconds: 0,
+      showIndicators: true,
+      swipeEnabled: true,
+    });
+    expect(pageSettingsSchema.safeParse({ autoRotateSeconds: 3 }).success).toBe(false);
+    expect(pageSettingsSchema.safeParse({ autoRotateSeconds: 5 }).success).toBe(true);
+
+    const validPages = onlineDashboardSchema.safeParse({
+      pageSettings: { autoRotateSeconds: 20, showIndicators: true, swipeEnabled: true },
+      pages: [
+        {
+          id: "page-1",
+          title: "Principal",
+          enabledWidgets: ["photos", "clock"],
+          gridLayout: {
+            enabled: true,
+            landscape: [
+              { widgetId: "photos", x: 0, y: 0, w: 16, h: 24 },
+              { widgetId: "clock", x: 16, y: 0, w: 8, h: 8 },
+            ],
+            portrait: [
+              { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+              { widgetId: "clock", x: 0, y: 20, w: 12, h: 8 },
+            ],
+          },
+        },
+        {
+          id: "page-2",
+          title: "Resumo",
+          enabledWidgets: ["weather"],
+        },
+      ],
+    });
+    expect(validPages.success).toBe(true);
+
+    // IDs duplicados ou 9 páginas devem falhar.
+    expect(
+      onlineDashboardSchema.safeParse({
+        pages: [
+          { id: "dup", title: "A", enabledWidgets: ["photos"] },
+          { id: "dup", title: "B", enabledWidgets: ["clock"] },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      onlineDashboardSchema.safeParse({
+        pages: Array.from({ length: 9 }, (_, i) => ({
+          id: `p-${i + 1}`,
+          title: `P${i + 1}`,
+          enabledWidgets: ["photos"],
+        })),
+      }).success,
+    ).toBe(false);
+    expect(
+      onlineDashboardSchema.safeParse({
+        pages: [],
+      }).success,
+    ).toBe(false);
   });
 });

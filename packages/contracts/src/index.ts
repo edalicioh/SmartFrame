@@ -4,8 +4,21 @@ export { photoFrameSchema, defaultPhotoFrame } from "./photo-frame";
 export type { PhotoFrame } from "./photo-frame";
 export { widgetDataSchema, defaultWidgetSettings } from "./photo-frame";
 export type { WidgetData } from "./photo-frame";
-export { onlineDashboardSchema, defaultOnlineDashboard } from "./online-dashboard";
-export type { GridBox, OnlineDashboard, OnlineDashboardState } from "./online-dashboard";
+export {
+  onlineDashboardSchema,
+  defaultOnlineDashboard,
+  smartStackSchema,
+  dashboardPageSchema,
+  pageSettingsSchema,
+} from "./online-dashboard";
+export type {
+  DashboardPage,
+  GridBox,
+  OnlineDashboard,
+  OnlineDashboardState,
+  PageSettings,
+  SmartStackConfig,
+} from "./online-dashboard";
 export {
   appearancePresets,
   appearancePresetSchema,
@@ -23,6 +36,7 @@ export {
   applyPanelTemplate,
   autoArrangeDashboardGrid,
   convertOnlineDashboardToGrid,
+  createDashboardPage,
   createDefaultDashboardGridLayout,
   createGridWidget,
   dashboardGridItemSchema,
@@ -37,6 +51,7 @@ export {
   panelTemplates,
   readOnlineDashboard,
   readStoredOnlineDashboard,
+  resolveActivePageConfig,
   widgetGridDashboardSchema,
 } from "./widget-grid";
 export type {
@@ -47,6 +62,7 @@ export type {
   GridWidget,
   PanelTemplate,
   PanelTemplateId,
+  ResolvedPageConfig,
   WidgetGridDashboard,
 } from "./widget-grid";
 export {

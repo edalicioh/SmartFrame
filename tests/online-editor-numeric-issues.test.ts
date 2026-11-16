@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clearNumericIssuesForDisabledWidgets,
+  clearNumericIssuesForHiddenWidgets,
   widgetKeyFromNumericIssue,
 } from "../apps/web/src/lib/online-editor/numeric-issues";
 
@@ -105,5 +106,21 @@ describe("clearNumericIssuesForDisabledWidgets", () => {
         { notes: { enabled: false } },
       ),
     ).toBe(issues);
+  });
+
+  it("remove erros dos widgets locais ocultos na página ativa", () => {
+    expect(
+      clearNumericIssuesForHiddenWidgets(
+        {
+          "notes.interval": "Informe um valor.",
+          "pomodoro.work": "Informe um valor.",
+          "photos.interval": "Informe um valor.",
+        },
+        new Set(["pomodoro", "photos"]),
+      ),
+    ).toEqual({
+      "pomodoro.work": "Informe um valor.",
+      "photos.interval": "Informe um valor.",
+    });
   });
 });

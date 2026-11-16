@@ -9,27 +9,37 @@ import {
   movePhotoSelection,
   removePhotoSelection,
 } from "@/lib/online-editor/photos";
-import { ensureGridLayoutValid } from "@/lib/online-editor/grid-layout";
-import { clearNumericIssuesForDisabledWidgets } from "@/lib/online-editor/numeric-issues";
+import { ensureGridLayoutValid, setGridLayoutEnabled } from "@/lib/online-editor/grid-layout";
+import {
+  clearNumericIssuesForDisabledWidgets,
+  clearNumericIssuesForHiddenWidgets,
+} from "@/lib/online-editor/numeric-issues";
 import {
   appearancePresets,
   applyPanelTemplate,
   autoArrangeDashboardGrid,
+  createDashboardPage,
   createDefaultDashboardGridLayout,
   currencyCodes,
+  dashboardWidgetKeys,
   defaultOnlineDashboard,
   gridDimensions,
   gridItemsOverlap,
   gridWidgetCatalog,
   onlineDashboardSchema,
   panelTemplates,
+  resolveActivePageConfig,
   resolveScopedAppearance,
   type AppearancePreset,
   type DashboardGridItem,
+  type DashboardGridLayout,
+  type DashboardPage,
   type DashboardWidgetKey,
   type OnlineDashboard,
+  type PageSettings,
   type PanelTemplateId,
   type ScopedAppearance,
+  type SmartStackConfig,
   type WidgetAppearanceOverride,
 } from "@smartframe/contracts";
 
@@ -235,14 +245,28 @@ function clampGridValue(value: number, min: number, max: number): number {
 
 function GridLayoutEditor({
   config,
+  pageId,
   disabled,
   onChange,
 }: {
   config: OnlineDashboard;
+  pageId?: string;
   disabled: boolean;
   onChange: (next: OnlineDashboard) => void;
 }) {
-  const gridLayout = config.gridLayout;
+  const scope = resolveActivePageConfig(config, pageId);
+  const gridLayout = scope.gridLayout;
+  const enabledSet = useMemo(() => new Set(scope.enabledWidgets), [scope.enabledWidgets]);
+  const activeStackKeys = useMemo(() => {
+    if (!scope.smartStack?.enabled) return [];
+    const list = scope.smartStack.widgets.filter((key) => enabledSet.has(key));
+    return list.length >= 2 ? list : [];
+  }, [scope.smartStack, enabledSet]);
+  const stackAnchor = activeStackKeys[0] ?? null;
+  const secondaryStackSet = useMemo(
+    () => (activeStackKeys.length >= 2 ? new Set(activeStackKeys.slice(1)) : null),
+    [activeStackKeys],
+  );
   const orientation = config.orientation;
   const dims = gridDimensions[orientation];
   const allItems = useMemo(
@@ -250,8 +274,13 @@ function GridLayoutEditor({
     [gridLayout, orientation],
   );
   const activeItems = useMemo(
-    () => allItems.filter((item) => config.widgets[item.widgetId].enabled),
-    [allItems, config.widgets],
+    () =>
+      allItems.filter(
+        (item) =>
+          enabledSet.has(item.widgetId) &&
+          (!secondaryStackSet || !secondaryStackSet.has(item.widgetId)),
+      ),
+    [allItems, enabledSet, secondaryStackSet],
   );
   const [selectedId, setSelectedId] = useState<DashboardWidgetKey>("photos");
   const [gridFeedback, setGridFeedback] = useState("");
@@ -264,20 +293,56 @@ function GridLayoutEditor({
   const selectedItem =
     activeItems.find((item) => item.widgetId === resolvedSelectedId) ?? activeItems[0] ?? null;
 
-  function commitOrientationItems(nextActive: DashboardGridItem[]) {
+  function minimumForWidget(widgetId: DashboardWidgetKey) {
+    if (widgetId === stackAnchor && activeStackKeys.length >= 2) {
+      return {
+        label: `${scope.smartStack?.title || "Smart Stack"} (${activeStackKeys.length})`,
+        minWidth: Math.max(...activeStackKeys.map((k) => gridWidgetCatalog[k].minWidth)),
+        minHeight: Math.max(...activeStackKeys.map((k) => gridWidgetCatalog[k].minHeight)),
+      };
+    }
+    return gridWidgetCatalog[widgetId];
+  }
+
+  function commitOrientationItems(nextVisible: DashboardGridItem[]) {
     if (!gridLayout) return;
-    const inactive = allItems.filter((item) => !config.widgets[item.widgetId].enabled);
+    const anchorUpdated = stackAnchor
+      ? nextVisible.find((item) => item.widgetId === stackAnchor)
+      : null;
+    const expanded = [...nextVisible];
+    if (anchorUpdated && activeStackKeys.length >= 2) {
+      for (const secondaryKey of activeStackKeys.slice(1)) {
+        expanded.push({
+          widgetId: secondaryKey,
+          x: anchorUpdated.x,
+          y: anchorUpdated.y,
+          w: anchorUpdated.w,
+          h: anchorUpdated.h,
+        });
+      }
+    }
+    const inactive = allItems.filter((item) => !enabledSet.has(item.widgetId));
+    const nextGridLayout: DashboardGridLayout = {
+      ...gridLayout,
+      [orientation]: [...expanded, ...inactive],
+    };
+    if (scope.page && config.pages?.length) {
+      onChange({
+        ...config,
+        pages: config.pages.map((p) =>
+          p.id === scope.page!.id ? { ...p, gridLayout: nextGridLayout } : p,
+        ),
+      });
+      return;
+    }
     onChange({
       ...config,
-      gridLayout: {
-        ...gridLayout,
-        [orientation]: [...nextActive, ...inactive],
-      },
+      gridLayout: nextGridLayout,
     });
   }
 
   function tryUpdateItem(candidate: DashboardGridItem): { ok: boolean; error?: string } {
-    const min = gridWidgetCatalog[candidate.widgetId];
+    const min = minimumForWidget(candidate.widgetId);
     if (candidate.w < min.minWidth || candidate.h < min.minHeight) {
       return {
         ok: false,
@@ -298,7 +363,7 @@ function GridLayoutEditor({
     if (blocker) {
       return {
         ok: false,
-        error: `Conflito de espaço com ${gridWidgetCatalog[blocker.widgetId].label}.`,
+        error: `Conflito de espaço com ${minimumForWidget(blocker.widgetId).label}.`,
       };
     }
     const current = activeItems.find((item) => item.widgetId === candidate.widgetId);
@@ -348,7 +413,7 @@ function GridLayoutEditor({
     if (!rect.width || !rect.height) return;
     const dx = Math.round(((event.clientX - dragState.startX) / rect.width) * dims.columns);
     const dy = Math.round(((event.clientY - dragState.startY) / rect.height) * dims.rows);
-    const min = gridWidgetCatalog[dragState.widgetId];
+    const min = minimumForWidget(dragState.widgetId);
     const origin = dragState.origin;
     const candidate: DashboardGridItem =
       dragState.mode === "move"
@@ -411,7 +476,7 @@ function GridLayoutEditor({
           type="button"
           onClick={() => {
             setGridFeedback("");
-            onChange(autoArrangeDashboardGrid(config, orientation));
+            onChange(autoArrangeDashboardGrid(config, orientation, scope.page?.id));
           }}
         >
           Organizar automaticamente sem colisões
@@ -444,12 +509,13 @@ function GridLayoutEditor({
         {activeItems.map((item) => {
           const isSelected = selectedItem?.widgetId === item.widgetId;
           const isBlocked = dragState?.widgetId === item.widgetId && dragState.blocked;
+          const meta = minimumForWidget(item.widgetId);
           return (
             <div
               key={item.widgetId}
               role="button"
               tabIndex={disabled ? -1 : 0}
-              aria-label={`${gridWidgetCatalog[item.widgetId].label} (${item.w}×${item.h} em ${item.x},${item.y})`}
+              aria-label={`${meta.label} (${item.w}×${item.h} em ${item.x},${item.y})`}
               aria-pressed={isSelected}
               className={`online-grid-item${isSelected ? " is-selected" : ""}${isBlocked ? " is-blocked" : ""}`}
               style={{
@@ -470,13 +536,13 @@ function GridLayoutEditor({
               }}
               onPointerDown={(event) => startPointerInteraction(event, item, "move")}
             >
-              <strong>{gridWidgetCatalog[item.widgetId].label}</strong>
+              <strong>{meta.label}</strong>
               <span>
                 {item.w}×{item.h} · ({item.x},{item.y})
               </span>
               <span
                 className="online-grid-resize-handle"
-                title={`Redimensionar ${gridWidgetCatalog[item.widgetId].label}`}
+                title={`Redimensionar ${meta.label}`}
                 aria-hidden="true"
                 onPointerDown={(event) => startPointerInteraction(event, item, "resize")}
               />
@@ -497,7 +563,7 @@ function GridLayoutEditor({
             >
               {activeItems.map((item) => (
                 <option key={item.widgetId} value={item.widgetId}>
-                  {gridWidgetCatalog[item.widgetId].label}
+                  {minimumForWidget(item.widgetId).label}
                 </option>
               ))}
             </select>
@@ -509,13 +575,13 @@ function GridLayoutEditor({
               [
                 "w",
                 "Largura (W)",
-                gridWidgetCatalog[selectedItem.widgetId].minWidth,
+                minimumForWidget(selectedItem.widgetId).minWidth,
                 dims.columns - selectedItem.x,
               ],
               [
                 "h",
                 "Altura (H)",
-                gridWidgetCatalog[selectedItem.widgetId].minHeight,
+                minimumForWidget(selectedItem.widgetId).minHeight,
                 dims.rows - selectedItem.y,
               ],
             ] as const
@@ -641,6 +707,7 @@ export function OnlineFrameEditor() {
   const [photoAnnouncement, setPhotoAnnouncement] = useState("");
   const [photoUploadStatus, setPhotoUploadStatus] = useState("");
   const [numericIssues, setNumericIssues] = useState<Record<string, string>>({});
+  const [activePageId, setActivePageId] = useState("");
   const photoInput = useRef<HTMLInputElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
   const operation = useRef(false);
@@ -660,6 +727,22 @@ export function OnlineFrameEditor() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  const resolvedPage = useMemo(
+    () => resolveActivePageConfig(config, activePageId || undefined),
+    [config, activePageId],
+  );
+  const currentPageSettings: PageSettings = config.pageSettings ?? {
+    autoRotateSeconds: 0,
+    showIndicators: true,
+    swipeEnabled: true,
+  };
+  const activeSmartStack: SmartStackConfig = resolvedPage.smartStack ?? {
+    enabled: false,
+    title: "Smart Stack",
+    widgets: [],
+    intervalSeconds: 10,
+    showIndicators: true,
+  };
   const readyPhotos = useMemo(() => photos.filter((photo) => photo.status === "ready"), [photos]);
   const hasPendingPhotos = photos.some(pendingPhoto);
   const previewConfig = useMemo(() => {
@@ -726,12 +809,17 @@ export function OnlineFrameEditor() {
     };
   }, [panelId, widgetSettings]);
 
+  const previewPageId = resolvedPage.page?.id ?? "";
   const sendPreview = useCallback(() => {
     frame.current?.contentWindow?.postMessage(
-      { type: "smartframe:online-preview", config: previewConfig },
+      {
+        type: "smartframe:online-preview",
+        config: previewConfig,
+        activePageId: previewPageId,
+      },
       window.location.origin,
     );
-  }, [previewConfig]);
+  }, [previewConfig, previewPageId]);
   useEffect(() => {
     sendPreview();
   }, [sendPreview]);
@@ -941,11 +1029,26 @@ export function OnlineFrameEditor() {
     // Widgets whose numeric fields unmount when disabled must not keep
     // blocking save with an error the user can no longer see. Always-mounted
     // fields keep their issue because the invalid draft stays visible.
+    const visibleWidgetKeys = new Set(
+      resolveActivePageConfig(arranged, activePageId || undefined).enabledWidgets,
+    );
     setNumericIssues((current) =>
-      clearNumericIssuesForDisabledWidgets(current, config.widgets, arranged.widgets),
+      clearNumericIssuesForHiddenWidgets(
+        clearNumericIssuesForDisabledWidgets(current, config.widgets, arranged.widgets),
+        visibleWidgetKeys,
+      ),
     );
     setDirty(true);
     setNotice("");
+  }
+  function changeActivePage(pageId: string, nextConfig: OnlineDashboard = config) {
+    const visibleWidgetKeys = new Set(
+      resolveActivePageConfig(nextConfig, pageId || undefined).enabledWidgets,
+    );
+    setNumericIssues((current) =>
+      clearNumericIssuesForHiddenWidgets(current, visibleWidgetKeys),
+    );
+    setActivePageId(pageId);
   }
   function setNumericIssue(id: string, message: string | null) {
     setNumericIssues((current) => {
@@ -974,6 +1077,145 @@ export function OnlineFrameEditor() {
     }
     change({ ...config, theme, appearance: next });
   }
+
+  function setWidgetEnabled(
+    baseWidgets: OnlineDashboard["widgets"],
+    isEnabled: (key: DashboardWidgetKey) => boolean,
+  ): OnlineDashboard["widgets"] {
+    return {
+      photos: { ...baseWidgets.photos, enabled: isEnabled("photos") },
+      clock: { ...baseWidgets.clock, enabled: isEnabled("clock") },
+      weather: { ...baseWidgets.weather, enabled: isEnabled("weather") },
+      currencies: { ...baseWidgets.currencies, enabled: isEnabled("currencies") },
+      calendar: { ...baseWidgets.calendar, enabled: isEnabled("calendar") },
+      notes: { ...baseWidgets.notes, enabled: isEnabled("notes") },
+      countdown: { ...baseWidgets.countdown, enabled: isEnabled("countdown") },
+      birthdays: { ...baseWidgets.birthdays, enabled: isEnabled("birthdays") },
+      tasks: { ...baseWidgets.tasks, enabled: isEnabled("tasks") },
+      pomodoro: { ...baseWidgets.pomodoro, enabled: isEnabled("pomodoro") },
+    };
+  }
+
+  function syncGlobalWidgetsFromPages(
+    baseWidgets: OnlineDashboard["widgets"],
+    pages: DashboardPage[],
+  ): OnlineDashboard["widgets"] {
+    const activeAnywhere = new Set<DashboardWidgetKey>();
+    for (const page of pages) {
+      for (const key of page.enabledWidgets) activeAnywhere.add(key);
+    }
+    return setWidgetEnabled(baseWidgets, (key) => activeAnywhere.has(key));
+  }
+
+  function updateActiveScope(
+    updater: (scope: {
+      enabledWidgets: readonly DashboardWidgetKey[];
+      layoutOptions: OnlineDashboard["layoutOptions"];
+      gridLayout?: DashboardGridLayout;
+      smartStack?: SmartStackConfig;
+    }) => {
+      enabledWidgets?: readonly DashboardWidgetKey[];
+      layoutOptions?: OnlineDashboard["layoutOptions"];
+      gridLayout?: DashboardGridLayout;
+      smartStack?: SmartStackConfig;
+    },
+  ) {
+    if (config.pages && config.pages.length > 0) {
+      const targetId = resolvedPage.page?.id ?? config.pages[0].id;
+      const patch = updater({
+        enabledWidgets: resolvedPage.enabledWidgets,
+        layoutOptions: resolvedPage.layoutOptions,
+        gridLayout: resolvedPage.gridLayout,
+        smartStack: resolvedPage.smartStack,
+      });
+      const nextPages = config.pages.map((page) =>
+        page.id === targetId
+          ? {
+              ...page,
+              ...(patch.enabledWidgets ? { enabledWidgets: [...patch.enabledWidgets] } : {}),
+              ...(patch.layoutOptions ? { layoutOptions: patch.layoutOptions } : {}),
+              ...("gridLayout" in patch ? { gridLayout: patch.gridLayout } : {}),
+              ...("smartStack" in patch ? { smartStack: patch.smartStack } : {}),
+            }
+          : page,
+      );
+      change({
+        ...config,
+        pages: nextPages,
+        widgets: syncGlobalWidgetsFromPages(config.widgets, nextPages),
+      });
+      return;
+    }
+
+    const patch = updater({
+      enabledWidgets: resolvedPage.enabledWidgets,
+      layoutOptions: config.layoutOptions,
+      gridLayout: config.gridLayout,
+      smartStack: config.smartStack,
+    });
+    let nextWidgets = config.widgets;
+    if (patch.enabledWidgets) {
+      const enabledSet = new Set(patch.enabledWidgets);
+      nextWidgets = setWidgetEnabled(config.widgets, (key) => enabledSet.has(key));
+    }
+    change({
+      ...config,
+      widgets: nextWidgets,
+      ...(patch.layoutOptions ? { layoutOptions: patch.layoutOptions } : {}),
+      ...("gridLayout" in patch ? { gridLayout: patch.gridLayout } : {}),
+      ...("smartStack" in patch ? { smartStack: patch.smartStack } : {}),
+    });
+  }
+
+  function updatePageSettings(patch: Partial<PageSettings>) {
+    change({
+      ...config,
+      pageSettings: {
+        ...currentPageSettings,
+        ...patch,
+      },
+    });
+  }
+
+  function updateSmartStack(patch: Partial<SmartStackConfig>) {
+    const rawWidgets = patch.widgets ?? activeSmartStack.widgets;
+    const dedupedWidgets = [...new Set(rawWidgets)].filter((key) =>
+      dashboardWidgetKeys.includes(key),
+    );
+    const enablingNow = patch.enabled === true && !activeSmartStack.enabled;
+    const initialStackWidgets =
+      enablingNow && dedupedWidgets.length === 0
+        ? resolvedPage.enabledWidgets.slice(0, 2)
+        : dedupedWidgets;
+
+    const nextStack: SmartStackConfig = {
+      ...activeSmartStack,
+      ...patch,
+      widgets: initialStackWidgets.slice(0, 12),
+    };
+
+    updateActiveScope((scope) => {
+      if (!nextStack.enabled || nextStack.widgets.length === 0) {
+        return { smartStack: nextStack };
+      }
+      const nextEnabled = [...new Set([...scope.enabledWidgets, ...nextStack.widgets])];
+      return {
+        enabledWidgets: nextEnabled,
+        ...(enablingNow
+          ? {
+              gridLayout: {
+                ...(scope.gridLayout ??
+                  resolvedPage.gridLayout ??
+                  createDefaultDashboardGridLayout(config)),
+                enabled: true,
+              },
+            }
+          : {}),
+        smartStack: nextStack,
+      };
+    });
+  }
+
   function chooseDevice(nextId: string) {
     if (operation.current || loading) return;
     setDeviceId(nextId);
@@ -984,6 +1226,7 @@ export function OnlineFrameEditor() {
       return;
     selectedId.current = nextId;
     setPanelId(nextId);
+    setActivePageId("");
     setNumericIssues({});
     setError("");
     setState(null);
@@ -1229,11 +1472,27 @@ export function OnlineFrameEditor() {
     }
   }
 
-  const widget = (key: keyof OnlineDashboard["widgets"], enabled: boolean) =>
+  const widget = (key: DashboardWidgetKey, enabled: boolean) => {
+    if (config.pages && config.pages.length > 0) {
+      const current = resolvedPage.enabledWidgets;
+      if (!enabled && current.length <= 1 && current.includes(key)) return;
+      const nextEnabled = enabled
+        ? [...new Set([...current, key])]
+        : current.filter((item) => item !== key);
+      const filteredStack = activeSmartStack.widgets.filter((item) => nextEnabled.includes(item));
+      updateActiveScope(() => ({
+        enabledWidgets: nextEnabled,
+        ...(resolvedPage.smartStack
+          ? { smartStack: { ...activeSmartStack, widgets: filteredStack } }
+          : {}),
+      }));
+      return;
+    }
     change({
       ...config,
       widgets: { ...config.widgets, [key]: { ...config.widgets[key], enabled } },
     });
+  };
   const movePhoto = (_id: string, index: number, delta: number) => {
     const ids = movePhotoSelection(config.widgets.photos.photoIds, index, delta);
     if (ids === config.widgets.photos.photoIds) return;
@@ -1249,6 +1508,18 @@ export function OnlineFrameEditor() {
     );
   };
   const controlsDisabled = !!busy || loading || !state;
+  const widgetChecked = (key: DashboardWidgetKey) =>
+    config.pages && config.pages.length > 0
+      ? resolvedPage.enabledWidgets.includes(key)
+      : config.widgets[key].enabled;
+  const widgetToggleDisabled = (key: DashboardWidgetKey) =>
+    controlsDisabled ||
+    Boolean(
+      config.pages &&
+      config.pages.length > 0 &&
+      resolvedPage.enabledWidgets.length <= 1 &&
+      resolvedPage.enabledWidgets.includes(key),
+    );
   const selectedPhotoIds = config.widgets.photos.photoIds;
   const numericError = Object.keys(numericIssues).length
     ? `Corrija os campos numéricos: ${Object.keys(numericIssues)
@@ -1662,7 +1933,8 @@ export function OnlineFrameEditor() {
                     <label className="online-toggle">
                       <input
                         type="checkbox"
-                        checked={config.widgets[key].enabled}
+                        disabled={widgetToggleDisabled(key)}
+                        checked={widgetChecked(key)}
                         onChange={(event) => widget(key, event.target.checked)}
                       />
                       {label}
@@ -1682,7 +1954,8 @@ export function OnlineFrameEditor() {
                   <label className="online-toggle">
                     <input
                       type="checkbox"
-                      checked={config.widgets.photos.enabled}
+                      disabled={widgetToggleDisabled("photos")}
+                      checked={widgetChecked("photos")}
                       onChange={(event) => widget("photos", event.target.checked)}
                     />
                     Fotos
@@ -1939,6 +2212,9 @@ export function OnlineFrameEditor() {
                 <legend>Widgets adicionais</legend>
                 <LocalWidgetEditor
                   widgets={config.widgets}
+                  checked={widgetChecked}
+                  disabled={widgetToggleDisabled}
+                  onEnabledChange={widget}
                   onChange={(widgets) => change({ ...config, widgets })}
                   onNumericInvalid={setNumericIssue}
                   onNumericIssuesRemove={clearNumericIssues}
@@ -1967,7 +2243,48 @@ export function OnlineFrameEditor() {
                         <button
                           type="button"
                           onClick={() => {
-                            change(applyPanelTemplate(config, template.id as PanelTemplateId));
+                            // Templates are applied to one page at a time. Remove pages
+                            // while building the template result so inherited page grids
+                            // aren't validated against the new root template grid.
+                            const templateBase = { ...config };
+                            delete templateBase.pages;
+                            const templated = applyPanelTemplate(
+                              templateBase,
+                              template.id as PanelTemplateId,
+                            );
+                            if (config.pages && config.pages.length > 0) {
+                              const targetId = resolvedPage.page?.id ?? config.pages[0].id;
+                              const nextEnabled = dashboardWidgetKeys.filter(
+                                (key) => templated.widgets[key].enabled,
+                              );
+                              const nextPages = config.pages.map((page) =>
+                                page.id === targetId
+                                  ? {
+                                      ...page,
+                                      enabledWidgets: nextEnabled,
+                                      layoutOptions: { ...templated.layoutOptions },
+                                      gridLayout: {
+                                        enabled: templated.gridLayout!.enabled,
+                                        landscape: templated.gridLayout!.landscape.map((item) => ({
+                                          ...item,
+                                        })),
+                                        portrait: templated.gridLayout!.portrait.map((item) => ({
+                                          ...item,
+                                        })),
+                                      },
+                                    }
+                                  : page,
+                              );
+                              change({
+                                ...config,
+                                theme: templated.theme,
+                                appearance: templated.appearance,
+                                pages: nextPages,
+                                widgets: syncGlobalWidgetsFromPages(config.widgets, nextPages),
+                              });
+                            } else {
+                              change(templated);
+                            }
                             setNotice(`Template "${template.name}" aplicado ao rascunho.`);
                           }}
                         >
@@ -1978,31 +2295,402 @@ export function OnlineFrameEditor() {
                   </div>
                 </fieldset>
                 <fieldset>
+                  <legend>Múltiplas páginas e Smart Stack</legend>
+                  <label>
+                    Estrutura do painel
+                    <select
+                      disabled={controlsDisabled}
+                      value={config.pages?.length ? "multi" : "single"}
+                      onChange={(event) => {
+                        if (event.target.value === "multi") {
+                          const firstPage = createDashboardPage(config, 0, "Principal");
+                          const nextConfig = {
+                            ...config,
+                            pages: [firstPage],
+                            pageSettings: currentPageSettings,
+                          };
+                          change(nextConfig);
+                          changeActivePage(firstPage.id, nextConfig);
+                          return;
+                        }
+                        const enabledSet = new Set(resolvedPage.enabledWidgets);
+                        const nextWidgets = setWidgetEnabled(config.widgets, (key) =>
+                          enabledSet.has(key),
+                        );
+                        const nextConfig: OnlineDashboard = {
+                          ...config,
+                          widgets: nextWidgets,
+                          layoutOptions: resolvedPage.layoutOptions,
+                          gridLayout: resolvedPage.gridLayout,
+                          smartStack: resolvedPage.smartStack,
+                        };
+                        delete nextConfig.pages;
+                        delete nextConfig.pageSettings;
+                        change(nextConfig);
+                        changeActivePage("", nextConfig);
+                      }}
+                    >
+                      <option value="single">Página única (padrão)</option>
+                      <option value="multi">Múltiplas páginas (até 8 páginas)</option>
+                    </select>
+                  </label>
+                  {config.pages && config.pages.length > 0 && (
+                    <>
+                      <div className="online-pages-bar">
+                        {config.pages.map((page, index) => {
+                          const isCurrent = page.id === resolvedPage.page?.id;
+                          return (
+                            <button
+                              key={page.id}
+                              type="button"
+                              className={
+                                isCurrent ? "online-page-tab is-active" : "online-page-tab"
+                              }
+                              onClick={() => changeActivePage(page.id)}
+                            >
+                              {index + 1}. {page.title || `Página ${index + 1}`}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          disabled={controlsDisabled || config.pages.length >= 8}
+                          onClick={() => {
+                            const nextPage = createDashboardPage(config, config.pages!.length);
+                            const nextPages = [...config.pages!, nextPage];
+                            const nextConfig = {
+                              ...config,
+                              pages: nextPages,
+                              widgets: syncGlobalWidgetsFromPages(config.widgets, nextPages),
+                            };
+                            change(nextConfig);
+                            changeActivePage(nextPage.id, nextConfig);
+                          }}
+                        >
+                          + Nova página
+                        </button>
+                      </div>
+                      <label>
+                        Título da página atual
+                        <input
+                          type="text"
+                          maxLength={40}
+                          disabled={controlsDisabled}
+                          value={resolvedPage.page?.title ?? ""}
+                          onChange={(event) => {
+                            const nextTitle = event.target.value;
+                            const targetId = resolvedPage.page?.id ?? config.pages![0].id;
+                            change({
+                              ...config,
+                              pages: config.pages!.map((page) =>
+                                page.id === targetId ? { ...page, title: nextTitle } : page,
+                              ),
+                            });
+                          }}
+                          onBlur={() => {
+                            const targetId = resolvedPage.page?.id ?? config.pages![0].id;
+                            const targetIndex = config.pages!.findIndex((p) => p.id === targetId);
+                            if (targetIndex === -1) return;
+                            const trimmed = config.pages![targetIndex].title.trim();
+                            if (!trimmed) {
+                              change({
+                                ...config,
+                                pages: config.pages!.map((page, index) =>
+                                  page.id === targetId
+                                    ? { ...page, title: `Página ${index + 1}` }
+                                    : page,
+                                ),
+                              });
+                            }
+                          }}
+                        />
+                      </label>
+                      <div>
+                        <button
+                          type="button"
+                          disabled={controlsDisabled || config.pages.length <= 1}
+                          onClick={() => {
+                            const targetId = resolvedPage.page?.id ?? config.pages![0].id;
+                            const remaining = config.pages!.filter((page) => page.id !== targetId);
+                            if (remaining.length === 0) return;
+                            const nextConfig = {
+                              ...config,
+                              pages: remaining,
+                              widgets: syncGlobalWidgetsFromPages(config.widgets, remaining),
+                            };
+                            change(nextConfig);
+                            changeActivePage(remaining[0].id, nextConfig);
+                          }}
+                        >
+                          Remover página atual
+                        </button>
+                      </div>
+                      <div className="online-page-widgets-grid">
+                        {dashboardWidgetKeys.map((widgetKey) => {
+                          const checked = resolvedPage.enabledWidgets.includes(widgetKey);
+                          return (
+                            <label key={widgetKey} className="online-check">
+                              <input
+                                type="checkbox"
+                                disabled={
+                                  controlsDisabled ||
+                                  (checked && resolvedPage.enabledWidgets.length <= 1)
+                                }
+                                checked={checked}
+                                onChange={(event) => {
+                                  const nextWidgets = event.target.checked
+                                    ? [...new Set([...resolvedPage.enabledWidgets, widgetKey])]
+                                    : resolvedPage.enabledWidgets.filter(
+                                        (item) => item !== widgetKey,
+                                      );
+                                  const filteredStack = activeSmartStack.widgets.filter((item) =>
+                                    nextWidgets.includes(item),
+                                  );
+                                  updateActiveScope(() => ({
+                                    enabledWidgets: nextWidgets,
+                                    ...(resolvedPage.smartStack
+                                      ? {
+                                          smartStack: {
+                                            ...activeSmartStack,
+                                            widgets: filteredStack,
+                                          },
+                                        }
+                                      : {}),
+                                  }));
+                                }}
+                              />
+                              <span>{gridWidgetCatalog[widgetKey].label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <label>
+                        Rotação automática entre páginas
+                        <select
+                          disabled={controlsDisabled}
+                          value={String(currentPageSettings.autoRotateSeconds)}
+                          onChange={(event) =>
+                            updatePageSettings({
+                              autoRotateSeconds: Number(event.target.value),
+                            })
+                          }
+                        >
+                          {![0, 5, 10, 15, 20, 30, 45, 60, 120, 300, 600].includes(
+                            currentPageSettings.autoRotateSeconds,
+                          ) && (
+                            <option value={String(currentPageSettings.autoRotateSeconds)}>
+                              {currentPageSettings.autoRotateSeconds}s (personalizado)
+                            </option>
+                          )}
+                          <option value="0">Desativada (manual)</option>
+                          <option value="5">A cada 5 segundos</option>
+                          <option value="10">A cada 10 segundos</option>
+                          <option value="15">A cada 15 segundos</option>
+                          <option value="20">A cada 20 segundos</option>
+                          <option value="30">A cada 30 segundos</option>
+                          <option value="45">A cada 45 segundos</option>
+                          <option value="60">A cada 1 minuto</option>
+                          <option value="120">A cada 2 minutos</option>
+                          <option value="300">A cada 5 minutos</option>
+                          <option value="600">A cada 10 minutos</option>
+                        </select>
+                      </label>
+                      <label className="online-check">
+                        <input
+                          type="checkbox"
+                          disabled={controlsDisabled}
+                          checked={currentPageSettings.showIndicators}
+                          onChange={(event) =>
+                            updatePageSettings({ showIndicators: event.target.checked })
+                          }
+                        />
+                        <span>Mostrar barra de páginas na tela</span>
+                      </label>
+                      <label className="online-check">
+                        <input
+                          type="checkbox"
+                          disabled={controlsDisabled}
+                          checked={currentPageSettings.swipeEnabled}
+                          onChange={(event) =>
+                            updatePageSettings({ swipeEnabled: event.target.checked })
+                          }
+                        />
+                        <span>Permitir alternar páginas deslizando na horizontal (swipe)</span>
+                      </label>
+                    </>
+                  )}
+                  <label className="online-check">
+                    <input
+                      type="checkbox"
+                      disabled={controlsDisabled}
+                      checked={activeSmartStack.enabled}
+                      onChange={(event) => updateSmartStack({ enabled: event.target.checked })}
+                    />
+                    <span>Ativar Smart Stack (pilha rotativa no mesmo espaço da grade)</span>
+                  </label>
+                  {activeSmartStack.enabled && (
+                    <>
+                      <label>
+                        Título do Smart Stack
+                        <input
+                          type="text"
+                          maxLength={40}
+                          disabled={controlsDisabled}
+                          value={activeSmartStack.title}
+                          onChange={(event) => updateSmartStack({ title: event.target.value })}
+                          onBlur={() => {
+                            if (!activeSmartStack.title.trim()) {
+                              updateSmartStack({ title: "Smart Stack" });
+                            }
+                          }}
+                        />
+                      </label>
+                      <label>
+                        Intervalo de rotação do Smart Stack
+                        <select
+                          disabled={controlsDisabled}
+                          value={String(activeSmartStack.intervalSeconds)}
+                          onChange={(event) =>
+                            updateSmartStack({ intervalSeconds: Number(event.target.value) })
+                          }
+                        >
+                          {![0, 5, 10, 15, 20, 30, 45, 60, 120, 300, 600].includes(
+                            activeSmartStack.intervalSeconds,
+                          ) && (
+                            <option value={String(activeSmartStack.intervalSeconds)}>
+                              {activeSmartStack.intervalSeconds}s (personalizado)
+                            </option>
+                          )}
+                          <option value="0">Manual (sem rotação automática)</option>
+                          <option value="5">A cada 5 segundos</option>
+                          <option value="10">A cada 10 segundos</option>
+                          <option value="15">A cada 15 segundos</option>
+                          <option value="20">A cada 20 segundos</option>
+                          <option value="30">A cada 30 segundos</option>
+                          <option value="45">A cada 45 segundos</option>
+                          <option value="60">A cada 1 minuto</option>
+                          <option value="120">A cada 2 minutos</option>
+                          <option value="300">A cada 5 minutos</option>
+                          <option value="600">A cada 10 minutos</option>
+                        </select>
+                      </label>
+                      <label className="online-check">
+                        <input
+                          type="checkbox"
+                          disabled={controlsDisabled}
+                          checked={activeSmartStack.showIndicators}
+                          onChange={(event) =>
+                            updateSmartStack({ showIndicators: event.target.checked })
+                          }
+                        />
+                        <span>Mostrar controles e indicadores do Smart Stack</span>
+                      </label>
+                      <small>
+                        Widgets na pilha ({activeSmartStack.widgets.length}/12 selecionados):
+                      </small>
+                      <div className="online-smart-stack-list">
+                        {activeSmartStack.widgets.map((widgetKey, stackIndex) => (
+                          <div key={widgetKey} className="online-smart-stack-row">
+                            <label className="online-check">
+                              <input
+                                type="checkbox"
+                                disabled={controlsDisabled}
+                                checked
+                                onChange={() =>
+                                  updateSmartStack({
+                                    widgets: activeSmartStack.widgets.filter(
+                                      (item) => item !== widgetKey,
+                                    ),
+                                  })
+                                }
+                              />
+                              <span>
+                                {stackIndex + 1}. {gridWidgetCatalog[widgetKey].label}
+                              </span>
+                            </label>
+                            <div className="online-smart-stack-actions">
+                              <button
+                                type="button"
+                                aria-label={`Subir ${gridWidgetCatalog[widgetKey].label} na pilha`}
+                                disabled={controlsDisabled || stackIndex === 0}
+                                onClick={() => {
+                                  const next = [...activeSmartStack.widgets];
+                                  [next[stackIndex - 1], next[stackIndex]] = [
+                                    next[stackIndex],
+                                    next[stackIndex - 1],
+                                  ];
+                                  updateSmartStack({ widgets: next });
+                                }}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Descer ${gridWidgetCatalog[widgetKey].label} na pilha`}
+                                disabled={
+                                  controlsDisabled ||
+                                  stackIndex === activeSmartStack.widgets.length - 1
+                                }
+                                onClick={() => {
+                                  const next = [...activeSmartStack.widgets];
+                                  [next[stackIndex], next[stackIndex + 1]] = [
+                                    next[stackIndex + 1],
+                                    next[stackIndex],
+                                  ];
+                                  updateSmartStack({ widgets: next });
+                                }}
+                              >
+                                ↓
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {dashboardWidgetKeys
+                          .filter((widgetKey) => !activeSmartStack.widgets.includes(widgetKey))
+                          .map((widgetKey) => (
+                            <div key={widgetKey} className="online-smart-stack-row">
+                              <label className="online-check">
+                                <input
+                                  type="checkbox"
+                                  disabled={
+                                    controlsDisabled || activeSmartStack.widgets.length >= 12
+                                  }
+                                  checked={false}
+                                  onChange={() =>
+                                    updateSmartStack({
+                                      widgets: [...activeSmartStack.widgets, widgetKey],
+                                    })
+                                  }
+                                />
+                                <span>{gridWidgetCatalog[widgetKey].label}</span>
+                              </label>
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  )}
+                </fieldset>
+                <fieldset>
                   <legend>Disposição do painel e grade livre</legend>
                   <label>
                     Modo de organização dos blocos
                     <select
-                      value={config.gridLayout?.enabled ? "grid" : "split"}
+                      value={
+                        (resolvedPage.gridLayout ?? config.gridLayout)?.enabled ? "grid" : "split"
+                      }
                       onChange={(event) => {
                         const enableGrid = event.target.value === "grid";
-                        const baseGrid =
-                          config.gridLayout ?? createDefaultDashboardGridLayout(config);
-                        change({
-                          ...config,
-                          gridLayout: {
-                            ...baseGrid,
-                            enabled: enableGrid,
-                          },
-                        });
+                        change(setGridLayoutEnabled(config, enableGrid, resolvedPage.page?.id));
                       }}
                     >
                       <option value="split">Painel dividido (clássico)</option>
                       <option value="grid">Grade livre modular (arrastar e redimensionar)</option>
                     </select>
                   </label>
-                  {config.gridLayout?.enabled && (
+                  {(resolvedPage.gridLayout ?? config.gridLayout)?.enabled && (
                     <GridLayoutEditor
                       config={config}
+                      pageId={resolvedPage.page?.id}
                       disabled={controlsDisabled}
                       onChange={change}
                     />
@@ -2251,40 +2939,44 @@ export function OnlineFrameEditor() {
                   </small>
                 </label>
                 <label>
-                  Proporção da foto · {config.layoutOptions.photoWidthPercent}%
+                  Proporção da foto · {resolvedPage.layoutOptions.photoWidthPercent}%
                   <input
                     type="range"
                     min="40"
                     max="75"
-                    disabled={controlsDisabled || Boolean(config.gridLayout?.enabled)}
-                    value={config.layoutOptions.photoWidthPercent}
+                    disabled={
+                      controlsDisabled ||
+                      Boolean((resolvedPage.gridLayout ?? config.gridLayout)?.enabled)
+                    }
+                    value={resolvedPage.layoutOptions.photoWidthPercent}
                     onChange={(event) =>
-                      change({
-                        ...config,
+                      updateActiveScope((scope) => ({
                         layoutOptions: {
-                          ...config.layoutOptions,
+                          ...scope.layoutOptions,
                           photoWidthPercent: Number(event.target.value),
                         },
-                      })
+                      }))
                     }
                   />
-                  {config.gridLayout?.enabled && (
+                  {(resolvedPage.gridLayout ?? config.gridLayout)?.enabled && (
                     <small>Controlado diretamente na grade livre acima.</small>
                   )}
                 </label>
                 <label>
                   Posição da foto
                   <select
-                    disabled={controlsDisabled || Boolean(config.gridLayout?.enabled)}
-                    value={config.layoutOptions.photoPosition}
+                    disabled={
+                      controlsDisabled ||
+                      Boolean((resolvedPage.gridLayout ?? config.gridLayout)?.enabled)
+                    }
+                    value={resolvedPage.layoutOptions.photoPosition}
                     onChange={(event) =>
-                      change({
-                        ...config,
+                      updateActiveScope((scope) => ({
                         layoutOptions: {
-                          ...config.layoutOptions,
+                          ...scope.layoutOptions,
                           photoPosition: event.target.value as "left" | "right",
                         },
-                      })
+                      }))
                     }
                   >
                     <option value="left">Esquerda</option>

@@ -83,7 +83,7 @@ const contentTypes = {
   ".webp": "image/webp",
 };
 
-function harness(config, sizes) {
+function harness(config, sizes, swipePhoto = false) {
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -99,6 +99,7 @@ html, body { margin: 0; }
 <script>
 const config = ${JSON.stringify(config)};
 const sizes = ${JSON.stringify(sizes)};
+const swipePhoto = ${JSON.stringify(swipePhoto)};
 const frame = document.getElementById("frame");
 const results = [];
 function measure() {
@@ -135,6 +136,8 @@ function measure() {
     columns: dashStyle.gridTemplateColumns.split(" ").length,
     client: [dash.clientWidth, dash.clientHeight],
     scroll: [dash.scrollWidth, dash.scrollHeight],
+    playerState: win.SmartFrame.getState(),
+    activePhoto: doc.querySelector("#photo-indicators .active")?.getAttribute("aria-label"),
     items,
   });
   document.getElementById("result").textContent = JSON.stringify(results);
@@ -145,6 +148,22 @@ function apply(index) {
   setTimeout(() => {
     try {
       measure();
+      if (swipePhoto && index === 0) {
+        const win = frame.contentWindow;
+        const photo = frame.contentDocument.querySelector(".photo-image.is-current");
+        photo.dispatchEvent(new win.PointerEvent("pointerdown", {
+          bubbles: true, clientX: 300, clientY: 120, pointerId: 1, pointerType: "touch",
+        }));
+        photo.dispatchEvent(Object.assign(new win.Event("touchstart", { bubbles: true }), {
+          touches: [{ clientX: 300, clientY: 120 }],
+        }));
+        photo.dispatchEvent(new win.PointerEvent("pointerup", {
+          bubbles: true, clientX: 160, clientY: 120, pointerId: 1, pointerType: "touch",
+        }));
+        photo.dispatchEvent(Object.assign(new win.Event("touchend", { bubbles: true }), {
+          changedTouches: [{ clientX: 160, clientY: 120 }],
+        }));
+      }
     } catch (error) {
       document.getElementById("result").textContent = "ERROR " + error.message;
       return;
@@ -172,7 +191,14 @@ before(async () => {
       const config = JSON.parse(url.searchParams.get("config"));
       const sizes = JSON.parse(url.searchParams.get("sizes"));
       response.writeHead(200, { "content-type": contentTypes[".html"] });
-      response.end(harness(config, sizes));
+      response.end(harness(config, sizes, url.searchParams.get("swipePhoto") === "1"));
+      return;
+    }
+    if (/^\/api\/photos\/test-[ab]\/image$/.test(url.pathname)) {
+      response.writeHead(200, { "content-type": contentTypes[".svg"] });
+      response.end(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="blue"/></svg>',
+      );
       return;
     }
     const relative = normalize(url.pathname.replace(/^\/player-dashboard\/?/, "")).replace(
@@ -197,14 +223,16 @@ after(async () => {
   if (server) await new Promise((done) => server.close(done));
 });
 
-function render(config, sizes) {
+function render(config, sizes, swipePhoto = false) {
   const profile = join(tmpdir(), "smartframe-grid-" + Math.random().toString(36).slice(2));
   const url =
     origin +
     "/harness?config=" +
     encodeURIComponent(JSON.stringify(config)) +
     "&sizes=" +
-    encodeURIComponent(JSON.stringify(sizes));
+    encodeURIComponent(JSON.stringify(sizes)) +
+    "&swipePhoto=" +
+    (swipePhoto ? "1" : "0");
   return new Promise((done, fail) => {
     const child = spawn(
       browser,
@@ -248,6 +276,41 @@ function span(value) {
   const match = /span (\d+)/.exec(value || "");
   return match ? Number(match[1]) : null;
 }
+
+test(
+  "gesto sobre a foto troca apenas o slide sem navegar para outra página",
+  { skip, timeout: 90000 },
+  async () => {
+    const config = {
+      layout: "photo-dashboard",
+      widgets: {
+        photos: {
+          enabled: true,
+          items: [
+            { id: "test-a", src: "/api/photos/test-a/image", alt: "A" },
+            { id: "test-b", src: "/api/photos/test-b/image", alt: "B" },
+          ],
+        },
+      },
+      pages: [
+        { id: "first", title: "Primeira", enabledWidgets: ["photos", "clock"] },
+        { id: "second", title: "Segunda", enabledWidgets: ["photos", "clock"] },
+      ],
+    };
+    const [before, after] = await render(
+      config,
+      [
+        [1024, 600],
+        [1024, 600],
+      ],
+      true,
+    );
+    assert.equal(before.playerState.activePageId, "first");
+    assert.equal(before.activePhoto, "Foto 1");
+    assert.equal(after.playerState.activePageId, "first");
+    assert.equal(after.activePhoto, "Foto 2");
+  },
+);
 
 function closeTo(actual, expected, tolerance = 0.75, label = "") {
   assert.ok(

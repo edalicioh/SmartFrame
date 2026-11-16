@@ -7,6 +7,7 @@
   display: grid;
   grid-template-columns: minmax(0, var(--photo-width, 62fr)) minmax(0, var(--widget-width, 38fr));
   gap: var(--widget-spacing, 8px);
+  touch-action: none;
 }
 .dashboard.photo-right:not(.no-photos):not(.no-widgets) {
   grid-template-columns: minmax(0, var(--widget-width, 38fr)) minmax(0, var(--photo-width, 62fr));
@@ -93,6 +94,13 @@
     calc(var(--widget-spacing, 8px) * var(--grid-margin-bottom-landscape, 0.5))
     calc(var(--widget-spacing, 8px) * var(--grid-margin-left-landscape, 0.5));
 }
+#dashboard.grid-mode .smart-stack-nav:not([hidden]) {
+  grid-column: var(--grid-col-landscape, auto);
+  grid-row: var(--grid-row-landscape, auto);
+  justify-self: end;
+  align-self: center;
+  margin-right: calc(var(--widget-spacing, 8px) * 0.5 + 8px);
+}
 /* The active grid follows the screen orientation, not the saved panel setting. */
 @media (orientation: portrait) {
   #dashboard.grid-mode {
@@ -107,5 +115,9 @@
       calc(var(--widget-spacing, 8px) * var(--grid-margin-right-portrait, 0.5))
       calc(var(--widget-spacing, 8px) * var(--grid-margin-bottom-portrait, 0.5))
       calc(var(--widget-spacing, 8px) * var(--grid-margin-left-portrait, 0.5));
+  }
+  #dashboard.grid-mode .smart-stack-nav:not([hidden]) {
+    grid-column: var(--grid-col-portrait, auto);
+    grid-row: var(--grid-row-portrait, auto);
   }
 }

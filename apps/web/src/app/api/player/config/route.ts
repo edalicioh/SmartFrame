@@ -40,7 +40,17 @@ export async function GET(request: Request) {
         ? [{ id, src: `/api/player/online-media/${id}?v=${photo.sha256}`, alt: photo.filename }]
         : [];
     });
-    const widgetData = await onlineWidgetData(db, config.widgets);
+    const pageEnabledWidgets = new Set(config.pages?.flatMap((page) => page.enabledWidgets) ?? []);
+    const widgetData = await onlineWidgetData(db, {
+      weather: {
+        ...config.widgets.weather,
+        enabled: config.widgets.weather.enabled || pageEnabledWidgets.has("weather"),
+      },
+      currencies: {
+        ...config.widgets.currencies,
+        enabled: config.widgets.currencies.enabled || pageEnabledWidgets.has("currencies"),
+      },
+    });
     const result = {
       ...config,
       deviceId: device.id,

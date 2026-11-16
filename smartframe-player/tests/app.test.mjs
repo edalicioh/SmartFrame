@@ -4,6 +4,21 @@ import { runInNewContext } from "node:vm";
 import test from "node:test";
 
 const source = readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+const configSource = readFileSync(new URL("../js/config.js", import.meta.url), "utf8");
+
+test("page IDs matching object property names are accepted", () => {
+  const window = {};
+  runInNewContext(configSource, { window });
+  const config = window.SmartFrame.normalizeConfig({
+    pages: [
+      { id: "constructor", enabledWidgets: ["photos"] },
+      { id: "toString", enabledWidgets: ["photos"] },
+    ],
+  });
+  assert.equal(config.pages.length, 2);
+  assert.equal(config.pages[0].id, "constructor");
+  assert.equal(config.pages[1].id, "toString");
+});
 
 function styleProps(target) {
   const map = {};
@@ -151,6 +166,12 @@ function setup(
       return timers.length;
     },
     clearTimeout() {},
+    setInterval: (fn, delay) => {
+      fn.delay = delay;
+      timers.push(fn);
+      return timers.length;
+    },
+    clearInterval() {},
   });
   return { app, window, fetches, listeners, documentListeners, timers, elements };
 }
@@ -165,6 +186,24 @@ test("os cartões adicionais aparecem e desaparecem conforme a configuração", 
   assert.equal(h.elements.notes.hidden, false);
   h.app.applyConfig({ ...h.app.defaults });
   assert.equal(h.elements.notes.hidden, true);
+});
+
+test("renderers receive the active page's enabled state when switching pages", () => {
+  const h = setup(true);
+  const enabledStates = [];
+  h.app.carousel.update = (value) => enabledStates.push(value.enabled);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    widgets: { ...h.app.defaults.widgets, photos: { enabled: true, items: [] } },
+    pages: [
+      { id: "without-photos", enabledWidgets: [] },
+      { id: "with-photos", enabledWidgets: ["photos"] },
+    ],
+  });
+
+  assert.equal(enabledStates.at(-1), false);
+  h.app.setPage("with-photos");
+  assert.equal(enabledStates.at(-1), true);
 });
 
 test("preview never fetches on init, refresh apply, visibility restore, or online", async () => {
@@ -219,6 +258,22 @@ test("first uncached quotes are polled soon without waiting for the layout inter
     revision: "online:quotes",
     refreshSeconds: 3600,
     widgets: { photos: { items: [] } },
+    widgetData: { currenciesPending: true, currencies: {} },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(h.timers.at(-1).delay, 2000);
+});
+
+test("polls pending quotes for currencies enabled on any page", async () => {
+  const h = setup(false, {
+    layout: "photo-dashboard",
+    revision: "online:page-quotes",
+    refreshSeconds: 3600,
+    widgets: { photos: { items: [] }, currencies: { enabled: false } },
+    pages: [
+      { id: "home", enabledWidgets: ["photos"] },
+      { id: "markets", enabledWidgets: ["currencies"] },
+    ],
     widgetData: { currenciesPending: true, currencies: {} },
   });
   await new Promise((resolve) => setImmediate(resolve));
@@ -407,4 +462,616 @@ test("player recalcula as margens da grade ao mover um widget para a borda", () 
   assert.equal(h.elements.clock.style.values["--grid-margin-left-landscape"], "0.5");
   assert.equal(h.elements.clock.style.values["--grid-margin-right-landscape"], "0");
   assert.equal(h.elements.clock.style.values["--grid-margin-bottom-landscape"], "0");
+});
+
+function setupInteractive(preview = true) {
+  const listeners = {},
+    documentListeners = {},
+    timers = [],
+    intervals = new Map(),
+    localCalls = {},
+    timezoneWidgetUpdates = { clock: [], calendar: [] };
+  let nextIntervalId = 0;
+  function createNode(tag = "div") {
+    const attrs = {};
+    const eventMap = {};
+    const node = {
+      tagName: tag.toUpperCase(),
+      hidden: false,
+      className: "",
+      textContent: "",
+      children: [],
+      attributes: attrs,
+      events: eventMap,
+      setAttribute(name, value) {
+        attrs[name] = String(value);
+      },
+      appendChild(child) {
+        node.children.push(child);
+        return child;
+      },
+      replaceChildren(...items) {
+        node.children = [...items];
+      },
+      contains(target) {
+        if (target === node) return true;
+        return node.children.some((child) =>
+          typeof child.contains === "function" ? child.contains(target) : child === target,
+        );
+      },
+      addEventListener(name, fn) {
+        eventMap[name] = fn;
+      },
+      click() {
+        if (typeof eventMap.click === "function") {
+          eventMap.click({ stopPropagation() {}, preventDefault() {} });
+        }
+      },
+    };
+    styleProps(node);
+    return node;
+  }
+
+  const elements = Object.fromEntries(
+    [
+      "dashboard",
+      "widget-stack",
+      "connection-status",
+      "smart-stack-nav",
+      "page-nav",
+      "page-overview",
+      "photos",
+      "clock",
+      "weather",
+      "currencies",
+      "calendar",
+      "notes",
+      "countdown",
+      "birthdays",
+      "tasks",
+      "pomodoro",
+    ].map((id) => [id, createNode("div")]),
+  );
+  elements["widget-stack"].children = [
+    elements.clock,
+    elements.weather,
+    elements.currencies,
+    elements.calendar,
+    elements.notes,
+    elements.countdown,
+    elements.birthdays,
+    elements.tasks,
+    elements.pomodoro,
+  ];
+  const defaults = {
+    revision: "",
+    layout: "photo-dashboard",
+    orientation: "landscape",
+    theme: "light",
+    refreshSeconds: 15,
+    timezone: "",
+    appearance: { backgroundColor: "", accentColor: "", textColor: "" },
+    layoutOptions: { photoPosition: "left", photoWidthPercent: 62 },
+    widgets: Object.fromEntries(
+      [
+        "photos",
+        "clock",
+        "weather",
+        "currencies",
+        "calendar",
+        "notes",
+        "countdown",
+        "birthdays",
+        "tasks",
+        "pomodoro",
+      ].map((name) => [name, { enabled: name === "photos" || name === "clock", items: [] }]),
+    ),
+  };
+  const app = {
+    defaults,
+    normalizeConfig: (input) => ({
+      ...structuredClone(defaults),
+      ...input,
+      widgets: { ...structuredClone(defaults.widgets), ...input.widgets },
+    }),
+    carousel: { update() {}, pause() {}, resume() {} },
+    clock: {
+      update(value) {
+        timezoneWidgetUpdates.clock.push(value);
+      },
+      pause() {},
+      resume() {},
+    },
+    calendar: {
+      update(value) {
+        timezoneWidgetUpdates.calendar.push(value);
+      },
+      pause() {},
+      resume() {},
+    },
+    weather: { update() {}, setData() {} },
+    currencies: { update() {}, setData() {}, relayout() {}, pause() {}, resume() {} },
+    localWidgets: {
+      create: (name) => {
+        const calls = { update: [], pause: 0, resume: 0 };
+        localCalls[name] = calls;
+        return {
+          update: (value) => {
+            calls.update.push(value);
+          },
+          pause: () => {
+            calls.pause++;
+          },
+          resume: () => {
+            calls.resume++;
+          },
+        };
+      },
+    },
+  };
+  const parent = { postMessage() {} };
+  const window = {
+    SmartFrame: app,
+    parent,
+    addEventListener(name, fn) {
+      listeners[name] = fn;
+    },
+    postMessage() {},
+  };
+  const document = {
+    hidden: false,
+    documentElement: createNode("html"),
+    body: createNode("body"),
+    createElement: (tag) => createNode(tag),
+    getElementById: (id) => elements[id],
+    addEventListener(name, fn) {
+      documentListeners[name] = fn;
+    },
+  };
+  runInNewContext(source, {
+    window,
+    document,
+    location: {
+      search: preview ? "?preview=1" : "",
+      pathname: "/player/id",
+      origin: "https://same",
+    },
+    URLSearchParams,
+    URL,
+    fetch: () => Promise.resolve({ ok: true, json: async () => ({ layout: "photo-dashboard" }) }),
+    AbortController,
+    setTimeout: (fn, delay) => {
+      fn.delay = delay;
+      timers.push(fn);
+      return timers.length;
+    },
+    clearTimeout() {},
+    setInterval: (fn, delay) => {
+      fn.delay = delay;
+      timers.push(fn);
+      const id = ++nextIntervalId;
+      intervals.set(id, fn);
+      return id;
+    },
+    clearInterval: (id) => intervals.delete(id),
+  });
+  return { app, window, listeners, elements, intervals, localCalls, timezoneWidgetUpdates };
+}
+
+test("player navega entre múltiplas páginas por controles, visão geral, swipe e preview", () => {
+  const h = setupInteractive(true);
+  const multiConfig = {
+    ...h.app.defaults,
+    pageSettings: { autoRotateSeconds: 0, showIndicators: true, swipeEnabled: true },
+    pages: [
+      {
+        id: "p1",
+        title: "Principal",
+        enabledWidgets: ["photos", "clock"],
+        layoutOptions: { photoPosition: "left", photoWidthPercent: 62 },
+      },
+      {
+        id: "p2",
+        title: "Agenda",
+        enabledWidgets: ["weather", "calendar"],
+        layoutOptions: { photoPosition: "right", photoWidthPercent: 50 },
+      },
+    ],
+  };
+
+  h.app.applyConfig(multiConfig);
+  assert.equal(h.app.getState().activePageId, "p1");
+  assert.equal(h.elements.photos.hidden, false);
+  assert.equal(h.elements.clock.hidden, false);
+  assert.equal(h.elements.weather.hidden, true);
+  assert.equal(h.elements.calendar.hidden, true);
+  assert.equal(h.elements["page-nav"].hidden, false);
+  assert.equal(h.elements["page-overview"].hidden, true);
+
+  // Troca de página pelo deslize horizontal no painel.
+  h.elements.dashboard.events.pointerdown({
+    pointerId: 1,
+    clientX: 300,
+    clientY: 120,
+    target: h.elements.dashboard,
+  });
+  h.elements.dashboard.events.pointerup({
+    pointerId: 1,
+    clientX: 160,
+    clientY: 130,
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+  assert.equal(h.elements.photos.hidden, true);
+  assert.equal(h.elements.weather.hidden, false);
+  assert.equal(h.elements.calendar.hidden, false);
+
+  // Mensagem de preview permite selecionar a página em edição no editor.
+  h.listeners.message({
+    origin: "https://same",
+    source: h.window.parent,
+    data: { type: "smartframe:online-preview", config: multiConfig, activePageId: "p1" },
+  });
+  assert.equal(h.app.getState().activePageId, "p1");
+  h.app.toggleOverview(true);
+  assert.equal(h.elements["page-overview"].hidden, false);
+  const overviewCards = h.elements["page-overview"].children[1].children;
+  assert.equal(overviewCards.length, 2);
+  overviewCards[1].click();
+  assert.equal(h.app.getState().activePageId, "p2");
+  assert.equal(h.elements["page-overview"].hidden, true);
+});
+
+test("swipes sobre fotos e seus filhos não trocam a página", () => {
+  const h = setupInteractive(true);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    pages: [
+      { id: "first", title: "Primeira", enabledWidgets: ["photos", "clock"] },
+      { id: "second", title: "Segunda", enabledWidgets: ["photos", "clock"] },
+    ],
+  });
+  const photoImage = {};
+  h.elements.photos.children.push(photoImage);
+  function swipe(target) {
+    h.elements.dashboard.events.pointerdown({ clientX: 300, clientY: 120, target });
+    h.elements.dashboard.events.pointerup({ clientX: 160, clientY: 120 });
+  }
+
+  swipe(h.elements.photos);
+  assert.equal(h.app.getState().activePageId, "first");
+  swipe(photoImage);
+  assert.equal(h.app.getState().activePageId, "first");
+  swipe(h.elements.clock);
+  assert.equal(h.app.getState().activePageId, "second");
+});
+
+test("player alterna widgets no Smart Stack e compartilha coordenadas na grade", () => {
+  const h = setupInteractive(true);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    widgets: {
+      ...h.app.defaults.widgets,
+      photos: { enabled: true, items: [] },
+      clock: { enabled: true, items: [] },
+      weather: { enabled: true, items: [] },
+    },
+    smartStack: {
+      enabled: true,
+      title: "Pilha Rápida",
+      widgets: ["clock", "weather"],
+      intervalSeconds: 0,
+      showIndicators: true,
+    },
+    gridLayout: {
+      enabled: true,
+      landscape: [
+        { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+        { widgetId: "clock", x: 14, y: 0, w: 10, h: 12 },
+        { widgetId: "weather", x: 14, y: 0, w: 10, h: 12 },
+      ],
+      portrait: [
+        { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+        { widgetId: "clock", x: 0, y: 20, w: 12, h: 10 },
+        { widgetId: "weather", x: 0, y: 20, w: 12, h: 10 },
+      ],
+    },
+  });
+
+  assert.equal(h.elements["smart-stack-nav"].hidden, false);
+  assert.equal(h.elements.photos.hidden, false);
+  assert.equal(h.elements.clock.hidden, false);
+  assert.equal(h.elements.weather.hidden, true);
+  assert.equal(h.elements.clock.style.values["--grid-col-landscape"], "15 / span 10");
+  assert.equal(h.elements.weather.style.values["--grid-col-landscape"], "15 / span 10");
+  assert.equal(h.elements["smart-stack-nav"].style.values["--grid-col-landscape"], "15 / span 10");
+  assert.equal(h.elements["smart-stack-nav"].style.values["--grid-row-landscape"], "1 / span 12");
+
+  // Gesto vertical sobre o card da pilha alterna para o próximo widget empilhado.
+  h.elements.dashboard.events.pointerdown({
+    pointerId: 2,
+    clientX: 500,
+    clientY: 220,
+    target: h.elements.clock,
+  });
+  h.elements.dashboard.events.pointerup({
+    pointerId: 2,
+    clientX: 505,
+    clientY: 120,
+  });
+  assert.equal(h.app.getState().activeStackIndex, 1);
+  assert.equal(h.elements.clock.hidden, true);
+  assert.equal(h.elements.weather.hidden, false);
+
+  h.app.stepSmartStack(1);
+  assert.equal(h.app.getState().activeStackIndex, 0);
+  assert.equal(h.elements.clock.hidden, false);
+  assert.equal(h.elements.weather.hidden, true);
+});
+
+test("widget local oculto no Smart Stack é inicializado e sincronizado antes de aparecer", () => {
+  const h = setupInteractive(true);
+  const stackConfig = {
+    ...h.app.defaults,
+    widgets: {
+      ...h.app.defaults.widgets,
+      notes: {
+        enabled: true,
+        title: "Recados",
+        messages: [{ id: "m1", text: "Primeiro" }],
+        intervalSeconds: 15,
+      },
+      countdown: {
+        enabled: true,
+        title: "Contagem",
+        target: { kind: "date", date: "2026-01-01" },
+        display: "days",
+        completedText: "Chegou",
+      },
+    },
+    smartStack: {
+      enabled: true,
+      title: "Pilha",
+      widgets: ["notes", "countdown"],
+      intervalSeconds: 0,
+      showIndicators: true,
+    },
+    gridLayout: {
+      enabled: true,
+      landscape: [
+        { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+        { widgetId: "notes", x: 14, y: 0, w: 10, h: 12 },
+        { widgetId: "countdown", x: 14, y: 0, w: 10, h: 12 },
+      ],
+      portrait: [
+        { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+        { widgetId: "notes", x: 0, y: 20, w: 12, h: 10 },
+        { widgetId: "countdown", x: 0, y: 20, w: 12, h: 10 },
+      ],
+    },
+  };
+
+  h.app.applyConfig(stackConfig);
+  assert.equal(h.elements.notes.hidden, false);
+  assert.equal(h.elements.countdown.hidden, true);
+  assert.equal(h.localCalls.countdown.update.length, 1);
+  assert.equal(h.localCalls.countdown.update[0].title, "Contagem");
+  assert.equal(h.localCalls.countdown.resume, 0);
+
+  const changed = {
+    ...stackConfig,
+    widgets: {
+      ...stackConfig.widgets,
+      countdown: { ...stackConfig.widgets.countdown, title: "Contagem nova" },
+    },
+  };
+  h.app.applyConfig(changed);
+  assert.equal(h.elements.countdown.hidden, true);
+  assert.equal(h.localCalls.countdown.update.length, 2);
+  assert.equal(h.localCalls.countdown.update[1].title, "Contagem nova");
+  assert.equal(h.localCalls.countdown.resume, 0);
+
+  h.app.stepSmartStack(1);
+  assert.equal(h.app.getState().activeStackIndex, 1);
+  assert.equal(h.elements.notes.hidden, true);
+  assert.equal(h.elements.countdown.hidden, false);
+  assert.equal(h.localCalls.countdown.update.length, 2);
+  assert.equal(h.localCalls.countdown.resume, 1);
+});
+
+test("selecionar um indicador da pilha preserva o estado dos widgets", () => {
+  const h = setupInteractive(true);
+  let carouselUpdates = 0;
+  h.app.carousel.update = () => {
+    carouselUpdates++;
+  };
+  h.app.applyConfig({
+    ...h.app.defaults,
+    widgets: {
+      ...h.app.defaults.widgets,
+      notes: {
+        enabled: true,
+        title: "Recados",
+        messages: [{ id: "m1", text: "Primeiro" }],
+        intervalSeconds: 15,
+      },
+    },
+    smartStack: {
+      enabled: true,
+      title: "Pilha",
+      widgets: ["notes", "clock"],
+      intervalSeconds: 0,
+      showIndicators: true,
+    },
+    gridLayout: {
+      enabled: true,
+      landscape: [
+        { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+        { widgetId: "notes", x: 14, y: 0, w: 10, h: 12 },
+        { widgetId: "clock", x: 14, y: 0, w: 10, h: 12 },
+      ],
+      portrait: [
+        { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+        { widgetId: "notes", x: 0, y: 20, w: 12, h: 10 },
+        { widgetId: "clock", x: 0, y: 20, w: 12, h: 10 },
+      ],
+    },
+  });
+
+  const carouselBefore = carouselUpdates;
+  const notesUpdatesBefore = h.localCalls.notes.update.length;
+  const dots = h.elements["smart-stack-nav"].children[1].children;
+  assert.equal(dots.length, 2);
+  dots[1].click();
+
+  assert.equal(h.app.getState().activeStackIndex, 1);
+  assert.equal(h.elements.notes.hidden, true);
+  assert.equal(h.elements.clock.hidden, false);
+  assert.equal(carouselUpdates, carouselBefore);
+  assert.equal(h.localCalls.notes.update.length, notesUpdatesBefore);
+});
+
+test("timers de rotação sobrevivem a atualizações e transições não relacionadas", () => {
+  const h = setupInteractive(true);
+  const multiConfig = {
+    ...h.app.defaults,
+    pageSettings: { autoRotateSeconds: 20, showIndicators: true, swipeEnabled: true },
+    gridLayout: {
+      enabled: true,
+      landscape: [
+        { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+        { widgetId: "clock", x: 14, y: 0, w: 10, h: 12 },
+        { widgetId: "weather", x: 14, y: 0, w: 10, h: 12 },
+        { widgetId: "calendar", x: 14, y: 12, w: 10, h: 12 },
+      ],
+      portrait: [
+        { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+        { widgetId: "clock", x: 0, y: 20, w: 12, h: 10 },
+        { widgetId: "weather", x: 0, y: 20, w: 12, h: 10 },
+        { widgetId: "calendar", x: 0, y: 30, w: 12, h: 10 },
+      ],
+    },
+    pages: [
+      {
+        id: "p1",
+        title: "Principal",
+        enabledWidgets: ["photos", "clock", "weather"],
+        smartStack: {
+          enabled: true,
+          title: "Pilha",
+          widgets: ["clock", "weather"],
+          intervalSeconds: 10,
+          showIndicators: true,
+        },
+      },
+      {
+        id: "p2",
+        title: "Agenda",
+        enabledWidgets: ["weather", "calendar"],
+      },
+    ],
+  };
+
+  h.app.applyConfig(multiConfig);
+  const findTimer = (delay) =>
+    [...h.intervals.values()].find((callback) => callback.delay === delay);
+  const firstPageTimer = findTimer(20000);
+  const firstStackTimer = findTimer(10000);
+  assert.ok(firstPageTimer);
+  assert.ok(firstStackTimer);
+
+  // Uma nova configuração idêntica (como o polling periódico) não reinicia os timers.
+  h.app.applyConfig(multiConfig);
+  assert.equal(findTimer(20000), firstPageTimer);
+  assert.equal(findTimer(10000), firstStackTimer);
+
+  // Uma transição do Smart Stack não reinicia a rotação da página nem da pilha.
+  h.app.stepSmartStack(1);
+  assert.equal(h.app.getState().activeStackIndex, 1);
+  assert.equal(findTimer(20000), firstPageTimer);
+  assert.equal(findTimer(10000), firstStackTimer);
+});
+
+test("Smart Stack com um único membro ativo mantém esse widget visível", () => {
+  const h = setupInteractive(true);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    gridLayout: {
+      enabled: true,
+      landscape: [
+        { widgetId: "photos", x: 0, y: 0, w: 14, h: 24 },
+        { widgetId: "clock", x: 14, y: 0, w: 10, h: 12 },
+        { widgetId: "weather", x: 14, y: 0, w: 10, h: 12 },
+      ],
+      portrait: [
+        { widgetId: "photos", x: 0, y: 0, w: 12, h: 20 },
+        { widgetId: "clock", x: 0, y: 20, w: 12, h: 10 },
+        { widgetId: "weather", x: 0, y: 20, w: 12, h: 10 },
+      ],
+    },
+    pageSettings: { autoRotateSeconds: 0, showIndicators: true, swipeEnabled: true },
+    pages: [
+      {
+        id: "p1",
+        title: "Principal",
+        enabledWidgets: ["photos", "clock"],
+        smartStack: {
+          enabled: true,
+          title: "Pilha",
+          widgets: ["clock", "weather"],
+          intervalSeconds: 10,
+          showIndicators: true,
+        },
+      },
+    ],
+  });
+
+  assert.equal(h.app.getState().stackWidgets.join(","), "clock");
+  assert.equal(h.elements.clock.hidden, false);
+  assert.equal(h.elements.weather.hidden, true);
+  assert.equal(h.elements["smart-stack-nav"].hidden, true);
+});
+
+test("atualização de fuso preserva relógio e calendário habilitados pela página", () => {
+  const h = setupInteractive(true);
+  const pageConfig = {
+    ...h.app.defaults,
+    widgets: {
+      ...h.app.defaults.widgets,
+      clock: { ...h.app.defaults.widgets.clock, enabled: false },
+      calendar: { ...h.app.defaults.widgets.calendar, enabled: false },
+    },
+    pages: [
+      {
+        id: "page-one",
+        title: "Principal",
+        enabledWidgets: ["photos", "clock", "calendar"],
+      },
+    ],
+  };
+
+  h.app.applyConfig(pageConfig);
+  h.app.applyConfig({ ...pageConfig, timezone: "America/Manaus" });
+
+  assert.equal(h.timezoneWidgetUpdates.clock.at(-1).enabled, true);
+  assert.equal(h.timezoneWidgetUpdates.calendar.at(-1).enabled, true);
+});
+
+test("mantém navegação por setas quando indicadores e swipe estão desativados", () => {
+  const h = setupInteractive(true);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    pageSettings: { autoRotateSeconds: 0, showIndicators: false, swipeEnabled: false },
+    pages: [
+      { id: "first", title: "Primeira", enabledWidgets: ["photos"] },
+      { id: "second", title: "Segunda", enabledWidgets: ["clock"] },
+    ],
+  });
+
+  const nav = h.elements["page-nav"];
+  assert.equal(nav.hidden, false);
+  assert.equal(nav.children.some((child) => child.className === "page-nav-dots"), false);
+  const nextButton = nav.children.find((child) => child.attributes["aria-label"] === "Próxima página");
+  assert.ok(nextButton);
+  nextButton.click();
+  assert.equal(h.app.getState().activePageId, "second");
 });

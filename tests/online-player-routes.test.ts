@@ -5,10 +5,17 @@ import { issuePairingCode, redeemPairingCode } from "@smartframe/frames";
 
 vi.mock("server-only", () => ({}));
 const panelAccess = vi.hoisted(() => vi.fn());
+const onlineWidgetDataMock = vi.hoisted(() =>
+  vi.fn(async (_db: unknown, _settings: unknown) => ({
+    refreshSeconds: 1800,
+    weather: null,
+    currencies: {},
+  })),
+);
 vi.mock("../apps/web/src/lib/panel-access", () => ({ panelAccess }));
 vi.mock("@smartframe/widgets", async (original) => ({
   ...(await original<typeof import("@smartframe/widgets")>()),
-  onlineWidgetData: vi.fn(async () => ({ refreshSeconds: 1800, weather: null, currencies: {} })),
+  onlineWidgetData: onlineWidgetDataMock,
 }));
 
 import { GET as getConfig } from "../apps/web/src/app/api/player/config/route";
@@ -92,7 +99,16 @@ it("uses only a device's published version and never acknowledges merely deliver
   const put = await putOnlineFrame(
     adminRequest("/api/online-frame", {
       deviceId,
-      config: { refreshSeconds: 20 },
+      config: {
+        refreshSeconds: 20,
+        pages: [
+          {
+            id: "weather-page",
+            title: "Weather",
+            enabledWidgets: ["photos", "weather", "currencies"],
+          },
+        ],
+      },
       expectedRevision: 0,
     }),
   );
@@ -111,6 +127,11 @@ it("uses only a device's published version and never acknowledges merely deliver
   const delivered = await getConfig(authRequest());
   expect(delivered.status).toBe(200);
   expect((await delivered.json()).refreshSeconds).toBe(20);
+  const onlineSettings = onlineWidgetDataMock.mock.calls.at(-1)?.[1];
+  expect(onlineSettings).toMatchObject({
+    weather: { enabled: true },
+    currencies: { enabled: true },
+  });
   expect(
     (await db.device.findUniqueOrThrow({ where: { id: deviceId } })).appliedRevision,
   ).toBeNull();

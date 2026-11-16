@@ -52,6 +52,14 @@ Em **Aparência e layout**, além do modo clássico **Painel dividido**, agora �
 - Aplicar um dos **6 templates prontos** (_Porta-Retrato Clássico_, _Painel Familiar da Casa_, _Mesa de Foco & Pomodoro_, _Cotações & Agenda Executiva_, _Galeria Minimalista_ e _Painel Contínuo Sem Bordas_), preservando `photoIds`, eventos de calendário, recados, tarefas e demais dados cadastrados.
 - Alternar para **Grade livre modular (arrastar e redimensionar)** (`gridLayout.enabled = true`), posicionando e redimensionando os widgets ativos em grades **24×24 (paisagem)** e **12×40 (retrato)** com detecção de colisões, tamanhos mínimos por catálogo, inspetor numérico acessível (`X`, `Y`, `W`, `H`) e botão **Organizar automaticamente sem colisões**.
 
+## Múltiplas páginas e Smart Stack
+
+Na seção **Múltiplas páginas e Smart Stack** em **Aparência e layout**, cada painel pode operar como **Página única** ou expandir para **Múltiplas páginas** (até 8 páginas por painel):
+
+- Cada página mantém sua própria lista de widgets visíveis, `layoutOptions` e grade livre (`gridLayout`) sem duplicar configurações de fotos, clima, calendário ou listas.
+- Em `pageSettings`, defina rotação automática entre páginas (`0` ou `>= 5` segundos), exibição dos indicadores inferiores e navegação por deslize horizontal (_swipe_), além da visão geral de páginas no player.
+- Com o **Smart Stack**, até **12 widgets** podem compartilhar o mesmo slot da grade por painel ou por página, alternando por botões/indicadores verticais, gesto vertical no card ou rotação automática que pausa quando o usuário interage.
+
 ## Fundo, aparência e tamanho dos widgets
 
 Em **Aparência e layout → Estilo e superfície do painel** e **Fundo e tamanho dos widgets**,

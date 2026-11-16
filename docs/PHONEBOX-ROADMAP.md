@@ -8,7 +8,7 @@ Este documento organiza as 6 fases de evolução para incorporar ao SmartFrame o
 | :--------- | :------------------------------------------------------------------------- | :--------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Fase 1** | Sistema de Aparência em Camadas (`APPEARANCE.md`)                          | **Implementada** | [widget-style.ts](../packages/contracts/src/widget-style.ts), [APPEARANCE.md](APPEARANCE.md), `smartframe-player`, `/layouts`                                     |
 | **Fase 2** | Editor Visual em Grade Livre + Templates                                   | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts` |
-| **Fase 3** | Múltiplas Páginas e _Smart Stack_                                          | Planejada        | Fluxo online multi-painel em `apps/web` e `smartframe-player`                                                                                                     |
+| **Fase 3** | Múltiplas Páginas e _Smart Stack_                                          | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts` |
 | **Fase 4** | Novos Widgets (Sistema, Tarefas interativas, Relógio Mundial, RSS, Dev/IA) | Planejada        | Provedores em `packages/widgets` e renderizadores em `smartframe-player`                                                                                          |
 | **Fase 5** | Webhooks de Entrada e Regras Automáticas                                   | Planejada        | Rotas em `apps/web/src/app/api` e fila em `packages/jobs`                                                                                                         |
 | **Fase 6** | Modo Control Deck (`CONTROL-DECK.md`)                                      | Planejada        | Autenticação de dispositivo em `packages/frames` e agente local                                                                                                   |
@@ -33,11 +33,11 @@ Este documento organiza as 6 fases de evolução para incorporar ao SmartFrame o
 
 ---
 
-## Fase 3 — Múltiplas Páginas e _Smart Stack_ (Planejada)
+## Fase 3 — Múltiplas Páginas e _Smart Stack_ (Implementada)
 
-- Permitir múltiplas páginas por painel publicado, mantendo compatibilidade com painéis de página única.
-- Navegação no `smartframe-player` por gestos de deslize horizontal (_swipe_), indicadores de página (_dots_), visão geral e troca remota opcional.
-- Introduzir o widget **Smart Stack**: empilhamento de até 12 widgets no mesmo slot da grade, com troca vertical ou rotação automática que pausa durante interação ativa.
+- Campo opcional `pages` (`1..8` páginas com `id`, `title`, `enabledWidgets`, `layoutOptions`, `gridLayout` e `smartStack` por página) e `pageSettings` (`autoRotateSeconds`, `showIndicators`, `swipeEnabled`) no contrato `onlineDashboardSchema`, mantendo compatibilidade retroativa total com painéis de página única.
+- Navegação no `smartframe-player` (`index.html`, `config.js`, `app.js`, `layout.css`, `widgets.css`) com indicadores de página (`#page-nav`), visão geral de páginas (`#page-overview`), gesto de deslize horizontal (_swipe_), sincronização da página ativa no preview (`activePageId`) e rotação automática com pausa temporária durante interação.
+- **Smart Stack**: campo opcional `smartStack` (até 12 widgets no mesmo slot da grade com rotação manual ou automática `>= 5s` que pausa durante interação ativa), controles verticais (`#smart-stack-nav` e gesto vertical no card), empilhamento automático compartilhado em `autoArrangeDashboardGrid` e configurador completo no editor `/layouts`.
 
 ---
 

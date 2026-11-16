@@ -21,6 +21,9 @@
     },
     layoutOptions: { photoPosition: "left", photoWidthPercent: 62 },
     gridLayout: null,
+    smartStack: null,
+    pages: null,
+    pageSettings: null,
     widgets: {
       photos: {
         enabled: true,
@@ -368,6 +371,120 @@
         : fallback.portrait.slice(),
     };
   }
+  function normalizeWidgetKeyList(list, limit) {
+    if (!Array.isArray(list)) return null;
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < list.length && out.length < limit; i++) {
+      var key = list[i];
+      if (typeof key !== "string" || !hasOwn(widgetMinSizes, key) || seen[key]) continue;
+      seen[key] = true;
+      out.push(key);
+    }
+    return out;
+  }
+  function normalizeSmartStack(raw, prev, fullConfig) {
+    if (raw === undefined || raw === null) {
+      return !fullConfig && prev ? prev : null;
+    }
+    if (typeof raw !== "object" || Array.isArray(raw)) {
+      return !fullConfig && prev ? prev : null;
+    }
+    var fallback = prev || {
+      enabled: false,
+      title: "Smart Stack",
+      widgets: [],
+      intervalSeconds: 10,
+      showIndicators: true,
+    };
+    var keys = hasOwn(raw, "widgets")
+      ? normalizeWidgetKeyList(raw.widgets, 12) || []
+      : fallback.widgets.slice();
+    var intervalSec = fallback.intervalSeconds;
+    if (
+      Number.isInteger(raw.intervalSeconds) &&
+      (raw.intervalSeconds === 0 || (raw.intervalSeconds >= 5 && raw.intervalSeconds <= 3600))
+    ) {
+      intervalSec = raw.intervalSeconds;
+    }
+    return {
+      enabled: bool(raw.enabled, fallback.enabled),
+      title: text(raw.title, fallback.title, 60),
+      widgets: keys,
+      intervalSeconds: intervalSec,
+      showIndicators: bool(raw.showIndicators, fallback.showIndicators),
+    };
+  }
+  function normalizePageSettings(raw, prev, fullConfig) {
+    if (raw === undefined || raw === null) {
+      return !fullConfig && prev ? prev : null;
+    }
+    if (typeof raw !== "object" || Array.isArray(raw)) {
+      return !fullConfig && prev ? prev : null;
+    }
+    var fallback = prev || {
+      autoRotateSeconds: 0,
+      showIndicators: true,
+      swipeEnabled: true,
+    };
+    var rotateSec = fallback.autoRotateSeconds;
+    if (
+      Number.isInteger(raw.autoRotateSeconds) &&
+      (raw.autoRotateSeconds === 0 || (raw.autoRotateSeconds >= 5 && raw.autoRotateSeconds <= 600))
+    ) {
+      rotateSec = raw.autoRotateSeconds;
+    }
+    return {
+      autoRotateSeconds: rotateSec,
+      showIndicators: bool(raw.showIndicators, fallback.showIndicators),
+      swipeEnabled: bool(raw.swipeEnabled, fallback.swipeEnabled),
+    };
+  }
+  function normalizePages(raw, prev, fullConfig) {
+    if (raw === undefined || raw === null) {
+      return !fullConfig && prev ? prev : null;
+    }
+    if (!Array.isArray(raw)) {
+      return !fullConfig && prev ? prev : null;
+    }
+    var seenIds = new Set();
+    var out = [];
+    for (var i = 0; i < raw.length && out.length < 8; i++) {
+      var entry = raw[i];
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      if (typeof entry.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(entry.id)) continue;
+      if (seenIds.has(entry.id)) continue;
+      var enabledKeys = normalizeWidgetKeyList(entry.enabledWidgets, 10);
+      if (!enabledKeys) continue;
+      seenIds.add(entry.id);
+      var pageObj = {
+        id: entry.id,
+        title: text(entry.title, "Página " + (out.length + 1), 60),
+        enabledWidgets: enabledKeys,
+      };
+      if (entry.layoutOptions && typeof entry.layoutOptions === "object") {
+        pageObj.layoutOptions = {
+          photoPosition: choice(entry.layoutOptions.photoPosition, ["left", "right"], "left"),
+          photoWidthPercent:
+            Number.isInteger(entry.layoutOptions.photoWidthPercent) &&
+            entry.layoutOptions.photoWidthPercent >= 40 &&
+            entry.layoutOptions.photoWidthPercent <= 75
+              ? entry.layoutOptions.photoWidthPercent
+              : 62,
+        };
+      }
+      if (hasOwn(entry, "gridLayout")) {
+        var pageGrid = normalizeGridLayout(entry.gridLayout, null, true);
+        if (pageGrid) pageObj.gridLayout = pageGrid;
+      }
+      if (hasOwn(entry, "smartStack")) {
+        var pageStack = normalizeSmartStack(entry.smartStack, null, true);
+        if (pageStack) pageObj.smartStack = pageStack;
+      }
+      out.push(pageObj);
+    }
+    return out.length > 0 ? out : null;
+  }
   function normalize(input, previous) {
     var old = previous || defaults,
       data = object(input),
@@ -580,6 +697,9 @@
             : old.layoutOptions.photoWidthPercent,
       },
       gridLayout: normalizeGridLayout(data.gridLayout, old.gridLayout || null, fullConfig),
+      smartStack: normalizeSmartStack(data.smartStack, old.smartStack || null, fullConfig),
+      pages: normalizePages(data.pages, old.pages || null, fullConfig),
+      pageSettings: normalizePageSettings(data.pageSettings, old.pageSettings || null, fullConfig),
       widgets: {
         photos: {
           enabled: bool(p.enabled, w.photos.enabled),

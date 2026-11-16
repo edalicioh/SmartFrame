@@ -33,3 +33,15 @@ export function clearNumericIssuesForDisabledWidgets(
   if (remaining.length === Object.keys(issues).length) return issues;
   return Object.fromEntries(remaining);
 }
+
+export function clearNumericIssuesForHiddenWidgets(
+  issues: Record<string, string>,
+  visibleWidgetKeys: ReadonlySet<string>,
+): Record<string, string> {
+  const remaining = Object.entries(issues).filter(([id]) => {
+    const key = widgetKeyFromNumericIssue(id);
+    return !UNMOUNTED_NUMERIC_WIDGETS.has(key) || visibleWidgetKeys.has(key);
+  });
+  if (remaining.length === Object.keys(issues).length) return issues;
+  return Object.fromEntries(remaining);
+}

@@ -3,13 +3,25 @@
   var dashboard = document.getElementById("dashboard"),
     stack = document.getElementById("widget-stack");
   var status = document.getElementById("connection-status"),
+    smartStackNav = document.getElementById("smart-stack-nav"),
+    pageNav = document.getElementById("page-nav"),
+    pageOverview = document.getElementById("page-overview"),
     config = null,
     pollTimer = null,
+    pageTimer = null,
+    stackTimer = null,
+    pageTimerKey = "",
+    stackTimerKey = "",
     controller = null,
     inFlight = false,
     refreshRequested = false,
     failures = 0,
-    currenciesPending = false;
+    currenciesPending = false,
+    activePageIndex = 0,
+    activePageId = "",
+    activeStackIndex = 0,
+    overviewOpen = false,
+    interactionPausedUntil = 0;
   var preview = new URLSearchParams(location.search).get("preview") === "1",
     deviceMatch = location.pathname.match(/^\/player\/([A-Za-z0-9_-]+)$/),
     appliedRevision = "";
@@ -139,25 +151,494 @@
       );
     });
   }
-  function applyGridLayout(gridLayout) {
+  function clearChildren(node) {
+    if (!node) return;
+    if (typeof node.replaceChildren === "function") node.replaceChildren();
+    else node.textContent = "";
+  }
+  function makeButton(className, label, text, pressed, onClick) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = className;
+    if (label) btn.setAttribute("aria-label", label);
+    if (pressed !== null && pressed !== undefined)
+      btn.setAttribute("aria-pressed", String(pressed));
+    btn.textContent = text;
+    btn.addEventListener("click", function (event) {
+      if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+      pauseAutoRotation();
+      onClick();
+    });
+    return btn;
+  }
+  function pauseAutoRotation() {
+    interactionPausedUntil = Date.now() + 10000;
+  }
+  function resolveEffectiveView(cfg) {
+    var pages = Array.isArray(cfg.pages) && cfg.pages.length > 0 ? cfg.pages : null;
+    var page = null;
+    if (pages) {
+      var foundIndex = -1;
+      if (activePageId) {
+        for (var i = 0; i < pages.length; i++) {
+          if (pages[i].id === activePageId) {
+            foundIndex = i;
+            break;
+          }
+        }
+      }
+      if (foundIndex < 0) foundIndex = activePageIndex < pages.length ? activePageIndex : 0;
+      activePageIndex = foundIndex;
+      page = pages[foundIndex];
+      activePageId = page.id;
+    } else {
+      activePageIndex = 0;
+      activePageId = "";
+    }
+    var enabledMap = {};
+    if (page && Array.isArray(page.enabledWidgets)) {
+      page.enabledWidgets.forEach(function (key) {
+        enabledMap[key] = true;
+      });
+    } else {
+      names.concat(localNames).forEach(function (key) {
+        if (cfg.widgets[key] && cfg.widgets[key].enabled) enabledMap[key] = true;
+      });
+    }
+    var layoutOptions = (page && page.layoutOptions) || cfg.layoutOptions;
+    var gridLayout = (page && page.gridLayout) || cfg.gridLayout || null;
+    var smartStack = (page && page.smartStack) || cfg.smartStack || null;
+    var stackWidgets = [];
+    var gridEnabled = Boolean(gridLayout && gridLayout.enabled);
+    if (gridEnabled && smartStack && smartStack.enabled && Array.isArray(smartStack.widgets)) {
+      smartStack.widgets.forEach(function (key) {
+        if (enabledMap[key] && stackWidgets.indexOf(key) === -1) stackWidgets.push(key);
+      });
+    }
+    if (stackWidgets.length >= 2) {
+      activeStackIndex =
+        ((activeStackIndex % stackWidgets.length) + stackWidgets.length) % stackWidgets.length;
+    } else {
+      activeStackIndex = 0;
+    }
+    return {
+      pages: pages,
+      page: page,
+      pageIndex: activePageIndex,
+      enabledMap: enabledMap,
+      layoutOptions: layoutOptions,
+      gridLayout: gridLayout,
+      smartStack: smartStack,
+      stackWidgets: stackWidgets,
+      activeStackWidget: stackWidgets.length >= 2 ? stackWidgets[activeStackIndex] : null,
+    };
+  }
+  function currenciesEnabledOnAnyPage(cfg) {
+    var globallyEnabled = Boolean(cfg.widgets.currencies && cfg.widgets.currencies.enabled);
+    if (Array.isArray(cfg.pages) && cfg.pages.length > 0) {
+      return (
+        globallyEnabled ||
+        cfg.pages.some(function (page) {
+          return (
+            page &&
+            Array.isArray(page.enabledWidgets) &&
+            page.enabledWidgets.indexOf("currencies") !== -1
+          );
+        })
+      );
+    }
+    return globallyEnabled;
+  }
+  function applyGridLayout(gridLayout, stackWidgets) {
     var enabled = Boolean(gridLayout && gridLayout.enabled);
     dashboard.classList.toggle("grid-mode", enabled);
     var maps = {
       landscape: enabled ? indexGridItems(gridLayout.landscape) : {},
       portrait: enabled ? indexGridItems(gridLayout.portrait) : {},
     };
+    function findStackSlot(orientation) {
+      if (!enabled || !stackWidgets || stackWidgets.length < 2) return null;
+      var map = maps[orientation];
+      for (var i = 0; i < stackWidgets.length; i++) {
+        if (map[stackWidgets[i]]) return map[stackWidgets[i]];
+      }
+      return null;
+    }
+    var stackSlot = {
+      landscape: findStackSlot("landscape"),
+      portrait: findStackSlot("portrait"),
+    };
     names.concat(localNames).forEach(function (name) {
       var element = document.getElementById(name);
       if (!element) return;
+      var inStack = stackWidgets && stackWidgets.length >= 2 && stackWidgets.indexOf(name) !== -1;
       ["landscape", "portrait"].forEach(function (orientation) {
-        applyGridItem(element, orientation, maps[orientation][name]);
+        var item = maps[orientation][name] || (inStack ? stackSlot[orientation] : null);
+        if (inStack && stackSlot[orientation]) item = stackSlot[orientation];
+        applyGridItem(element, orientation, item);
       });
     });
+    if (smartStackNav) {
+      ["landscape", "portrait"].forEach(function (orientation) {
+        applyGridItem(smartStackNav, orientation, stackSlot[orientation]);
+      });
+    }
+  }
+  function renderSmartStackNav(effective) {
+    if (!smartStackNav) return;
+    var stackWidgets = effective.stackWidgets;
+    var smartStack = effective.smartStack;
+    var show = stackWidgets.length >= 2 && (!smartStack || smartStack.showIndicators !== false);
+    smartStackNav.hidden = !show;
+    if (!show || typeof document.createElement !== "function") {
+      clearChildren(smartStackNav);
+      return;
+    }
+    clearChildren(smartStackNav);
+    smartStackNav.appendChild(
+      makeButton("smart-stack-btn", "Widget anterior da pilha", "▲", null, function () {
+        stepSmartStack(-1);
+      }),
+    );
+    var dots = document.createElement("div");
+    dots.className = "smart-stack-dots";
+    stackWidgets.forEach(function (key, index) {
+      var active = index === activeStackIndex;
+      dots.appendChild(
+        makeButton(
+          "smart-stack-dot" + (active ? " is-active" : ""),
+          key + " (" + (index + 1) + "/" + stackWidgets.length + ")",
+          "",
+          active,
+          function () {
+            activeStackIndex = index;
+            renderEffectiveView(true, config, false);
+          },
+        ),
+      );
+    });
+    smartStackNav.appendChild(dots);
+    smartStackNav.appendChild(
+      makeButton("smart-stack-btn", "Próximo widget da pilha", "▼", null, function () {
+        stepSmartStack(1);
+      }),
+    );
+  }
+  function renderPageNavigation(effective) {
+    var pages = effective.pages;
+    var hasMulti = Boolean(pages && pages.length > 1);
+    var settings = config.pageSettings;
+    if (pageNav) {
+      var showBar = hasMulti;
+      var showIndicators = !settings || settings.showIndicators !== false;
+      pageNav.hidden = !showBar;
+      clearChildren(pageNav);
+      if (showBar && typeof document.createElement === "function") {
+        pageNav.appendChild(
+          makeButton("page-nav-btn", "Página anterior", "‹", null, function () {
+            setPage(activePageIndex - 1);
+          }),
+        );
+        if (showIndicators) {
+          var dots = document.createElement("div");
+          dots.className = "page-nav-dots";
+          pages.forEach(function (p, index) {
+            var active = index === effective.pageIndex;
+            dots.appendChild(
+              makeButton(
+                "page-dot" + (active ? " is-active" : ""),
+                p.title,
+                "",
+                active,
+                function () {
+                  setPage(index);
+                },
+              ),
+            );
+          });
+          pageNav.appendChild(dots);
+        }
+        pageNav.appendChild(
+          makeButton("page-nav-btn", "Próxima página", "›", null, function () {
+            setPage(activePageIndex + 1);
+          }),
+        );
+        pageNav.appendChild(
+          makeButton(
+            "page-overview-toggle",
+            "Visão geral das páginas",
+            effective.page ? effective.page.title : "Páginas",
+            overviewOpen,
+            function () {
+              toggleOverview();
+            },
+          ),
+        );
+      }
+    }
+    if (pageOverview) {
+      var showOverview = hasMulti && overviewOpen;
+      pageOverview.hidden = !showOverview;
+      clearChildren(pageOverview);
+      if (showOverview && typeof document.createElement === "function") {
+        var header = document.createElement("div");
+        header.className = "page-overview-header";
+        var titleEl = document.createElement("strong");
+        titleEl.textContent = "Páginas do painel";
+        header.appendChild(titleEl);
+        header.appendChild(
+          makeButton("page-overview-close", "Fechar visão geral", "✕", null, function () {
+            toggleOverview(false);
+          }),
+        );
+        pageOverview.appendChild(header);
+        var grid = document.createElement("div");
+        grid.className = "page-overview-grid";
+        pages.forEach(function (p, index) {
+          var active = index === effective.pageIndex;
+          grid.appendChild(
+            makeButton(
+              "page-overview-card" + (active ? " is-active" : ""),
+              p.title,
+              p.title + " (" + p.enabledWidgets.length + ")",
+              active,
+              function () {
+                overviewOpen = false;
+                setPage(index);
+              },
+            ),
+          );
+        });
+        pageOverview.appendChild(grid);
+      }
+    }
+  }
+  function scheduleInteractiveTimers(effective) {
+    if (document.hidden) {
+      clearInterval(pageTimer);
+      pageTimer = null;
+      clearInterval(stackTimer);
+      stackTimer = null;
+      return;
+    }
+    var pageSettings = config.pageSettings;
+    var pageInterval =
+      effective.pages &&
+      effective.pages.length > 1 &&
+      pageSettings &&
+      pageSettings.autoRotateSeconds >= 5
+        ? pageSettings.autoRotateSeconds
+        : 0;
+    var pageKey =
+      (effective.page ? effective.page.id : "") +
+      "|" +
+      (effective.pages ? effective.pages.length : 0) +
+      "|" +
+      pageInterval;
+    if (pageKey !== pageTimerKey || (pageInterval > 0 ? !pageTimer : !!pageTimer)) {
+      clearInterval(pageTimer);
+      pageTimer = null;
+      pageTimerKey = pageKey;
+      if (pageInterval > 0) {
+        pageTimer = setInterval(function () {
+          if (document.hidden || overviewOpen || Date.now() < interactionPausedUntil) return;
+          setPage(activePageIndex + 1);
+        }, pageInterval * 1000);
+      }
+    }
+    var stackInterval =
+      effective.stackWidgets.length >= 2 &&
+      effective.smartStack &&
+      effective.smartStack.intervalSeconds >= 5
+        ? effective.smartStack.intervalSeconds
+        : 0;
+    var stackKey =
+      (effective.page ? effective.page.id : "") +
+      "|" +
+      stackInterval +
+      "|" +
+      effective.stackWidgets.join(",");
+    if (stackKey !== stackTimerKey || (stackInterval > 0 ? !stackTimer : !!stackTimer)) {
+      clearInterval(stackTimer);
+      stackTimer = null;
+      stackTimerKey = stackKey;
+      if (stackInterval > 0) {
+        stackTimer = setInterval(function () {
+          if (document.hidden || Date.now() < interactionPausedUntil) return;
+          stepSmartStack(1);
+        }, stackInterval * 1000);
+      }
+    }
+  }
+  function renderEffectiveView(relayoutCurrencies, old, appearanceChanged) {
+    var effective = resolveEffectiveView(config);
+    var appearance = config.appearance || {};
+    var layoutChanged =
+      !old ||
+      changed(old._effectiveLayoutOptions, effective.layoutOptions) ||
+      changed(old._effectiveGridLayout, effective.gridLayout) ||
+      changed(old._effectiveStackWidgets, effective.stackWidgets);
+    if (layoutChanged) {
+      applyGridLayout(effective.gridLayout, effective.stackWidgets);
+      dashboard.classList.toggle("photo-right", effective.layoutOptions.photoPosition === "right");
+      dashboard.style.setProperty(
+        "--photo-width",
+        effective.layoutOptions.photoWidthPercent + "fr",
+      );
+      dashboard.style.setProperty(
+        "--widget-width",
+        100 - effective.layoutOptions.photoWidthPercent + "fr",
+      );
+      dashboard.style.setProperty(
+        "--clock-normal",
+        (100 - effective.layoutOptions.photoWidthPercent) * 0.13 + "vw",
+      );
+      dashboard.style.setProperty(
+        "--clock-small",
+        (100 - effective.layoutOptions.photoWidthPercent) * 0.11 + "vw",
+      );
+      dashboard.style.setProperty(
+        "--clock-large",
+        (100 - effective.layoutOptions.photoWidthPercent) * 0.15 + "vw",
+      );
+    }
+    var visibleMap = {};
+    var enabledMap = {};
+    var stackSet = {};
+    if (effective.stackWidgets.length >= 2)
+      effective.stackWidgets.forEach(function (k) {
+        stackSet[k] = true;
+      });
+    names.forEach(function (name) {
+      var value = config.widgets[name];
+      var isEnabled = Boolean(effective.enabledMap[name]);
+      var isVisible = isEnabled && (!stackSet[name] || name === effective.activeStackWidget);
+      visibleMap[name] = isVisible;
+      enabledMap[name] = isEnabled;
+      var el = document.getElementById(name);
+      var widgetChanged =
+        !old ||
+        changed(old.widgets[name], value) ||
+        Boolean(old._visibleMap && old._visibleMap[name] !== isVisible) ||
+        Boolean(old._enabledMap && old._enabledMap[name] !== isEnabled);
+      if (el) el.hidden = !isVisible;
+      if (widgetChanged || appearanceChanged) {
+        styleWidget(name, value, appearance);
+        if (
+          !old ||
+          changed(old.widgets[name], value) ||
+          Boolean(old._enabledMap && old._enabledMap[name] !== isEnabled)
+        ) {
+          var renderValue = Object.assign({}, value, { enabled: isEnabled });
+          app[name === "photos" ? "carousel" : name].update(renderValue);
+        }
+      }
+    });
+    if (app.localWidgets)
+      localNames.forEach(function (name) {
+        var value = config.widgets[name];
+        var isEnabled = Boolean(effective.enabledMap[name]);
+        var isVisible = isEnabled && (!stackSet[name] || name === effective.activeStackWidget);
+        visibleMap[name] = isVisible;
+        enabledMap[name] = isEnabled;
+        var el = document.getElementById(name);
+        var widgetChanged =
+          !old ||
+          changed(old.widgets[name], value) ||
+          old.timezone !== config.timezone ||
+          Boolean(old._visibleMap && old._visibleMap[name] !== isVisible) ||
+          Boolean(old._enabledMap && old._enabledMap[name] !== isEnabled);
+        if (el) el.hidden = !isVisible;
+        if (widgetChanged || appearanceChanged) {
+          styleWidget(name, value, appearance);
+          if (
+            isEnabled &&
+            (!old ||
+              changed(old.widgets[name], value) ||
+              old.timezone !== config.timezone ||
+              Boolean(old._enabledMap && old._enabledMap[name] !== isEnabled))
+          )
+            localRenderers[name].update(value);
+          if (isVisible) localRenderers[name].resume();
+          else localRenderers[name].pause();
+        }
+      });
+    var anyWidgets =
+      names.slice(1).some(function (name) {
+        return Boolean(visibleMap[name]);
+      }) ||
+      (app.localWidgets &&
+        localNames.some(function (name) {
+          return Boolean(visibleMap[name]);
+        }));
+    stack.hidden = !anyWidgets;
+    dashboard.classList.toggle("no-photos", !visibleMap.photos);
+    dashboard.classList.toggle("no-widgets", !anyWidgets);
+    var visible = Array.prototype.filter.call(stack.children, function (element) {
+      return !element.hidden;
+    });
+    Array.prototype.forEach.call(stack.children, function (element) {
+      element.classList.remove("last-visible");
+    });
+    if (visible.length) visible[visible.length - 1].classList.add("last-visible");
+    renderSmartStackNav(effective);
+    renderPageNavigation(effective);
+    config._effectiveLayoutOptions = effective.layoutOptions;
+    config._effectiveGridLayout = effective.gridLayout;
+    config._effectiveStackWidgets = effective.stackWidgets;
+    config._visibleMap = visibleMap;
+    config._enabledMap = enabledMap;
+    if (relayoutCurrencies) app.currencies.relayout();
+    scheduleInteractiveTimers(effective);
+    return effective;
+  }
+  function setPage(target) {
+    if (!config || !Array.isArray(config.pages) || config.pages.length === 0) return;
+    var pages = config.pages;
+    if (typeof target === "string") {
+      for (var i = 0; i < pages.length; i++) {
+        if (pages[i].id === target) {
+          activePageIndex = i;
+          activePageId = pages[i].id;
+          activeStackIndex = 0;
+          renderEffectiveView(true, config, false);
+          return;
+        }
+      }
+      return;
+    }
+    var count = pages.length;
+    activePageIndex = ((target % count) + count) % count;
+    activePageId = pages[activePageIndex].id;
+    activeStackIndex = 0;
+    renderEffectiveView(true, config, false);
+  }
+  function stepSmartStack(delta) {
+    if (!config) return;
+    var effective = resolveEffectiveView(config);
+    if (effective.stackWidgets.length < 2) return;
+    var count = effective.stackWidgets.length;
+    activeStackIndex = (((activeStackIndex + delta) % count) + count) % count;
+    renderEffectiveView(true, config, false);
+  }
+  function toggleOverview(force) {
+    overviewOpen = typeof force === "boolean" ? force : !overviewOpen;
+    if (config) renderPageNavigation(resolveEffectiveView(config));
   }
   function applyConfig(input) {
     if (!input || typeof input !== "object" || Array.isArray(input)) return config;
     var old = config,
       next = app.normalizeConfig(input, old);
+    if (typeof input.activePageId === "string" && Array.isArray(next.pages)) {
+      for (var p = 0; p < next.pages.length; p++) {
+        if (next.pages[p].id === input.activePageId) {
+          activePageId = next.pages[p].id;
+          activePageIndex = p;
+          break;
+        }
+      }
+    }
+    if (!next.pages || next.pages.length <= 1) overviewOpen = false;
     config = next;
     var appearance = next.appearance || {};
     app.timezone = next.timezone || "";
@@ -191,85 +672,29 @@
       document.body.classList.toggle("theme-dark", next.theme === "dark");
     if (!old || old.orientation !== next.orientation)
       dashboard.classList.toggle("orientation-portrait", next.orientation === "portrait");
-    if (!old || changed(old.gridLayout, next.gridLayout)) applyGridLayout(next.gridLayout);
-    if (!old || changed(old.layoutOptions, next.layoutOptions)) {
-      dashboard.classList.toggle("photo-right", next.layoutOptions.photoPosition === "right");
-      dashboard.style.setProperty("--photo-width", next.layoutOptions.photoWidthPercent + "fr");
-      dashboard.style.setProperty(
-        "--widget-width",
-        100 - next.layoutOptions.photoWidthPercent + "fr",
-      );
-      dashboard.style.setProperty(
-        "--clock-normal",
-        (100 - next.layoutOptions.photoWidthPercent) * 0.13 + "vw",
-      );
-      dashboard.style.setProperty(
-        "--clock-small",
-        (100 - next.layoutOptions.photoWidthPercent) * 0.11 + "vw",
-      );
-      dashboard.style.setProperty(
-        "--clock-large",
-        (100 - next.layoutOptions.photoWidthPercent) * 0.15 + "vw",
-      );
-    }
     var appearanceChanged = !old || changed(old.appearance, next.appearance);
-    names.forEach(function (name) {
-      var value = next.widgets[name];
-      var widgetChanged = !old || changed(old.widgets[name], value);
-      if (widgetChanged || appearanceChanged) {
-        document.getElementById(name).hidden = !value.enabled;
-        styleWidget(name, value, appearance);
-        if (widgetChanged) app[name === "photos" ? "carousel" : name].update(value);
-      }
-    });
-    if (app.localWidgets)
-      localNames.forEach(function (name) {
-        var value = next.widgets[name];
-        var widgetChanged =
-          !old || changed(old.widgets[name], value) || old.timezone !== next.timezone;
-        if (widgetChanged || appearanceChanged) {
-          document.getElementById(name).hidden = !value.enabled;
-          styleWidget(name, value, appearance);
-          if (widgetChanged) {
-            if (value.enabled) {
-              localRenderers[name].update(value);
-              localRenderers[name].resume();
-            } else localRenderers[name].pause();
-          }
-        }
-      });
-    if (old && old.timezone !== next.timezone) {
-      app.clock.update(next.widgets.clock);
-      app.calendar.update(next.widgets.calendar);
-    }
-    var anyWidgets =
-      names.slice(1).some(function (name) {
-        return next.widgets[name].enabled;
-      }) ||
-      (app.localWidgets &&
-        localNames.some(function (name) {
-          return next.widgets[name].enabled;
-        }));
-    stack.hidden = !anyWidgets;
-    dashboard.classList.toggle("no-photos", !next.widgets.photos.enabled);
-    dashboard.classList.toggle("no-widgets", !anyWidgets);
-    var visible = Array.prototype.filter.call(stack.children, function (element) {
-      return !element.hidden;
-    });
-    Array.prototype.forEach.call(stack.children, function (element) {
-      element.classList.remove("last-visible");
-    });
-    if (visible.length) visible[visible.length - 1].classList.add("last-visible");
-    if (
+    var shouldRelayout =
       !old ||
       old.orientation !== next.orientation ||
       changed(old.gridLayout, next.gridLayout) ||
       changed(old.layoutOptions, next.layoutOptions) ||
+      changed(old.pages, next.pages) ||
+      changed(old.smartStack, next.smartStack) ||
       names.some(function (name) {
         return old.widgets[name].enabled !== next.widgets[name].enabled;
-      })
-    )
-      app.currencies.relayout();
+      });
+    renderEffectiveView(shouldRelayout, old, appearanceChanged);
+    if (old && old.timezone !== next.timezone) {
+      var effective = resolveEffectiveView(next);
+      app.clock.update(
+        Object.assign({}, next.widgets.clock, { enabled: Boolean(effective.enabledMap.clock) }),
+      );
+      app.calendar.update(
+        Object.assign({}, next.widgets.calendar, {
+          enabled: Boolean(effective.enabledMap.calendar),
+        }),
+      );
+    }
     if (old && old.refreshSeconds !== next.refreshSeconds && !inFlight)
       schedule(next.refreshSeconds * 1000);
     if (input.widgetData && typeof input.widgetData === "object") {
@@ -345,21 +770,91 @@
         if (refreshRequested) {
           refreshRequested = false;
           schedule(0);
-        } else
+        } else {
+          var currenciesEnabled = currenciesEnabledOnAnyPage(config);
           schedule(
             failures
               ? Math.min(300000, 5000 * Math.pow(2, Math.min(failures - 1, 6)))
-              : config.widgets.currencies.enabled && currenciesPending
+              : currenciesEnabled && currenciesPending
                 ? 2000
-                : Math.min(config.refreshSeconds, config.widgets.currencies.enabled ? 1800 : 3600) *
-                  1000,
+                : Math.min(config.refreshSeconds, currenciesEnabled ? 1800 : 3600) * 1000,
           );
+        }
       }
     }
+  }
+  var swipeOrigin = null;
+  function startedInWidget(target, name) {
+    var el = document.getElementById(name);
+    return Boolean(
+      el && (target === el || (typeof el.contains === "function" && el.contains(target))),
+    );
+  }
+  function startedInSmartStack(target) {
+    if (!config) return false;
+    var effective = resolveEffectiveView(config);
+    if (effective.stackWidgets.length < 2) return false;
+    for (var i = 0; i < effective.stackWidgets.length; i++) {
+      if (startedInWidget(target, effective.stackWidgets[i])) return true;
+    }
+    return false;
+  }
+  if (typeof dashboard.addEventListener === "function") {
+    dashboard.addEventListener("pointerdown", function (event) {
+      pauseAutoRotation();
+      if (!event || (event.button !== undefined && event.button !== 0)) return;
+      swipeOrigin = {
+        x: event.clientX,
+        y: event.clientY,
+        inStack: startedInSmartStack(event.target),
+        inPhotos: startedInWidget(event.target, "photos"),
+      };
+    });
+    dashboard.addEventListener("pointerup", function (event) {
+      if (!swipeOrigin || !event || !config) {
+        swipeOrigin = null;
+        return;
+      }
+      var dx = event.clientX - swipeOrigin.x;
+      var dy = event.clientY - swipeOrigin.y;
+      var inStack = swipeOrigin.inStack;
+      var inPhotos = swipeOrigin.inPhotos;
+      swipeOrigin = null;
+      var effective = resolveEffectiveView(config);
+      if (
+        inStack &&
+        effective.stackWidgets.length >= 2 &&
+        Math.abs(dy) >= 36 &&
+        Math.abs(dy) > Math.abs(dx) * 1.5
+      ) {
+        stepSmartStack(dy < 0 ? 1 : -1);
+        return;
+      }
+      var swipeEnabled = !config.pageSettings || config.pageSettings.swipeEnabled !== false;
+      if (
+        // Photo swipes belong to the carousel's touch handlers, not page navigation.
+        !inPhotos &&
+        swipeEnabled &&
+        effective.pages &&
+        effective.pages.length > 1 &&
+        !overviewOpen &&
+        Math.abs(dx) >= 48 &&
+        Math.abs(dx) > Math.abs(dy) * 1.5
+      ) {
+        setPage(dx < 0 ? activePageIndex + 1 : activePageIndex - 1);
+      }
+    });
+    dashboard.addEventListener("pointercancel", function () {
+      swipeOrigin = null;
+    });
   }
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) {
       clearTimeout(pollTimer);
+      clearInterval(pageTimer);
+      pageTimer = null;
+      clearInterval(stackTimer);
+      stackTimer = null;
       if (controller) controller.abort();
       app.carousel.pause();
       app.currencies.pause();
@@ -374,8 +869,10 @@
       app.clock.resume();
       app.calendar.resume();
       localNames.forEach(function (name) {
-        if (localRenderers[name] && config.widgets[name].enabled) localRenderers[name].resume();
+        var visible = config._visibleMap ? config._visibleMap[name] : config.widgets[name].enabled;
+        if (localRenderers[name] && visible) localRenderers[name].resume();
       });
+      if (config) scheduleInteractiveTimers(resolveEffectiveView(config));
       if (!preview) poll();
     }
   });
@@ -384,6 +881,19 @@
   });
   window.applyConfig = applyConfig;
   app.applyConfig = applyConfig;
+  app.setPage = setPage;
+  app.stepSmartStack = stepSmartStack;
+  app.toggleOverview = toggleOverview;
+  app.getState = function () {
+    var effective = config ? resolveEffectiveView(config) : null;
+    return {
+      activePageId: activePageId,
+      activePageIndex: activePageIndex,
+      activeStackIndex: activeStackIndex,
+      overviewOpen: overviewOpen,
+      stackWidgets: effective ? effective.stackWidgets.slice() : [],
+    };
+  };
   applyConfig(app.defaults);
   if (preview) {
     window.addEventListener("message", function (event) {
@@ -405,7 +915,11 @@
             src: "/api/photos/" + encodeURIComponent(item.id) + "/image",
           });
         });
-      applyConfig(input);
+      applyConfig(
+        typeof event.data.activePageId === "string"
+          ? Object.assign({}, input, { activePageId: event.data.activePageId })
+          : input,
+      );
     });
     if (window.parent !== window)
       window.parent.postMessage({ type: "smartframe:online-preview-ready" }, location.origin);

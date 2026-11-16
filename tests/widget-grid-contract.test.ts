@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   autoArrangeDashboardGrid,
   convertOnlineDashboardToGrid,
+  createDashboardPage,
   createDefaultDashboardGridLayout,
   createGridWidget,
   dashboardPhotoIds,
@@ -13,6 +14,7 @@ import {
   onlineDashboardSchema,
   readOnlineDashboard,
   readStoredOnlineDashboard,
+  resolveActivePageConfig,
   widgetGridDashboardSchema,
   type DashboardGridItem,
   type OnlineDashboard,
@@ -439,5 +441,127 @@ describe("contrato da grade modular", () => {
       }),
     ).toThrow();
     expect(() => readStoredOnlineDashboard({ theme: "neon" })).toThrow();
+  });
+
+  it("cria, resolve páginas e posiciona Smart Stack no mesmo slot com autoArrangeDashboardGrid", () => {
+    const page1 = createDashboardPage(defaultOnlineDashboard, 1, "Capa");
+    const page2 = createDashboardPage(defaultOnlineDashboard, 2);
+    expect(page1.id).toBe("page-1");
+    expect(page2.id).toBe("page-2");
+    expect(page2.title).toBe("Página 2");
+
+    const withExistingPages: OnlineDashboard = {
+      ...defaultOnlineDashboard,
+      pages: [page1, page2],
+    };
+    const page3 = createDashboardPage(withExistingPages, withExistingPages.pages!.length);
+    expect(withExistingPages.pages).toHaveLength(2);
+    expect(page3.id).toBe("page-3");
+    expect(page3.title).toBe("Página 3");
+
+    const multiBaseInput = {
+      pages: [
+        {
+          ...page1,
+          enabledWidgets: ["photos", "clock", "weather"],
+          smartStack: {
+            enabled: true,
+            title: "Cards",
+            widgets: ["photos", "clock"],
+            intervalSeconds: 20,
+            showIndicators: true,
+          },
+          gridLayout: {
+            enabled: true,
+            landscape: [],
+            portrait: [],
+          },
+        },
+        {
+          ...page2,
+          enabledWidgets: ["calendar"],
+          layoutOptions: { photoPosition: "right", photoWidthPercent: 50 },
+        },
+      ],
+    } satisfies Partial<OnlineDashboard>;
+
+    expect(() => onlineDashboardSchema.parse(multiBaseInput)).toThrow();
+
+    const arranged = autoArrangeDashboardGrid(multiBaseInput as OnlineDashboard, undefined, "page-1");
+    const multiBase = onlineDashboardSchema.parse(arranged);
+
+    const fallbackResolved = resolveActivePageConfig(defaultOnlineDashboard);
+    expect(fallbackResolved.page).toBeNull();
+    expect(fallbackResolved.layoutOptions).toEqual(defaultOnlineDashboard.layoutOptions);
+
+    const resolvedP2 = resolveActivePageConfig(multiBase, "page-2");
+    expect(resolvedP2.page?.id).toBe("page-2");
+    expect(resolvedP2.enabledWidgets).toEqual(["calendar"]);
+    expect(resolvedP2.layoutOptions.photoPosition).toBe("right");
+    expect(() => onlineDashboardSchema.parse(arranged)).not.toThrow();
+
+    const p1Grid = arranged.pages?.[0]?.gridLayout;
+    expect(p1Grid).toBeDefined();
+    for (const orientation of ["landscape", "portrait"] as const) {
+      const photosBox = p1Grid![orientation].find((item) => item.widgetId === "photos");
+      const clockBox = p1Grid![orientation].find((item) => item.widgetId === "clock");
+      const weatherBox = p1Grid![orientation].find((item) => item.widgetId === "weather");
+      expect(photosBox).toBeDefined();
+      expect(clockBox).toBeDefined();
+      expect(weatherBox).toBeDefined();
+      // Membros do Smart Stack dividem o mesmo slot, respeitando o maior tamanho mínimo (photos 4x4).
+      expect({ x: clockBox!.x, y: clockBox!.y, w: clockBox!.w, h: clockBox!.h }).toEqual({
+        x: photosBox!.x,
+        y: photosBox!.y,
+        w: photosBox!.w,
+        h: photosBox!.h,
+      });
+      expect(photosBox!.w).toBeGreaterThanOrEqual(4);
+      expect(photosBox!.h).toBeGreaterThanOrEqual(4);
+      expect(gridItemsOverlap(photosBox!, weatherBox!)).toBe(false);
+    }
+  });
+
+  it("reempacota a posição padrão do Smart Stack sem sobrepor widgets vizinhos", () => {
+    const gridLayout = {
+      ...createDefaultDashboardGridLayout(defaultOnlineDashboard),
+      enabled: true,
+    };
+    const config = {
+      ...defaultOnlineDashboard,
+      pages: [
+        {
+          id: "stack-page",
+          title: "Stack",
+          enabledWidgets: [...dashboardWidgetKeys],
+          smartStack: {
+            enabled: true,
+            title: "Stack",
+            widgets: ["notes", "photos"],
+            intervalSeconds: 10,
+            showIndicators: true,
+          },
+          gridLayout,
+        },
+      ],
+    } satisfies OnlineDashboard;
+
+    const arranged = autoArrangeDashboardGrid(config, undefined, "stack-page");
+    expect(() => onlineDashboardSchema.parse(arranged)).not.toThrow();
+    for (const orientation of ["landscape", "portrait"] as const) {
+      const items = arranged.pages![0].gridLayout![orientation];
+      const notes = items.find((item) => item.widgetId === "notes")!;
+      const photos = items.find((item) => item.widgetId === "photos")!;
+      expect({ x: notes.x, y: notes.y, w: notes.w, h: notes.h }).toEqual({
+        x: photos.x,
+        y: photos.y,
+        w: photos.w,
+        h: photos.h,
+      });
+      for (const item of items) {
+        if (item.widgetId === "notes" || item.widgetId === "photos") continue;
+        expect(gridItemsOverlap(notes, item)).toBe(false);
+      }
+    }
   });
 });
