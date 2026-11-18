@@ -83,7 +83,7 @@ const contentTypes = {
   ".webp": "image/webp",
 };
 
-function harness(config, sizes, swipePhoto = false) {
+function harness(config, sizes, interaction) {
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -99,9 +99,10 @@ html, body { margin: 0; }
 <script>
 const config = ${JSON.stringify(config)};
 const sizes = ${JSON.stringify(sizes)};
-const swipePhoto = ${JSON.stringify(swipePhoto)};
+const interaction = ${JSON.stringify(interaction)};
 const frame = document.getElementById("frame");
 const results = [];
+let focusedTask;
 function measure() {
   const win = frame.contentWindow;
   const doc = frame.contentDocument;
@@ -138,6 +139,11 @@ function measure() {
     scroll: [dash.scrollWidth, dash.scrollHeight],
     playerState: win.SmartFrame.getState(),
     activePhoto: doc.querySelector("#photo-indicators .active")?.getAttribute("aria-label"),
+    task: focusedTask && {
+      focused: doc.activeElement === focusedTask,
+      label: focusedTask.textContent,
+      pressed: focusedTask.getAttribute("aria-pressed"),
+    },
     items,
   });
   document.getElementById("result").textContent = JSON.stringify(results);
@@ -147,8 +153,22 @@ function apply(index) {
   frame.style.height = sizes[index][1] + "px";
   setTimeout(() => {
     try {
+      if (interaction === "refreshTasks") {
+        const doc = frame.contentDocument;
+        if (index === 0) {
+          focusedTask = doc.querySelector("#tasks button");
+          focusedTask.focus();
+        } else {
+          if (index === 2) {
+            const items = config.widgets.tasks.items;
+            items[0].completed = true;
+            items.reverse();
+          }
+          frame.contentWindow.applyConfig(config);
+        }
+      }
       measure();
-      if (swipePhoto && index === 0) {
+      if (interaction === "swipePhoto" && index === 0) {
         const win = frame.contentWindow;
         const photo = frame.contentDocument.querySelector(".photo-image.is-current");
         photo.dispatchEvent(new win.PointerEvent("pointerdown", {
@@ -191,7 +211,7 @@ before(async () => {
       const config = JSON.parse(url.searchParams.get("config"));
       const sizes = JSON.parse(url.searchParams.get("sizes"));
       response.writeHead(200, { "content-type": contentTypes[".html"] });
-      response.end(harness(config, sizes, url.searchParams.get("swipePhoto") === "1"));
+      response.end(harness(config, sizes, url.searchParams.get("interaction")));
       return;
     }
     if (/^\/api\/photos\/test-[ab]\/image$/.test(url.pathname)) {
@@ -223,7 +243,7 @@ after(async () => {
   if (server) await new Promise((done) => server.close(done));
 });
 
-function render(config, sizes, swipePhoto = false) {
+function render(config, sizes, interaction = "") {
   const profile = join(tmpdir(), "smartframe-grid-" + Math.random().toString(36).slice(2));
   const url =
     origin +
@@ -231,8 +251,8 @@ function render(config, sizes, swipePhoto = false) {
     encodeURIComponent(JSON.stringify(config)) +
     "&sizes=" +
     encodeURIComponent(JSON.stringify(sizes)) +
-    "&swipePhoto=" +
-    (swipePhoto ? "1" : "0");
+    "&interaction=" +
+    encodeURIComponent(interaction);
   return new Promise((done, fail) => {
     const child = spawn(
       browser,
@@ -303,12 +323,42 @@ test(
         [1024, 600],
         [1024, 600],
       ],
-      true,
+      "swipePhoto",
     );
     assert.equal(before.playerState.activePageId, "first");
     assert.equal(before.activePhoto, "Foto 1");
     assert.equal(after.playerState.activePageId, "first");
     assert.equal(after.activePhoto, "Foto 2");
+  },
+);
+
+test(
+  "tarefas mantêm o foco ao receber a mesma configuração e ao atualizar a lista",
+  { skip, timeout: 90000 },
+  async () => {
+    const config = {
+      layout: "photo-dashboard",
+      revision: "online:test",
+      widgets: {
+        tasks: {
+          enabled: true,
+          showCompleted: true,
+          items: [
+            { id: "agua", text: "Água", completed: false },
+            { id: "pao", text: "Pão", completed: false },
+          ],
+        },
+      },
+    };
+    const measurements = await render(config, Array(3).fill([1024, 600]), "refreshTasks");
+    assert.deepEqual(
+      measurements.map(({ task }) => task),
+      [
+        { focused: true, label: "○ Água", pressed: "false" },
+        { focused: true, label: "○ Água", pressed: "false" },
+        { focused: true, label: "✓ Água", pressed: "true" },
+      ],
+    );
   },
 );
 

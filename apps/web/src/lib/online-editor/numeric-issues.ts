@@ -14,7 +14,14 @@ export function widgetKeyFromNumericIssue(id: string): string {
  * when disabled; retaining the pending error prevents saving with a stale
  * value that is still visible in the field.
  */
-const UNMOUNTED_NUMERIC_WIDGETS = new Set(["notes", "countdown", "birthdays", "tasks", "pomodoro"]);
+const UNMOUNTED_NUMERIC_WIDGETS = new Set([
+  "notes",
+  "countdown",
+  "birthdays",
+  "tasks",
+  "pomodoro",
+  "rss",
+]);
 
 export function clearNumericIssuesForDisabledWidgets(
   issues: Record<string, string>,

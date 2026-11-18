@@ -4,7 +4,65 @@ import type { OnlineDashboard } from "@smartframe/contracts";
 import { ValidatedNumberField } from "./online-editor/validated-number-field";
 
 type Widgets = OnlineDashboard["widgets"];
-type LocalKey = "notes" | "countdown" | "birthdays" | "tasks" | "pomodoro";
+type LocalKey =
+  | "notes"
+  | "countdown"
+  | "birthdays"
+  | "tasks"
+  | "pomodoro"
+  | "system"
+  | "worldClock"
+  | "rss"
+  | "devMonitor";
+
+const LOCAL_WIDGET_METADATA: ReadonlyArray<{ key: LocalKey; label: string; description: string }> =
+  [
+    { key: "notes", label: "Recados", description: "Exiba recados em sequência." },
+    {
+      key: "countdown",
+      label: "Contagem regressiva",
+      description: "Acompanhe a contagem até uma data.",
+    },
+    { key: "birthdays", label: "Aniversários", description: "Lembre os próximos aniversários." },
+    {
+      key: "tasks",
+      label: "Tarefas",
+      description: "Mostre e marque uma lista de tarefas no painel.",
+    },
+    { key: "pomodoro", label: "Pomodoro", description: "Configure ciclos locais de foco e pausa." },
+    {
+      key: "system",
+      label: "Monitor do sistema",
+      description: "Exiba CPU, RAM, disco e tempo de atividade do servidor.",
+    },
+    {
+      key: "worldClock",
+      label: "Relógio mundial",
+      description: "Compare até 6 fusos horários internacionais.",
+    },
+    {
+      key: "rss",
+      label: "Feed RSS",
+      description: "Exiba manchetes sanitizadas no servidor a partir de uma URL HTTPS.",
+    },
+    {
+      key: "devMonitor",
+      label: "Monitor Dev/IA",
+      description: "Acompanhe telemetria do servidor, pipelines, deploys e agentes.",
+    },
+  ];
+
+const COMMON_WORLD_TIMEZONES = [
+  "UTC",
+  "America/Sao_Paulo",
+  "America/New_York",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Lisbon",
+  "Europe/Berlin",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+];
 
 export function LocalWidgetEditor({
   widgets,
@@ -35,28 +93,10 @@ export function LocalWidgetEditor({
     ).join("");
   return (
     <>
-      {(
-        [
-          ["notes", "Recados"],
-          ["countdown", "Contagem regressiva"],
-          ["birthdays", "Aniversários"],
-          ["tasks", "Tarefas"],
-          ["pomodoro", "Pomodoro"],
-        ] as const
-      ).map(([key, label]) => (
+      {LOCAL_WIDGET_METADATA.map(({ key, label, description }) => (
         <fieldset key={key} className="progressive-widget">
           <legend>{label}</legend>
-          <p className="widget-description">
-            {key === "notes"
-              ? "Exiba recados em sequência."
-              : key === "countdown"
-                ? "Acompanhe a contagem até uma data."
-                : key === "birthdays"
-                  ? "Lembre os próximos aniversários."
-                  : key === "tasks"
-                    ? "Mostre uma lista de tarefas."
-                    : "Configure ciclos locais de foco e pausa."}
-          </p>
+          <p className="widget-description">{description}</p>
           <label className="online-toggle">
             <input
               type="checkbox"
@@ -312,6 +352,14 @@ export function LocalWidgetEditor({
                     />{" "}
                     Mostrar concluídas
                   </label>
+                  <label className="online-toggle">
+                    <input
+                      type="checkbox"
+                      checked={widgets.tasks.interactive}
+                      onChange={(e) => update("tasks", { interactive: e.target.checked })}
+                    />{" "}
+                    Permitir marcar e desmarcar tarefas diretamente no tablet
+                  </label>
                 </>
               )}
               {key === "pomodoro" && (
@@ -338,6 +386,281 @@ export function LocalWidgetEditor({
                     Inicie e pause o timer no player. Ao terminar uma etapa, inicie a próxima
                     manualmente; o timer não é sincronizado entre dispositivos.
                   </small>
+                </>
+              )}
+              {key === "system" && (
+                <>
+                  {(
+                    [
+                      ["showCpu", "Mostrar uso de CPU"],
+                      ["showMemory", "Mostrar uso de RAM"],
+                      ["showDisk", "Mostrar uso de disco"],
+                      ["showUptime", "Mostrar tempo de atividade"],
+                    ] as const
+                  ).map(([field, fieldLabel]) => (
+                    <label key={field} className="online-toggle">
+                      <input
+                        type="checkbox"
+                        checked={widgets.system[field]}
+                        onChange={(e) => update("system", { [field]: e.target.checked })}
+                      />{" "}
+                      {fieldLabel}
+                    </label>
+                  ))}
+                </>
+              )}
+              {key === "worldClock" && (
+                <>
+                  <label>
+                    Formato da hora
+                    <select
+                      value={widgets.worldClock.format}
+                      onChange={(e) =>
+                        update("worldClock", { format: e.target.value as "12h" | "24h" })
+                      }
+                    >
+                      <option value="24h">24 horas</option>
+                      <option value="12h">12 horas</option>
+                    </select>
+                  </label>
+                  {widgets.worldClock.zones.map((zone, zoneIndex) => (
+                    <div key={zone.id}>
+                      <label>
+                        Nome {zoneIndex + 1}
+                        <input
+                          maxLength={40}
+                          value={zone.label}
+                          onChange={(e) =>
+                            update("worldClock", {
+                              zones: widgets.worldClock.zones.map((row) =>
+                                row.id === zone.id ? { ...row, label: e.target.value } : row,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Fuso horário {zoneIndex + 1}
+                        <input
+                          list="world-clock-timezone-options"
+                          maxLength={80}
+                          value={zone.timezone}
+                          onChange={(e) =>
+                            update("worldClock", {
+                              zones: widgets.worldClock.zones.map((row) =>
+                                row.id === zone.id ? { ...row, timezone: e.target.value } : row,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={widgets.worldClock.zones.length <= 1}
+                        onClick={() =>
+                          update("worldClock", {
+                            zones: widgets.worldClock.zones.filter((row) => row.id !== zone.id),
+                          })
+                        }
+                      >
+                        Remover fuso
+                      </button>
+                    </div>
+                  ))}
+                  <datalist id="world-clock-timezone-options">
+                    {COMMON_WORLD_TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz} />
+                    ))}
+                  </datalist>
+                  <button
+                    type="button"
+                    disabled={widgets.worldClock.zones.length >= 6}
+                    onClick={() =>
+                      update("worldClock", {
+                        zones: [
+                          ...widgets.worldClock.zones,
+                          { id: id(), label: "Lisboa", timezone: "Europe/Lisbon" },
+                        ],
+                      })
+                    }
+                  >
+                    Adicionar fuso horário
+                  </button>
+                </>
+              )}
+              {key === "rss" && (
+                <>
+                  <label>
+                    URL do feed (HTTPS público)
+                    <input
+                      type="url"
+                      maxLength={500}
+                      placeholder="https://exemplo.com/feed.xml"
+                      value={widgets.rss.feedUrl}
+                      onChange={(e) => update("rss", { feedUrl: e.target.value })}
+                    />
+                  </label>
+                  <ValidatedNumberField
+                    id="rss.maxItems"
+                    label="Máximo de notícias (1–10)"
+                    value={widgets.rss.maxItems}
+                    min={1}
+                    max={10}
+                    onInvalidChange={onNumericInvalid}
+                    onChange={(maxItems) => update("rss", { maxItems })}
+                  />
+                  <label>
+                    Rotação entre manchetes
+                    <select
+                      value={String(widgets.rss.rotateSeconds)}
+                      onChange={(e) => update("rss", { rotateSeconds: Number(e.target.value) })}
+                    >
+                      {![0, 5, 10, 15, 20, 30, 45, 60, 120, 300].includes(
+                        widgets.rss.rotateSeconds,
+                      ) && (
+                        <option value={String(widgets.rss.rotateSeconds)}>
+                          {widgets.rss.rotateSeconds}s
+                        </option>
+                      )}
+                      <option value="0">Lista fixa (sem alternância)</option>
+                      <option value="5">A cada 5 segundos</option>
+                      <option value="10">A cada 10 segundos</option>
+                      <option value="15">A cada 15 segundos</option>
+                      <option value="20">A cada 20 segundos</option>
+                      <option value="30">A cada 30 segundos</option>
+                      <option value="60">A cada 1 minuto</option>
+                      <option value="120">A cada 2 minutos</option>
+                    </select>
+                  </label>
+                  <small>
+                    O servidor consulta e sanitiza o XML em texto puro; o tablet nunca acessa a URL
+                    externa diretamente.
+                  </small>
+                </>
+              )}
+              {key === "devMonitor" && (
+                <>
+                  <label className="online-toggle">
+                    <input
+                      type="checkbox"
+                      checked={widgets.devMonitor.showServerMetrics}
+                      onChange={(e) =>
+                        update("devMonitor", { showServerMetrics: e.target.checked })
+                      }
+                    />{" "}
+                    Mostrar telemetria do servidor SmartFrame
+                  </label>
+                  {widgets.devMonitor.items.map((item, itemIndex) => (
+                    <div key={item.id}>
+                      <label>
+                        Serviço ou agente {itemIndex + 1}
+                        <input
+                          maxLength={60}
+                          value={item.name}
+                          onChange={(e) =>
+                            update("devMonitor", {
+                              items: widgets.devMonitor.items.map((row) =>
+                                row.id === item.id ? { ...row, name: e.target.value } : row,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Categoria
+                        <select
+                          value={item.category}
+                          onChange={(e) =>
+                            update("devMonitor", {
+                              items: widgets.devMonitor.items.map((row) =>
+                                row.id === item.id
+                                  ? {
+                                      ...row,
+                                      category: e.target.value as
+                                        "ci" | "ai" | "service" | "deploy",
+                                    }
+                                  : row,
+                              ),
+                            })
+                          }
+                        >
+                          <option value="service">Serviço</option>
+                          <option value="ci">Build / CI</option>
+                          <option value="ai">Agente IA</option>
+                          <option value="deploy">Deploy / PR</option>
+                        </select>
+                      </label>
+                      <label>
+                        Estado
+                        <select
+                          value={item.status}
+                          onChange={(e) =>
+                            update("devMonitor", {
+                              items: widgets.devMonitor.items.map((row) =>
+                                row.id === item.id
+                                  ? {
+                                      ...row,
+                                      status: e.target.value as
+                                        "healthy" | "running" | "warning" | "failing" | "idle",
+                                    }
+                                  : row,
+                              ),
+                            })
+                          }
+                        >
+                          <option value="healthy">Saudável</option>
+                          <option value="running">Em execução</option>
+                          <option value="warning">Atenção</option>
+                          <option value="failing">Falha</option>
+                          <option value="idle">Inativo</option>
+                        </select>
+                      </label>
+                      <label>
+                        Detalhe
+                        <input
+                          maxLength={120}
+                          value={item.detail}
+                          onChange={(e) =>
+                            update("devMonitor", {
+                              items: widgets.devMonitor.items.map((row) =>
+                                row.id === item.id ? { ...row, detail: e.target.value } : row,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          update("devMonitor", {
+                            items: widgets.devMonitor.items.filter((row) => row.id !== item.id),
+                          })
+                        }
+                      >
+                        Remover item
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={widgets.devMonitor.items.length >= 12}
+                    onClick={() =>
+                      update("devMonitor", {
+                        items: [
+                          ...widgets.devMonitor.items,
+                          {
+                            id: id(),
+                            name: "Pipeline principal",
+                            category: "ci",
+                            status: "healthy",
+                            detail: "",
+                          },
+                        ],
+                      })
+                    }
+                  >
+                    Adicionar item Dev/IA
+                  </button>
                 </>
               )}
             </div>

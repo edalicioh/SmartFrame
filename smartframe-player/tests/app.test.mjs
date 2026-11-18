@@ -20,6 +20,17 @@ test("page IDs matching object property names are accepted", () => {
   assert.equal(config.pages[1].id, "toString");
 });
 
+test("pages preserve all fourteen supported widgets", () => {
+  const window = {};
+  runInNewContext(configSource, { window, Intl });
+  const keys = Object.keys(window.SmartFrame.defaults.widgets);
+  assert.equal(keys.length, 14);
+  const config = window.SmartFrame.normalizeConfig({
+    pages: [{ id: "all", title: "Todos", enabledWidgets: keys }],
+  });
+  assert.deepEqual(Array.from(config.pages[0].enabledWidgets), keys);
+});
+
 function styleProps(target) {
   const map = {};
   target.style = {
@@ -464,7 +475,7 @@ test("player recalcula as margens da grade ao mover um widget para a borda", () 
   assert.equal(h.elements.clock.style.values["--grid-margin-bottom-landscape"], "0");
 });
 
-function setupInteractive(preview = true) {
+function setupInteractive(preview = true, nativeTasks = undefined) {
   const listeners = {},
     documentListeners = {},
     timers = [],
@@ -530,6 +541,10 @@ function setupInteractive(preview = true) {
       "birthdays",
       "tasks",
       "pomodoro",
+      "system",
+      "worldClock",
+      "rss",
+      "devMonitor",
     ].map((id) => [id, createNode("div")]),
   );
   elements["widget-stack"].children = [
@@ -542,6 +557,10 @@ function setupInteractive(preview = true) {
     elements.birthdays,
     elements.tasks,
     elements.pomodoro,
+    elements.system,
+    elements.worldClock,
+    elements.rss,
+    elements.devMonitor,
   ];
   const defaults = {
     revision: "",
@@ -564,6 +583,10 @@ function setupInteractive(preview = true) {
         "birthdays",
         "tasks",
         "pomodoro",
+        "system",
+        "worldClock",
+        "rss",
+        "devMonitor",
       ].map((name) => [name, { enabled: name === "photos" || name === "clock", items: [] }]),
     ),
   };
@@ -592,12 +615,15 @@ function setupInteractive(preview = true) {
     weather: { update() {}, setData() {} },
     currencies: { update() {}, setData() {}, relayout() {}, pause() {}, resume() {} },
     localWidgets: {
-      create: (name) => {
-        const calls = { update: [], pause: 0, resume: 0 };
+      create: (name, _root, context) => {
+        const calls = { update: [], setData: [], pause: 0, resume: 0, context };
         localCalls[name] = calls;
         return {
           update: (value) => {
             calls.update.push(value);
+          },
+          setData: (data) => {
+            calls.setData.push(data);
           },
           pause: () => {
             calls.pause++;
@@ -609,9 +635,12 @@ function setupInteractive(preview = true) {
       },
     },
   };
+  const fetches = [];
+  let fetchOk = true;
   const parent = { postMessage() {} };
   const window = {
     SmartFrame: app,
+    SmartFrameTasks: nativeTasks,
     parent,
     addEventListener(name, fn) {
       listeners[name] = fn;
@@ -638,7 +667,13 @@ function setupInteractive(preview = true) {
     },
     URLSearchParams,
     URL,
-    fetch: () => Promise.resolve({ ok: true, json: async () => ({ layout: "photo-dashboard" }) }),
+    fetch: (...args) => {
+      fetches.push(args);
+      return Promise.resolve({
+        ok: fetchOk,
+        json: async () => ({ layout: "photo-dashboard" }),
+      });
+    },
     AbortController,
     setTimeout: (fn, delay) => {
       fn.delay = delay;
@@ -655,7 +690,20 @@ function setupInteractive(preview = true) {
     },
     clearInterval: (id) => intervals.delete(id),
   });
-  return { app, window, listeners, elements, intervals, localCalls, timezoneWidgetUpdates };
+  return {
+    app,
+    window,
+    listeners,
+    elements,
+    intervals,
+    localCalls,
+    timezoneWidgetUpdates,
+    fetches,
+    timers,
+    setFetchOk: (value) => {
+      fetchOk = value;
+    },
+  };
 }
 
 test("player navega entre múltiplas páginas por controles, visão geral, swipe e preview", () => {
@@ -1069,9 +1117,130 @@ test("mantém navegação por setas quando indicadores e swipe estão desativado
 
   const nav = h.elements["page-nav"];
   assert.equal(nav.hidden, false);
-  assert.equal(nav.children.some((child) => child.className === "page-nav-dots"), false);
-  const nextButton = nav.children.find((child) => child.attributes["aria-label"] === "Próxima página");
+  assert.equal(
+    nav.children.some((child) => child.className === "page-nav-dots"),
+    false,
+  );
+  const nextButton = nav.children.find(
+    (child) => child.attributes["aria-label"] === "Próxima página",
+  );
   assert.ok(nextButton);
   nextButton.click();
   assert.equal(h.app.getState().activePageId, "second");
+});
+
+test("player repassa widgetData da Fase 4 no modo online", () => {
+  const h = setupInteractive(false);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    widgets: {
+      ...h.app.defaults.widgets,
+      system: { enabled: true, title: "Sistema" },
+      rss: { enabled: true, title: "RSS", feedUrl: "https://feeds.example.com/news.xml" },
+      devMonitor: { enabled: true, title: "Dev/IA", showServerMetrics: true, items: [] },
+    },
+    widgetData: {
+      system: { cpuUsagePercent: 18, cpuCores: 4, memoryUsedPercent: 40 },
+      rss: { title: "Feed", items: [{ title: "Item 1" }] },
+      devMonitor: {
+        nodeVersion: "v24.0.0",
+        rssMemoryMb: 90,
+        activeDevicesCount: 1,
+        readyPhotosCount: 3,
+      },
+    },
+  });
+
+  assert.equal(h.elements.system.hidden, false);
+  assert.equal(h.elements.rss.hidden, false);
+  assert.equal(h.elements.devMonitor.hidden, false);
+  assert.equal(h.localCalls.system.setData.at(-1).cpuUsagePercent, 18);
+  assert.equal(h.localCalls.rss.setData.at(-1).title, "Feed");
+  assert.equal(h.localCalls.devMonitor.setData.at(-1).nodeVersion, "v24.0.0");
+});
+
+test("task interaction is disabled without a supported native transport", () => {
+  const h = setupInteractive(false);
+  assert.equal(h.localCalls.tasks.context.canToggleTasks, false);
+  let rolledBack = false;
+  h.localCalls.tasks.context.onToggleTask("t1", true, () => {
+    rolledBack = true;
+  });
+  assert.equal(
+    h.fetches.some(([url]) => String(url).includes("/api/player/tasks")),
+    false,
+  );
+  assert.equal(rolledBack, true);
+});
+
+test("Android task writes use the scoped native bridge and acknowledge success or rollback", () => {
+  const messages = [];
+  const bridge = { postMessage: (data) => messages.push(JSON.parse(data)) };
+  const h = setupInteractive(false, bridge);
+  h.app.applyConfig({ ...h.app.defaults, revision: "online:shown" });
+  assert.equal(h.localCalls.tasks.context.canToggleTasks, true);
+  let rollbacks = 0;
+  const settled = [];
+  h.localCalls.tasks.context.onToggleTask(
+    "t1",
+    true,
+    () => rollbacks++,
+    (ok) => settled.push(ok),
+  );
+  assert.deepEqual(messages[0], {
+    requestId: "task-1",
+    revision: "online:shown",
+    taskId: "t1",
+    completed: true,
+  });
+  assert.equal(
+    h.fetches.some(([url]) => String(url).includes("/api/player/tasks")),
+    false,
+  );
+  bridge.onmessage({ data: JSON.stringify({ requestId: "task-1", ok: true }) });
+  assert.equal(rollbacks, 0);
+  assert.deepEqual(settled, [true]);
+  assert.equal(h.timers.at(-1).delay, 0);
+  h.localCalls.tasks.context.onToggleTask("t1", false, () => rollbacks++);
+  bridge.onmessage({ data: JSON.stringify({ requestId: "task-2", ok: false }) });
+  bridge.onmessage({ data: JSON.stringify({ requestId: "task-2", ok: false }) });
+  assert.equal(rollbacks, 1);
+  h.localCalls.tasks.context.onToggleTask("t1", true, () => rollbacks++);
+  h.timers.at(-1)();
+  assert.equal(rollbacks, 2);
+  assert.equal(h.timers.at(-1).delay, 0);
+});
+
+test("task bridge never writes before a valid publication is displayed", () => {
+  const messages = [];
+  const h = setupInteractive(false, { postMessage: (data) => messages.push(data) });
+  const settled = [];
+  h.localCalls.tasks.context.onToggleTask(
+    "t1",
+    true,
+    () => {},
+    (ok) => settled.push(ok),
+  );
+  assert.deepEqual(settled, [false]);
+  assert.equal(messages.length, 0);
+});
+
+test("changing publication refreshes tasks even when their settings are identical", () => {
+  const h = setupInteractive(true);
+  const widgets = { ...h.app.defaults.widgets, tasks: { enabled: true, items: [] } };
+  h.app.applyConfig({ ...h.app.defaults, revision: "online:first", widgets });
+  const updates = h.localCalls.tasks.update.length;
+  h.app.applyConfig({ ...h.app.defaults, revision: "online:second", widgets });
+  assert.equal(h.localCalls.tasks.update.length, updates + 1);
+  assert.equal(h.localCalls.tasks.context.revision, "online:second");
+  h.app.applyConfig({ ...h.app.defaults, revision: "online:second", widgets });
+  assert.equal(h.localCalls.tasks.update.length, updates + 2);
+});
+
+test("preview never writes tasks even when a native bridge is available", () => {
+  const messages = [];
+  const h = setupInteractive(true, { postMessage: (data) => messages.push(data) });
+  h.localCalls.tasks.context.onToggleTask("t1", true, () => {});
+  assert.equal(messages.length, 0);
+  assert.equal(h.fetches.length, 0);
 });

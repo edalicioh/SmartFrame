@@ -17,6 +17,7 @@
     refreshRequested = false,
     failures = 0,
     currenciesPending = false,
+    rssPending = false,
     activePageIndex = 0,
     activePageId = "",
     activeStackIndex = 0,
@@ -26,16 +27,93 @@
     deviceMatch = location.pathname.match(/^\/player\/([A-Za-z0-9_-]+)$/),
     appliedRevision = "";
   var names = ["photos", "clock", "weather", "currencies", "calendar"];
-  var localNames = ["notes", "countdown", "birthdays", "tasks", "pomodoro"];
-  var localContext = { timezone: "America/Sao_Paulo" },
+  var localNames = [
+    "notes",
+    "countdown",
+    "birthdays",
+    "tasks",
+    "pomodoro",
+    "system",
+    "worldClock",
+    "rss",
+    "devMonitor",
+  ];
+  var nativeTasks = window.SmartFrameTasks,
+    nativeTasksSupported = Boolean(nativeTasks && typeof nativeTasks.postMessage === "function"),
+    nativeTaskSequence = 0,
+    pendingNativeTasks = Object.create(null);
+  if (nativeTasksSupported) {
+    nativeTasks.onmessage = function (event) {
+      var reply;
+      try {
+        reply = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (!reply || typeof reply.requestId !== "string") return;
+      var pending = pendingNativeTasks[reply.requestId];
+      if (!pending) return;
+      delete pendingNativeTasks[reply.requestId];
+      clearTimeout(pending.timer);
+      if (reply.ok !== true && typeof pending.rollback === "function") pending.rollback();
+      if (typeof pending.settle === "function") pending.settle(reply.ok === true);
+      // A failed response may still have committed. Reconcile with the server.
+      schedule(0);
+    };
+  }
+  var localContext = {
+      timezone: "America/Sao_Paulo",
+      revision: "",
+      canToggleTasks: preview || nativeTasksSupported,
+      onToggleTask: function (taskId, completed, rollback, settle) {
+        if (preview) {
+          if (typeof settle === "function") settle(true);
+          return;
+        }
+        if (
+          !nativeTasksSupported ||
+          !taskId ||
+          !config ||
+          !/^online:[A-Za-z0-9_-]{1,128}$/.test(config.revision)
+        ) {
+          if (typeof rollback === "function") rollback();
+          if (typeof settle === "function") settle(false);
+          return;
+        }
+        var requestId = "task-" + ++nativeTaskSequence;
+        var failNativeTask = function () {
+          var pending = pendingNativeTasks[requestId];
+          if (!pending) return;
+          delete pendingNativeTasks[requestId];
+          clearTimeout(pending.timer);
+          if (typeof pending.rollback === "function") pending.rollback();
+          if (typeof pending.settle === "function") pending.settle(false);
+          schedule(0);
+        };
+        pendingNativeTasks[requestId] = {
+          rollback: rollback,
+          settle: settle,
+          timer: setTimeout(failNativeTask, 25000),
+        };
+        try {
+          nativeTasks.postMessage(
+            JSON.stringify({
+              requestId: requestId,
+              revision: config.revision,
+              taskId: taskId,
+              completed: completed,
+            }),
+          );
+        } catch {
+          failNativeTask();
+        }
+      },
+    },
     localRenderers = {};
   if (app.localWidgets)
     localNames.forEach(function (name) {
-      localRenderers[name] = app.localWidgets.create(
-        name,
-        document.getElementById(name),
-        localContext,
-      );
+      var el = document.getElementById(name);
+      if (el) localRenderers[name] = app.localWidgets.create(name, el, localContext);
     });
   function changed(a, b) {
     return JSON.stringify(a) !== JSON.stringify(b);
@@ -537,30 +615,32 @@
     if (app.localWidgets)
       localNames.forEach(function (name) {
         var value = config.widgets[name];
+        if (!value) return;
         var isEnabled = Boolean(effective.enabledMap[name]);
         var isVisible = isEnabled && (!stackSet[name] || name === effective.activeStackWidget);
         visibleMap[name] = isVisible;
         enabledMap[name] = isEnabled;
         var el = document.getElementById(name);
-        var widgetChanged =
+        var settingsChanged =
           !old ||
+          !old.widgets[name] ||
           changed(old.widgets[name], value) ||
           old.timezone !== config.timezone ||
-          Boolean(old._visibleMap && old._visibleMap[name] !== isVisible) ||
           Boolean(old._enabledMap && old._enabledMap[name] !== isEnabled);
+        var viewChanged =
+          settingsChanged ||
+          appearanceChanged ||
+          Boolean(old._visibleMap && old._visibleMap[name] !== isVisible);
         if (el) el.hidden = !isVisible;
-        if (widgetChanged || appearanceChanged) {
-          styleWidget(name, value, appearance);
-          if (
-            isEnabled &&
-            (!old ||
-              changed(old.widgets[name], value) ||
-              old.timezone !== config.timezone ||
-              Boolean(old._enabledMap && old._enabledMap[name] !== isEnabled))
-          )
-            localRenderers[name].update(value);
-          if (isVisible) localRenderers[name].resume();
-          else localRenderers[name].pause();
+        var renderer = localRenderers[name];
+        if (!renderer) return;
+        if (viewChanged) styleWidget(name, value, appearance);
+        // Even an identical server snapshot can settle an optimistic task change.
+        if (isEnabled && (settingsChanged || (name === "tasks" && old !== config)))
+          renderer.update(value);
+        if (viewChanged) {
+          if (isVisible) renderer.resume();
+          else renderer.pause();
         }
       });
     var anyWidgets =
@@ -643,6 +723,7 @@
     var appearance = next.appearance || {};
     app.timezone = next.timezone || "";
     localContext.timezone = next.timezone || "America/Sao_Paulo";
+    localContext.revision = next.revision || "";
     [
       ["--background", appearance.backgroundColor],
       ["--primary", appearance.accentColor],
@@ -699,8 +780,15 @@
       schedule(next.refreshSeconds * 1000);
     if (input.widgetData && typeof input.widgetData === "object") {
       currenciesPending = input.widgetData.currenciesPending === true;
+      rssPending = input.widgetData.rssPending === true;
       app.weather.setData(input.widgetData.weather);
       app.currencies.setData(input.widgetData.currencies);
+      if (localRenderers.system && typeof localRenderers.system.setData === "function")
+        localRenderers.system.setData(input.widgetData.system || null);
+      if (localRenderers.rss && typeof localRenderers.rss.setData === "function")
+        localRenderers.rss.setData(input.widgetData.rss || null);
+      if (localRenderers.devMonitor && typeof localRenderers.devMonitor.setData === "function")
+        localRenderers.devMonitor.setData(input.widgetData.devMonitor || null);
     }
     return config;
   }
@@ -775,7 +863,7 @@
           schedule(
             failures
               ? Math.min(300000, 5000 * Math.pow(2, Math.min(failures - 1, 6)))
-              : currenciesEnabled && currenciesPending
+              : (currenciesEnabled && currenciesPending) || rssPending
                 ? 2000
                 : Math.min(config.refreshSeconds, currenciesEnabled ? 1800 : 3600) * 1000,
           );

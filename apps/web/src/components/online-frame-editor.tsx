@@ -10,6 +10,7 @@ import {
   removePhotoSelection,
 } from "@/lib/online-editor/photos";
 import { ensureGridLayoutValid, setGridLayoutEnabled } from "@/lib/online-editor/grid-layout";
+import { previewWidgetSettings } from "@/lib/online-editor/widget-settings";
 import {
   clearNumericIssuesForDisabledWidgets,
   clearNumericIssuesForHiddenWidgets,
@@ -765,13 +766,7 @@ export function OnlineFrameEditor() {
 
   // The preview iframe never polls or receives device credentials. Its parent uses
   // the authenticated, shared server cache, including for unsaved pair selections.
-  const widgetSettings = JSON.stringify({
-    weather: { enabled: config.widgets.weather.enabled, city: config.widgets.weather.city },
-    currencies: {
-      enabled: config.widgets.currencies.enabled,
-      pairs: config.widgets.currencies.pairs,
-    },
-  });
+  const widgetSettings = JSON.stringify(previewWidgetSettings(config));
   useEffect(() => {
     if (!panelId) return;
     let active = true;
@@ -791,7 +786,7 @@ export function OnlineFrameEditor() {
         });
         if (response.ok) {
           const data: WidgetData = await response.json();
-          if (data.currenciesPending) delay = 2000;
+          if (data.currenciesPending || data.rssPending) delay = 2000;
           if (active) setWidgetData(data);
         }
       } catch {
@@ -1045,9 +1040,7 @@ export function OnlineFrameEditor() {
     const visibleWidgetKeys = new Set(
       resolveActivePageConfig(nextConfig, pageId || undefined).enabledWidgets,
     );
-    setNumericIssues((current) =>
-      clearNumericIssuesForHiddenWidgets(current, visibleWidgetKeys),
-    );
+    setNumericIssues((current) => clearNumericIssuesForHiddenWidgets(current, visibleWidgetKeys));
     setActivePageId(pageId);
   }
   function setNumericIssue(id: string, message: string | null) {
@@ -1093,6 +1086,10 @@ export function OnlineFrameEditor() {
       birthdays: { ...baseWidgets.birthdays, enabled: isEnabled("birthdays") },
       tasks: { ...baseWidgets.tasks, enabled: isEnabled("tasks") },
       pomodoro: { ...baseWidgets.pomodoro, enabled: isEnabled("pomodoro") },
+      system: { ...baseWidgets.system, enabled: isEnabled("system") },
+      worldClock: { ...baseWidgets.worldClock, enabled: isEnabled("worldClock") },
+      rss: { ...baseWidgets.rss, enabled: isEnabled("rss") },
+      devMonitor: { ...baseWidgets.devMonitor, enabled: isEnabled("devMonitor") },
     };
   }
 
@@ -2792,6 +2789,22 @@ export function OnlineFrameEditor() {
                       ],
                       ["tasks", "Tarefas", config.theme === "dark" ? "#1d3045" : "#ffffff"],
                       ["pomodoro", "Pomodoro", config.theme === "dark" ? "#1d3045" : "#ffffff"],
+                      [
+                        "system",
+                        "Monitor do sistema",
+                        config.theme === "dark" ? "#1d3045" : "#ffffff",
+                      ],
+                      [
+                        "worldClock",
+                        "Relógio mundial",
+                        config.theme === "dark" ? "#1d3045" : "#ffffff",
+                      ],
+                      ["rss", "Feed RSS", config.theme === "dark" ? "#1d3045" : "#ffffff"],
+                      [
+                        "devMonitor",
+                        "Monitor Dev/IA",
+                        config.theme === "dark" ? "#1d3045" : "#ffffff",
+                      ],
                     ] as const
                   ).map(([key, label, fallback]) => {
                     const widgetEntry = config.widgets[key];

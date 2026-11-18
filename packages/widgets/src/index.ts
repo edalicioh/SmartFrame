@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { statfs } from "node:fs/promises";
+import os from "node:os";
+import { MIMEType } from "node:util";
 import { z } from "zod";
 import {
   photoFrameSchema,
@@ -7,12 +11,16 @@ import {
   currencyCodes,
   currencyPairSchema,
   defaultCurrencyPairs,
+  isSafePublicHttpsUrl,
 } from "@smartframe/contracts";
 import type { PrismaClient } from "@smartframe/database";
+import { publicHttpsDispatcher } from "./public-https";
 
 export const WIDGET_REFRESH_SECONDS = 30 * 60;
 export const CURRENCY_REFRESH_SECONDS = 30 * 60;
+export const RSS_REFRESH_SECONDS = 15 * 60;
 const TTL = WIDGET_REFRESH_SECONDS * 1000;
+const RSS_TTL = RSS_REFRESH_SECONDS * 1000;
 const STALE_AFTER = 30 * 60_000;
 const weatherPayload = z.object({
   temperature: z.number().min(-100).max(100),
@@ -70,11 +78,13 @@ async function loadFiat() {
   });
 }
 
-async function externalJson(url: URL | string) {
+async function fetchExternalBytes(url: URL | string, accept: string, publicOnly = false) {
+  if (publicOnly && !isSafePublicHttpsUrl(String(url))) throw new Error("URL de feed inválida.");
   const response = await fetch(url, {
     signal: AbortSignal.timeout(9000),
     redirect: "error",
-    headers: { Accept: "application/json", "User-Agent": "SmartFrame/0.2 self-hosted" },
+    headers: { Accept: accept, "User-Agent": "SmartFrame/0.4 self-hosted" },
+    ...(publicOnly ? { dispatcher: publicHttpsDispatcher } : {}),
   });
   if (!response.ok) throw new Error("Fonte de dados temporariamente indisponível.");
   const reader = response.body?.getReader();
@@ -95,13 +105,178 @@ async function externalJson(url: URL | string) {
   } finally {
     reader.releaseLock();
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+  return {
+    bytes: Buffer.concat(chunks, length),
+    contentType: response.headers.get("content-type"),
+  };
 }
+
+async function externalJson(url: URL | string) {
+  const { bytes } = await fetchExternalBytes(url, "application/json");
+  return JSON.parse(bytes.toString("utf8")) as unknown;
+}
+
+/** XML over HTTP: the BOM takes precedence over the HTTP charset, then the XML declaration. */
+function feedEncoding(bytes: Buffer, contentType: string | null): string {
+  const prefix = bytes.toString("hex", 0, 4);
+  if (prefix === "fffe0000" || prefix === "0000feff") throw new Error("UTF-32 não suportado.");
+  if (prefix.startsWith("efbbbf")) return "utf-8";
+  if (prefix.startsWith("fffe")) return "utf-16le";
+  if (prefix.startsWith("feff")) return "utf-16be";
+
+  if (contentType) {
+    try {
+      const charset = new MIMEType(contentType).params.get("charset");
+      if (charset) return charset;
+    } catch {
+      // An invalid Content-Type supplies no usable charset; inspect the XML itself.
+    }
+  }
+  if (prefix === "3c003f00") return "utf-16le";
+  if (prefix === "003c003f") return "utf-16be";
+  // For ASCII-compatible encodings only the declaration needs inspecting before decoding.
+  const end = bytes.indexOf("?>");
+  const declaration = end < 0 ? "" : bytes.toString("latin1", 0, end);
+  return (
+    /^<\?xml\s+[^?]*?\bencoding\s*=\s*(["'])([A-Za-z][\w.-]*)\1/.exec(declaration)?.[2] ?? "utf-8"
+  );
+}
+
+type RssParsedFeed = {
+  title: string;
+  items: Array<{ title: string; publishedAt: string | null }>;
+};
+
+const rssCachePayload = z.object({
+  title: z.string().max(120),
+  items: z
+    .array(
+      z.object({
+        title: z.string().max(180),
+        publishedAt: z.string().nullable(),
+      }),
+    )
+    .max(10),
+});
+
+function cleanXmlText(raw: string): string {
+  const unwrapped = raw.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1");
+  const withoutTags = unwrapped.replace(/<[^>]+>/g, " ");
+  const decoded = withoutTags
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#0*39;/gi, "'")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#(\d+);/g, (_match, dec: string) => {
+      const code = Number(dec);
+      return Number.isInteger(code) && code > 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : "";
+    })
+    .replace(/&#x([0-9a-fA-F]+);/g, (_match, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isInteger(code) && code > 0 && code <= 0x10ffff
+        ? String.fromCodePoint(code)
+        : "";
+    });
+  return decoded
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstTagValue(block: string, tag: string): string {
+  const match = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i").exec(block);
+  return match ? cleanXmlText(match[1]) : "";
+}
+
+/** Extract sanitized feed title and headlines from RSS 2.0 or Atom XML without HTML/scripts. */
+export function parseRssXml(xml: string): RssParsedFeed {
+  const stripped = xml.replace(/<!--[\s\S]*?-->/g, "");
+  const headerSlice = stripped.split(/<(?:item|entry)(?:\s|>)/i)[0] ?? stripped;
+  const feedTitle = firstTagValue(headerSlice, "title").slice(0, 120) || "Feed RSS";
+  const blocks = [...stripped.matchAll(/<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1>/gi)].slice(
+    0,
+    10,
+  );
+  const items: Array<{ title: string; publishedAt: string | null }> = [];
+  for (const match of blocks) {
+    const body = match[2];
+    const title = firstTagValue(body, "title").slice(0, 180);
+    if (!title) continue;
+    const rawDate =
+      firstTagValue(body, "pubDate") ||
+      firstTagValue(body, "published") ||
+      firstTagValue(body, "updated");
+    const parsedTime = rawDate ? Date.parse(rawDate) : Number.NaN;
+    items.push({
+      title,
+      publishedAt: Number.isFinite(parsedTime) ? new Date(parsedTime).toISOString() : null,
+    });
+  }
+  return rssCachePayload.parse({ title: feedTitle, items });
+}
+
+let previousCpuSnapshot: { idle: number; total: number } | null = null;
+
+export async function collectSystemMetrics() {
+  const cpus = os.cpus();
+  let idle = 0;
+  let total = 0;
+  for (const cpu of cpus) {
+    idle += cpu.times.idle;
+    total += cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq;
+  }
+  let cpuUsagePercent = 0;
+  if (previousCpuSnapshot && total > previousCpuSnapshot.total) {
+    const deltaTotal = total - previousCpuSnapshot.total;
+    const deltaIdle = Math.max(0, idle - previousCpuSnapshot.idle);
+    cpuUsagePercent = Math.min(
+      100,
+      Math.max(0, Math.round(((deltaTotal - deltaIdle) / deltaTotal) * 100)),
+    );
+  } else if (total > 0) {
+    cpuUsagePercent = Math.min(100, Math.max(0, Math.round(((total - idle) / total) * 100)));
+  }
+  previousCpuSnapshot = { idle, total };
+
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = Math.max(0, totalMem - freeMem);
+  let diskUsedPercent: number | null = null;
+  try {
+    const stats = await statfs(process.cwd());
+    const blocks = Number(stats.blocks);
+    const bfree = Number(stats.bfree);
+    if (blocks > 0) {
+      diskUsedPercent = Math.min(100, Math.max(0, Math.round(((blocks - bfree) / blocks) * 100)));
+    }
+  } catch {
+    diskUsedPercent = null;
+  }
+
+  return {
+    cpuUsagePercent,
+    cpuCores: cpus.length,
+    memoryUsedPercent: totalMem > 0 ? Math.min(100, Math.round((usedMem / totalMem) * 100)) : 0,
+    memoryUsedGb: Math.round((usedMem / 1024 ** 3) * 10) / 10,
+    memoryTotalGb: Math.round((totalMem / 1024 ** 3) * 10) / 10,
+    diskUsedPercent,
+    uptimeSeconds: Math.max(0, Math.floor(os.uptime())),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+type JsonObject = { [key: string]: JsonValue };
 
 async function refresh(
   db: PrismaClient,
   key: string,
-  load: () => Promise<Record<string, string | number | Record<string, number>>>,
+  load: () => Promise<JsonObject>,
   force: boolean,
   ttl = TTL,
 ) {
@@ -217,9 +392,14 @@ export async function cachedWidgetData(db: PrismaClient, frame: PhotoFrame): Pro
 type OnlineSettings = {
   weather: { enabled: boolean; city: string };
   currencies: { enabled: boolean; pairs?: string[] };
+  system?: { enabled: boolean };
+  rss?: { enabled: boolean; feedUrl?: string; maxItems?: number };
+  devMonitor?: { enabled: boolean; showServerMetrics?: boolean };
 };
 const onlineWeatherKey = (city: string) =>
   `online:weather:${city.trim().toLocaleLowerCase("pt-BR")}`;
+const onlineRssKey = (feedUrl: string) =>
+  `online:rss:${createHash("sha256").update(feedUrl).digest("hex").slice(0, 32)}`;
 const onlineRefreshes = new WeakMap<PrismaClient, Map<string, Promise<void>>>();
 const spotPayload = z.object({ rates: z.record(z.string(), z.number().positive().max(1e20)) });
 const spotKey = (base: string) => `online:currencies:spot:${base}`;
@@ -274,7 +454,7 @@ async function loadMarketStats(pair: string) {
 function refreshOnlineSource(
   db: PrismaClient,
   key: string,
-  load: () => Promise<Record<string, string | number | Record<string, number>>>,
+  load: () => Promise<JsonObject>,
   ttl = TTL,
 ): Promise<void> {
   let jobs = onlineRefreshes.get(db);
@@ -323,14 +503,44 @@ export async function refreshOnlineWidgets(
         CURRENCY_REFRESH_SECONDS * 1000,
       ),
     );
+  const rssUrl = settings.rss?.enabled ? (settings.rss.feedUrl?.trim() ?? "") : "";
+  if (rssUrl && isSafePublicHttpsUrl(rssUrl)) {
+    tasks.push(
+      refreshOnlineSource(
+        db,
+        onlineRssKey(rssUrl),
+        async () => {
+          const { bytes, contentType } = await fetchExternalBytes(
+            rssUrl,
+            "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9",
+            true,
+          );
+          const decoder = new TextDecoder(feedEncoding(bytes, contentType), { fatal: true });
+          return parseRssXml(decoder.decode(bytes));
+        },
+        RSS_TTL,
+      ),
+    );
+  }
   await Promise.all(tasks);
 }
 
-export async function onlineWidgetData(db: PrismaClient, settings: OnlineSettings) {
+export async function onlineWidgetData(
+  db: PrismaClient,
+  settings: OnlineSettings,
+  householdId: string,
+) {
+  if (!householdId) throw new Error("Residência autenticada necessária para os widgets.");
   const pairs = selectedPairs(settings);
   const bases = [...new Set(pairs.map((pair) => pair.split("/")[0]))];
   const statsPairs = pairs.filter(hasMarketStats);
-  const [weather, records, statsRecords] = await Promise.all([
+  const rssUrl = settings.rss?.enabled ? (settings.rss.feedUrl?.trim() ?? "") : "";
+  const validRssUrl = rssUrl && isSafePublicHttpsUrl(rssUrl) ? rssUrl : "";
+  const wantSystem = Boolean(settings.system?.enabled);
+  const wantDevMetrics = Boolean(
+    settings.devMonitor?.enabled && settings.devMonitor.showServerMetrics !== false,
+  );
+  const [weather, records, statsRecords, rssRecord, systemMetrics, devMetrics] = await Promise.all([
     settings.weather.enabled
       ? db.widgetSnapshot.findUnique({ where: { key: onlineWeatherKey(settings.weather.city) } })
       : null,
@@ -342,6 +552,23 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
         db.widgetSnapshot.findUnique({ where: { key: marketStatsKey(pair) } }),
       ),
     ),
+    validRssUrl
+      ? db.widgetSnapshot.findUnique({ where: { key: onlineRssKey(validRssUrl) } })
+      : null,
+    wantSystem ? collectSystemMetrics() : null,
+    wantDevMetrics
+      ? Promise.all([
+          db.device.count({ where: { householdId, revokedAt: null } }),
+          db.media.count({ where: { householdId, status: "ready" } }),
+        ]).then(([activeDevicesCount, readyPhotosCount]) => ({
+          nodeVersion: process.version,
+          processUptimeSeconds: Math.max(0, Math.floor(process.uptime())),
+          rssMemoryMb: Math.round((process.memoryUsage().rss / (1024 * 1024)) * 10) / 10,
+          activeDevicesCount,
+          readyPhotosCount,
+          updatedAt: new Date().toISOString(),
+        }))
+      : null,
   ]);
   // Providers may take longer than the tablet's HTTP deadline. Return the last cache
   // immediately and refresh in the background; the next normal poll receives new data.
@@ -352,6 +579,8 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
     Date.now() - record.updatedAt.getTime() >= ttl ||
     (!!record.failedAt && record.failedAt >= record.updatedAt);
   const parsedWeather = weatherPayload.safeParse(weather?.payload);
+  const parsedRss = rssCachePayload.safeParse(rssRecord?.payload);
+  const rssMaxItems = Math.max(1, Math.min(10, settings.rss?.maxItems ?? 5));
   const currencies: Record<
     string,
     {
@@ -390,6 +619,7 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
   return {
     refreshSeconds: WIDGET_REFRESH_SECONDS,
     currencyRefreshSeconds: CURRENCY_REFRESH_SECONDS,
+    rssPending: Boolean(validRssUrl && (!rssRecord || rssRecord.expiresAt.getTime() <= Date.now())),
     currenciesPending: [...records, ...statsRecords].some(
       (record) => !record || record.expiresAt.getTime() <= Date.now(),
     ),
@@ -404,6 +634,17 @@ export async function onlineWidgetData(db: PrismaClient, settings: OnlineSetting
           }
         : null,
     currencies,
+    system: systemMetrics,
+    rss:
+      rssRecord && parsedRss.success
+        ? {
+            title: parsedRss.data.title,
+            items: parsedRss.data.items.slice(0, rssMaxItems),
+            updatedAt: rssRecord.updatedAt.toISOString(),
+            stale: old(rssRecord, RSS_TTL),
+          }
+        : null,
+    devMonitor: devMetrics,
   };
 }
 

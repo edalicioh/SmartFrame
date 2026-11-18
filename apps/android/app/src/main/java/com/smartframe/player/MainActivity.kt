@@ -14,6 +14,8 @@ import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.webkit.*
 import android.webkit.ServiceWorkerController
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import android.widget.*
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -79,6 +81,21 @@ class MainActivity : Activity() {
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.cacheMode = WebSettings.LOAD_NO_CACHE
             settings.safeBrowsingEnabled = true
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+                WebViewCompat.addWebMessageListener(this, "SmartFrameTasks", setOf(c.server)) { v, message, sourceOrigin, isMainFrame, reply ->
+                    if (!isMainFrame || v !== webView || !DashboardUrl.sameOrigin(c.server, sourceOrigin.toString())) return@addWebMessageListener
+                    val task = try { TaskClient.parse(message.data ?: "") } catch (_: Exception) { return@addWebMessageListener }
+                    val deadline = TaskWriteDeadline()
+                    executor.execute {
+                        val ok = try { TaskClient.toggle(c, task, deadline); true } catch (_: Exception) { false }
+                        handler.post {
+                            if (v === webView && credentials.read() == c) {
+                                reply.postMessage(JSONObject().put("requestId", task.requestId).put("ok", ok).toString())
+                            }
+                        }
+                    }
+                }
+            }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(v: WebView, request: WebResourceRequest) = true
                 override fun shouldInterceptRequest(v: WebView, request: WebResourceRequest): WebResourceResponse {

@@ -265,4 +265,41 @@ test("scoped appearance normalizes presets, bounds, resets and inheritance", () 
       photoWidthPercent: 48,
     },
   });
+
+  const phase4Normalized = normalize({
+    layout: "photo-dashboard",
+    widgets: {
+      tasks: { interactive: false },
+      system: { enabled: true, title: "PC Sala", showCpu: true, showDisk: false },
+      worldClock: {
+        enabled: true,
+        format: "12h",
+        zones: [
+          { id: "z1", label: "Lisboa", timezone: "Europe/Lisbon" },
+          { id: "bad", label: "Inválido", timezone: "Invalid/Zone" },
+        ],
+      },
+      rss: { enabled: true, feedUrl: "http://inseguro.test/feed.xml", maxItems: 8 },
+      devMonitor: {
+        enabled: true,
+        items: [{ id: "ci-1", name: "Build", category: "ci", status: "running", detail: "PR #9" }],
+      },
+    },
+  });
+  assert.equal(phase4Normalized.widgets.tasks.interactive, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(phase4Normalized.widgets.system)), {
+    enabled: true,
+    backgroundColor: "",
+    appearance: null,
+    title: "PC Sala",
+    showCpu: true,
+    showMemory: true,
+    showDisk: false,
+    showUptime: true,
+  });
+  assert.equal(phase4Normalized.widgets.worldClock.zones.length, 1);
+  assert.equal(phase4Normalized.widgets.worldClock.zones[0].id, "z1");
+  assert.equal(phase4Normalized.widgets.rss.feedUrl, "");
+  assert.equal(phase4Normalized.widgets.rss.maxItems, 8);
+  assert.equal(phase4Normalized.widgets.devMonitor.items[0].status, "running");
 });

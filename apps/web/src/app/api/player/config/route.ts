@@ -41,16 +41,32 @@ export async function GET(request: Request) {
         : [];
     });
     const pageEnabledWidgets = new Set(config.pages?.flatMap((page) => page.enabledWidgets) ?? []);
-    const widgetData = await onlineWidgetData(db, {
-      weather: {
-        ...config.widgets.weather,
-        enabled: config.widgets.weather.enabled || pageEnabledWidgets.has("weather"),
+    const widgetData = await onlineWidgetData(
+      db,
+      {
+        weather: {
+          ...config.widgets.weather,
+          enabled: config.widgets.weather.enabled || pageEnabledWidgets.has("weather"),
+        },
+        currencies: {
+          ...config.widgets.currencies,
+          enabled: config.widgets.currencies.enabled || pageEnabledWidgets.has("currencies"),
+        },
+        system: {
+          ...config.widgets.system,
+          enabled: config.widgets.system.enabled || pageEnabledWidgets.has("system"),
+        },
+        rss: {
+          ...config.widgets.rss,
+          enabled: config.widgets.rss.enabled || pageEnabledWidgets.has("rss"),
+        },
+        devMonitor: {
+          ...config.widgets.devMonitor,
+          enabled: config.widgets.devMonitor.enabled || pageEnabledWidgets.has("devMonitor"),
+        },
       },
-      currencies: {
-        ...config.widgets.currencies,
-        enabled: config.widgets.currencies.enabled || pageEnabledWidgets.has("currencies"),
-      },
-    });
+      device.householdId,
+    );
     const result = {
       ...config,
       deviceId: device.id,

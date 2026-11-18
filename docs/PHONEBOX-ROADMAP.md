@@ -9,7 +9,7 @@ Este documento organiza as 6 fases de evolução para incorporar ao SmartFrame o
 | **Fase 1** | Sistema de Aparência em Camadas (`APPEARANCE.md`)                          | **Implementada** | [widget-style.ts](../packages/contracts/src/widget-style.ts), [APPEARANCE.md](APPEARANCE.md), `smartframe-player`, `/layouts`                                     |
 | **Fase 2** | Editor Visual em Grade Livre + Templates                                   | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts` |
 | **Fase 3** | Múltiplas Páginas e _Smart Stack_                                          | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts` |
-| **Fase 4** | Novos Widgets (Sistema, Tarefas interativas, Relógio Mundial, RSS, Dev/IA) | Planejada        | Provedores em `packages/widgets` e renderizadores em `smartframe-player`                                                                                          |
+| **Fase 4** | Novos Widgets (Sistema, Tarefas interativas, Relógio Mundial, RSS, Dev/IA) | **Implementada** | [widgets/src/index.ts](../packages/widgets/src/index.ts), `/api/player/tasks`, `smartframe-player`, `/layouts`                                                    |
 | **Fase 5** | Webhooks de Entrada e Regras Automáticas                                   | Planejada        | Rotas em `apps/web/src/app/api` e fila em `packages/jobs`                                                                                                         |
 | **Fase 6** | Modo Control Deck (`CONTROL-DECK.md`)                                      | Planejada        | Autenticação de dispositivo em `packages/frames` e agente local                                                                                                   |
 
@@ -41,12 +41,12 @@ Este documento organiza as 6 fases de evolução para incorporar ao SmartFrame o
 
 ---
 
-## Fase 4 — Novos Widgets (Planejada)
+## Fase 4 — Novos Widgets (Implementada)
 
-- **Monitoramento do servidor/PC**: CPU, RAM, disco, rede e status de contêineres/processos locais coletados com validação no backend/worker, sem expor dados sensíveis.
-- **Tarefas interativas no tablet**: permitir marcar e desmarcar itens diretamente no `smartframe-player` com sincronização autenticada de volta ao rascunho/estado do painel.
-- **Relógio Mundial e Feeds RSS**: múltiplos fusos horários configuráveis e leitor RSS sanitizado no servidor (sem acesso externo direto do player HTML).
-- **Monitoramento Dev/IA**: visão de sessões ativas, status de builds/PRs e métricas locais de ferramentas de desenvolvimento.
+- **Monitoramento do servidor/PC (`system`)**: CPU, RAM, disco e tempo de atividade coletados localmente em [widgets/src/index.ts](../packages/widgets/src/index.ts), sem expor nomes de host, caminhos ou variáveis sensíveis.
+- **Tarefas interativas no tablet (`tasks.interactive`)**: botões acessíveis no `smartframe-player` com sincronização autenticada via `POST /api/player/tasks` (atualizando versão ativa e rascunho em transação, com _rollback_ automático em caso de falha).
+- **Relógio Mundial (`worldClock`) e Feeds RSS (`rss`)**: até 6 fusos horários internacionais formatados localmente e leitor RSS 2.0/Atom com bloqueio SSRF (`isSafePublicHttpsUrl`), limite de resposta e sanitização em texto puro no servidor.
+- **Monitoramento Dev/IA (`devMonitor`)**: telemetria resumida do servidor combinada a cartões de status configuráveis (`ci`, `ai`, `service`, `deploy`).
 
 ---
 

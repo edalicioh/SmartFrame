@@ -60,6 +60,16 @@ Na seção **Múltiplas páginas e Smart Stack** em **Aparência e layout**, cad
 - Em `pageSettings`, defina rotação automática entre páginas (`0` ou `>= 5` segundos), exibição dos indicadores inferiores e navegação por deslize horizontal (_swipe_), além da visão geral de páginas no player.
 - Com o **Smart Stack**, até **12 widgets** podem compartilhar o mesmo slot da grade por painel ou por página, alternando por botões/indicadores verticais, gesto vertical no card ou rotação automática que pausa quando o usuário interage.
 
+## Novos widgets e tarefas interativas
+
+Na aba **Widgets → Widgets adicionais**, além de _Recados_, _Contagem regressiva_, _Aniversários_, _Tarefas_ e _Pomodoro_:
+
+- **Tarefas interativas**: quando ativado (`interactive: true`), tocar ou clicar em um item no tablet marca ou desmarca a tarefa e sincroniza o estado diretamente com o painel publicado via `POST /api/player/tasks`.
+- **Monitor do sistema**: mostra percentuais agregados de CPU, RAM, disco e uptime do servidor sem expor credenciais ou caminhos.
+- **Relógio mundial**: exibe até **6 fusos horários IANA** configuráveis com indicador de dia relativo (`Hoje`, `+1d`, `-1d`).
+- **Feed RSS**: lê feeds `https://` públicos validados e sanitizados no servidor em texto puro, com lista fixa ou rotação por manchete.
+- **Monitor Dev/IA**: combina métricas básicas do runtime Node/SmartFrame com itens de status personalizados para builds de CI, serviços, deploys ou agentes de IA.
+
 ## Fundo, aparência e tamanho dos widgets
 
 Em **Aparência e layout → Estilo e superfície do painel** e **Fundo e tamanho dos widgets**,

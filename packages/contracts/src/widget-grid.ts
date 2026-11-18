@@ -456,7 +456,7 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
-/** Generate a valid, non-overlapping default grid layout covering all 10 widgets. */
+/** Generate a valid, non-overlapping default grid layout covering all 14 widgets. */
 export function createDefaultDashboardGridLayout(
   config: OnlineDashboard = defaultOnlineDashboard,
 ): DashboardGridLayout {
@@ -465,35 +465,40 @@ export function createDefaultDashboardGridLayout(
   const right = config.layoutOptions.photoPosition === "right";
   const photoX = right ? sideWidth : 0;
   const sideX = right ? 0 : photoWidth;
-  const w1 = Math.floor(photoWidth / 3);
-  const w2 = Math.floor(photoWidth / 3);
-  const w3 = photoWidth - w1 - w2;
 
   return {
     enabled: config.gridLayout?.enabled ?? false,
     landscape: [
-      { widgetId: "photos", x: photoX, y: 0, w: photoWidth, h: 18 },
-      { widgetId: "clock", x: sideX, y: 0, w: sideWidth, h: 4 },
-      { widgetId: "weather", x: sideX, y: 4, w: sideWidth, h: 5 },
-      { widgetId: "currencies", x: sideX, y: 9, w: sideWidth, h: 5 },
-      { widgetId: "calendar", x: sideX, y: 14, w: sideWidth, h: 10 },
-      { widgetId: "notes", x: photoX, y: 18, w: w1, h: 3 },
-      { widgetId: "countdown", x: photoX + w1, y: 18, w: w2, h: 3 },
-      { widgetId: "birthdays", x: photoX + w1 + w2, y: 18, w: w3, h: 3 },
-      { widgetId: "tasks", x: photoX, y: 21, w: w1 + w2, h: 3 },
-      { widgetId: "pomodoro", x: photoX + w1 + w2, y: 21, w: w3, h: 3 },
+      { widgetId: "photos", x: photoX, y: 0, w: photoWidth, h: 15 },
+      { widgetId: "clock", x: sideX, y: 0, w: sideWidth, h: 3 },
+      { widgetId: "weather", x: sideX, y: 3, w: sideWidth, h: 3 },
+      { widgetId: "currencies", x: sideX, y: 6, w: sideWidth, h: 4 },
+      { widgetId: "calendar", x: sideX, y: 10, w: sideWidth, h: 5 },
+      { widgetId: "notes", x: 0, y: 15, w: 5, h: 3 },
+      { widgetId: "countdown", x: 5, y: 15, w: 5, h: 3 },
+      { widgetId: "birthdays", x: 10, y: 15, w: 5, h: 3 },
+      { widgetId: "tasks", x: 15, y: 15, w: 5, h: 3 },
+      { widgetId: "pomodoro", x: 20, y: 15, w: 4, h: 3 },
+      { widgetId: "system", x: 0, y: 18, w: 6, h: 6 },
+      { widgetId: "worldClock", x: 6, y: 18, w: 6, h: 6 },
+      { widgetId: "rss", x: 12, y: 18, w: 6, h: 6 },
+      { widgetId: "devMonitor", x: 18, y: 18, w: 6, h: 6 },
     ],
     portrait: [
-      { widgetId: "photos", x: 0, y: 0, w: 12, h: 18 },
-      { widgetId: "clock", x: 0, y: 18, w: 6, h: 4 },
-      { widgetId: "weather", x: 6, y: 18, w: 6, h: 4 },
-      { widgetId: "currencies", x: 0, y: 22, w: 6, h: 5 },
-      { widgetId: "calendar", x: 6, y: 22, w: 6, h: 8 },
-      { widgetId: "notes", x: 0, y: 27, w: 6, h: 3 },
-      { widgetId: "tasks", x: 0, y: 30, w: 6, h: 5 },
-      { widgetId: "countdown", x: 6, y: 30, w: 6, h: 4 },
-      { widgetId: "birthdays", x: 0, y: 35, w: 6, h: 5 },
-      { widgetId: "pomodoro", x: 6, y: 34, w: 6, h: 6 },
+      { widgetId: "photos", x: 0, y: 0, w: 12, h: 10 },
+      { widgetId: "clock", x: 0, y: 10, w: 6, h: 3 },
+      { widgetId: "weather", x: 6, y: 10, w: 6, h: 3 },
+      { widgetId: "currencies", x: 0, y: 13, w: 6, h: 4 },
+      { widgetId: "calendar", x: 6, y: 13, w: 6, h: 4 },
+      { widgetId: "notes", x: 0, y: 17, w: 6, h: 3 },
+      { widgetId: "countdown", x: 6, y: 17, w: 6, h: 3 },
+      { widgetId: "birthdays", x: 0, y: 20, w: 6, h: 4 },
+      { widgetId: "tasks", x: 6, y: 20, w: 6, h: 4 },
+      { widgetId: "pomodoro", x: 0, y: 24, w: 6, h: 4 },
+      { widgetId: "worldClock", x: 6, y: 24, w: 6, h: 4 },
+      { widgetId: "system", x: 0, y: 28, w: 6, h: 6 },
+      { widgetId: "rss", x: 6, y: 28, w: 6, h: 6 },
+      { widgetId: "devMonitor", x: 0, y: 34, w: 12, h: 6 },
     ],
   };
 }
@@ -793,6 +798,10 @@ export function applyPanelTemplate(
       birthdays: { ...current.widgets.birthdays, enabled: enabled.has("birthdays") },
       tasks: { ...current.widgets.tasks, enabled: enabled.has("tasks") },
       pomodoro: { ...current.widgets.pomodoro, enabled: enabled.has("pomodoro") },
+      system: { ...current.widgets.system, enabled: enabled.has("system") },
+      worldClock: { ...current.widgets.worldClock, enabled: enabled.has("worldClock") },
+      rss: { ...current.widgets.rss, enabled: enabled.has("rss") },
+      devMonitor: { ...current.widgets.devMonitor, enabled: enabled.has("devMonitor") },
     },
     gridLayout: {
       enabled: true,
@@ -818,6 +827,9 @@ function defaultWidgetBoxSize(
   }
   if (key === "pomodoro") {
     return orientation === "landscape" ? { w: 6, h: 4 } : { w: 6, h: 5 };
+  }
+  if (key === "system" || key === "worldClock" || key === "rss" || key === "devMonitor") {
+    return orientation === "landscape" ? { w: 6, h: 5 } : { w: 6, h: 5 };
   }
   return orientation === "landscape"
     ? { w: Math.min(8, columns), h: Math.min(4, rows) }
@@ -955,10 +967,7 @@ function arrangeOrientationItemsForScope(
       smartStack,
       true,
     );
-    return [
-      ...repacked.filter((item) => enabledSet.has(item.widgetId)),
-      ...inactiveItems,
-    ];
+    return [...repacked.filter((item) => enabledSet.has(item.widgetId)), ...inactiveItems];
   }
 
   if (hasActiveStack && stackAnchor) {

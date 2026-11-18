@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyPanelTemplate,
   defaultOnlineDashboard,
+  isSafePublicHttpsUrl,
   onlineDashboardSchema,
   pageSettingsSchema,
   panelTemplates,
@@ -542,6 +543,82 @@ describe("contrato do dashboard online", () => {
       onlineDashboardSchema.safeParse({
         pages: [],
       }).success,
+    ).toBe(false);
+  });
+
+  it("valida os novos widgets da Fase 4, URL HTTPS pública sem SSRF e tasks.interactive", () => {
+    expect(defaultOnlineDashboard.widgets.tasks.interactive).toBe(true);
+    expect(defaultOnlineDashboard.widgets.system.enabled).toBe(false);
+    expect(defaultOnlineDashboard.widgets.worldClock.zones.length).toBeGreaterThanOrEqual(3);
+    expect(defaultOnlineDashboard.widgets.rss.rotateSeconds).toBe(15);
+    expect(defaultOnlineDashboard.widgets.devMonitor.showServerMetrics).toBe(true);
+
+    expect(isSafePublicHttpsUrl("https://feeds.bbci.co.uk/news/rss.xml")).toBe(true);
+    for (const unsafe of [
+      "http://example.com/feed.xml",
+      "https://localhost/feed.xml",
+      "https://127.0.0.1/feed.xml",
+      "https://10.0.0.5/feed.xml",
+      "https://192.168.1.1/feed.xml",
+      "https://169.254.169.254/latest/meta-data",
+      "https://[::1]/feed.xml",
+      "https://[fd00::1]/feed.xml",
+      "https://user:pass@example.com/feed.xml",
+      "https://printer.local/feed.xml",
+      "https://localhost./feed.xml",
+      "https://printer.local./feed.xml",
+      "https://router.internal./feed.xml",
+      "https://[febf::1]/feed.xml",
+      "https://[::ffff:127.0.0.1]/feed.xml",
+      "https://[2002:7f00:1::]/feed.xml",
+      "https://224.0.0.1/feed.xml",
+      "https://192.0.2.1/feed.xml",
+    ]) {
+      expect(isSafePublicHttpsUrl(unsafe)).toBe(false);
+      expect(
+        onlineDashboardSchema.safeParse({ widgets: { rss: { enabled: true, feedUrl: unsafe } } })
+          .success,
+      ).toBe(false);
+    }
+
+    expect(
+      onlineDashboardSchema.safeParse({
+        widgets: {
+          tasks: { interactive: false },
+          system: { enabled: true, showCpu: true, showDisk: false },
+          worldClock: {
+            enabled: true,
+            format: "12h",
+            zones: [{ id: "z1", label: "Lisboa", timezone: "Europe/Lisbon" }],
+          },
+          rss: {
+            enabled: true,
+            feedUrl: "https://feeds.example.org/rss.xml",
+            maxItems: 8,
+            rotateSeconds: 30,
+          },
+          devMonitor: {
+            enabled: true,
+            showServerMetrics: true,
+            items: [
+              { id: "d1", name: "API Core", category: "service", status: "healthy", detail: "OK" },
+              { id: "d2", name: "Agente IA", category: "ai", status: "running", detail: "12s" },
+            ],
+          },
+        },
+      }).success,
+    ).toBe(true);
+
+    // Fuso inválido e rotação < 5s (diferente de 0) devem ser rejeitados.
+    expect(
+      onlineDashboardSchema.safeParse({
+        widgets: {
+          worldClock: { zones: [{ id: "bad", label: "Marte", timezone: "Mars/Phobos" }] },
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      onlineDashboardSchema.safeParse({ widgets: { rss: { rotateSeconds: 3 } } }).success,
     ).toBe(false);
   });
 });

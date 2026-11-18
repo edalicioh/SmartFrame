@@ -1,4 +1,5 @@
 import { z } from "zod";
+import ipaddr from "ipaddr.js";
 import { onlineCurrenciesSchema } from "./currencies";
 import {
   scopedAppearanceFields,
@@ -11,6 +12,79 @@ const color = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
 const interval = (min: number, fallback: number) =>
   z.number().int().min(min).max(3600).default(fallback);
 
+export function isPublicIpAddress(value: string): boolean {
+  try {
+    return ipaddr.parse(value).range() === "unicast";
+  } catch {
+    return false;
+  }
+}
+
+/** Hostname validation is complemented by DNS validation at the RSS connection. */
+export function isSafePublicHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password) return false;
+    const host = parsed.hostname
+      .toLowerCase()
+      .replace(/^\[(.*)\]$/, "$1")
+      .replace(/\.$/, "");
+    if (
+      !host ||
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      host.endsWith(".home") ||
+      host.endsWith(".lan")
+    ) {
+      return false;
+    }
+    if (ipaddr.isValid(host)) return isPublicIpAddress(host);
+    return host.includes(".");
+  } catch {
+    return false;
+  }
+}
+
+const validTimezoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .refine((value) => {
+    try {
+      new Intl.DateTimeFormat("pt-BR", { timeZone: value });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Fuso horário inválido");
+
+export const defaultWorldClockZones = [
+  { id: "zone-utc", label: "Londres (UTC)", timezone: "UTC" },
+  { id: "zone-ny", label: "Nova York", timezone: "America/New_York" },
+  { id: "zone-tokyo", label: "Tóquio", timezone: "Asia/Tokyo" },
+];
+
+export const worldClockZoneSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    label: z.string().trim().min(1).max(40),
+    timezone: validTimezoneSchema,
+  })
+  .strict();
+
+export const devMonitorItemSchema = z
+  .object({
+    id: z.string().min(1).max(128),
+    name: z.string().trim().min(1).max(60),
+    category: z.enum(["ci", "ai", "service", "deploy"]).default("service"),
+    status: z.enum(["healthy", "running", "warning", "failing", "idle"]).default("healthy"),
+    detail: z.string().trim().max(120).default(""),
+  })
+  .strict();
+
 export const dashboardWidgetKeys = [
   "photos",
   "clock",
@@ -22,6 +96,10 @@ export const dashboardWidgetKeys = [
   "birthdays",
   "tasks",
   "pomodoro",
+  "system",
+  "worldClock",
+  "rss",
+  "devMonitor",
 ] as const;
 
 export type DashboardWidgetKey = (typeof dashboardWidgetKeys)[number];
@@ -44,6 +122,10 @@ export const gridWidgetCatalog = {
   birthdays: { label: "Aniversários", minWidth: 3, minHeight: 2 },
   tasks: { label: "Tarefas", minWidth: 3, minHeight: 2 },
   pomodoro: { label: "Pomodoro", minWidth: 3, minHeight: 3 },
+  system: { label: "Sistema", minWidth: 4, minHeight: 3 },
+  worldClock: { label: "Relógio mundial", minWidth: 3, minHeight: 3 },
+  rss: { label: "Feed RSS", minWidth: 4, minHeight: 3 },
+  devMonitor: { label: "Monitor Dev/IA", minWidth: 4, minHeight: 3 },
 } as const satisfies Record<
   DashboardWidgetKey,
   { label: string; minWidth: number; minHeight: number }
@@ -222,18 +304,7 @@ export const onlineDashboardSchema = z
   .object({
     layout: z.literal("photo-dashboard").default("photo-dashboard"),
     orientation: z.enum(["landscape", "portrait"]).default("landscape"),
-    timezone: z
-      .string()
-      .max(80)
-      .refine((value) => {
-        try {
-          new Intl.DateTimeFormat("pt-BR", { timeZone: value });
-          return true;
-        } catch {
-          return false;
-        }
-      }, "Fuso horário inválido")
-      .default("America/Sao_Paulo"),
+    timezone: validTimezoneSchema.default("America/Sao_Paulo"),
     theme: z.enum(["light", "dark"]).default("light"),
     refreshSeconds: interval(10, 15),
     appearance: z
@@ -390,6 +461,7 @@ export const onlineDashboardSchema = z
               .max(50)
               .default([]),
             showCompleted: z.boolean().default(false),
+            interactive: z.boolean().default(true),
           })
           .strict()
           .prefault({}),
@@ -401,6 +473,83 @@ export const onlineDashboardSchema = z
             title: z.string().trim().min(1).max(80).default("Pomodoro"),
             workMinutes: z.number().int().min(1).max(180).default(25),
             breakMinutes: z.number().int().min(1).max(60).default(5),
+          })
+          .strict()
+          .prefault({}),
+        system: z
+          .object({
+            enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
+            title: z.string().trim().min(1).max(80).default("Monitor do sistema"),
+            showCpu: z.boolean().default(true),
+            showMemory: z.boolean().default(true),
+            showDisk: z.boolean().default(true),
+            showUptime: z.boolean().default(true),
+          })
+          .strict()
+          .prefault({}),
+        worldClock: z
+          .object({
+            enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
+            title: z.string().trim().min(1).max(80).default("Relógio mundial"),
+            format: z.enum(["12h", "24h"]).default("24h"),
+            zones: z
+              .array(worldClockZoneSchema)
+              .min(1)
+              .max(6)
+              .refine(
+                (items) => new Set(items.map((item) => item.id)).size === items.length,
+                "Fusos horários duplicados",
+              )
+              .default(defaultWorldClockZones),
+          })
+          .strict()
+          .prefault({}),
+        rss: z
+          .object({
+            enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
+            title: z.string().trim().min(1).max(80).default("Notícias RSS"),
+            feedUrl: z
+              .union([
+                z.literal(""),
+                z
+                  .string()
+                  .trim()
+                  .max(500)
+                  .refine(isSafePublicHttpsUrl, "Use uma URL HTTPS pública válida"),
+              ])
+              .default(""),
+            maxItems: z.number().int().min(1).max(10).default(5),
+            rotateSeconds: z
+              .number()
+              .int()
+              .min(0)
+              .max(3600)
+              .refine((value) => value === 0 || value >= 5, "Use 0 (fixo) ou pelo menos 5 segundos")
+              .default(15),
+          })
+          .strict()
+          .prefault({}),
+        devMonitor: z
+          .object({
+            enabled: z.boolean().default(false),
+            backgroundColor: widgetBackground,
+            appearance: widgetAppearanceOverrideSchema.optional(),
+            title: z.string().trim().min(1).max(80).default("Status Dev & IA"),
+            showServerMetrics: z.boolean().default(true),
+            items: z
+              .array(devMonitorItemSchema)
+              .max(12)
+              .refine(
+                (items) => new Set(items.map((item) => item.id)).size === items.length,
+                "Itens duplicados no monitor",
+              )
+              .default([]),
           })
           .strict()
           .prefault({}),

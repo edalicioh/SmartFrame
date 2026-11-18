@@ -98,6 +98,7 @@
         title: "Tarefas",
         items: [],
         showCompleted: false,
+        interactive: true,
       },
       pomodoro: {
         enabled: false,
@@ -106,6 +107,45 @@
         title: "Pomodoro",
         workMinutes: 25,
         breakMinutes: 5,
+      },
+      system: {
+        enabled: false,
+        backgroundColor: "",
+        appearance: null,
+        title: "Monitor do sistema",
+        showCpu: true,
+        showMemory: true,
+        showDisk: true,
+        showUptime: true,
+      },
+      worldClock: {
+        enabled: false,
+        backgroundColor: "",
+        appearance: null,
+        title: "Relógio mundial",
+        format: "24h",
+        zones: [
+          { id: "zone-utc", label: "Londres (UTC)", timezone: "UTC" },
+          { id: "zone-ny", label: "Nova York", timezone: "America/New_York" },
+          { id: "zone-tokyo", label: "Tóquio", timezone: "Asia/Tokyo" },
+        ],
+      },
+      rss: {
+        enabled: false,
+        backgroundColor: "",
+        appearance: null,
+        title: "Notícias RSS",
+        feedUrl: "",
+        maxItems: 5,
+        rotateSeconds: 15,
+      },
+      devMonitor: {
+        enabled: false,
+        backgroundColor: "",
+        appearance: null,
+        title: "Status Dev & IA",
+        showServerMetrics: true,
+        items: [],
       },
     },
   };
@@ -323,6 +363,10 @@
     birthdays: [3, 2],
     tasks: [3, 2],
     pomodoro: [3, 3],
+    system: [4, 3],
+    worldClock: [3, 3],
+    rss: [4, 3],
+    devMonitor: [4, 3],
   };
   function normalizeGridItems(list, orientation) {
     if (!Array.isArray(list)) return [];
@@ -454,7 +498,10 @@
       if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
       if (typeof entry.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(entry.id)) continue;
       if (seenIds.has(entry.id)) continue;
-      var enabledKeys = normalizeWidgetKeyList(entry.enabledWidgets, 10);
+      var enabledKeys = normalizeWidgetKeyList(
+        entry.enabledWidgets,
+        Object.keys(widgetMinSizes).length,
+      );
       if (!enabledKeys) continue;
       seenIds.add(entry.id);
       var pageObj = {
@@ -605,7 +652,8 @@
               .slice(0, 50)
           : [];
         result.showCompleted = bool(value.showCompleted, false);
-      } else {
+        result.interactive = bool(value.interactive, true);
+      } else if (name === "pomodoro") {
         result.workMinutes =
           Number.isInteger(value.workMinutes) && value.workMinutes >= 1 && value.workMinutes <= 180
             ? value.workMinutes
@@ -616,6 +664,92 @@
           value.breakMinutes <= 60
             ? value.breakMinutes
             : 5;
+      } else if (name === "system") {
+        result.showCpu = bool(value.showCpu, true);
+        result.showMemory = bool(value.showMemory, true);
+        result.showDisk = bool(value.showDisk, true);
+        result.showUptime = bool(value.showUptime, true);
+      } else if (name === "worldClock") {
+        result.format = choice(value.format, ["12h", "24h"], "24h");
+        var seenZones = {};
+        var zones = Array.isArray(value.zones)
+          ? value.zones
+              .filter(function (item) {
+                if (
+                  !item ||
+                  typeof item.id !== "string" ||
+                  !item.id ||
+                  typeof item.label !== "string" ||
+                  !item.label.trim() ||
+                  typeof item.timezone !== "string" ||
+                  seenZones[item.id]
+                )
+                  return false;
+                try {
+                  new Intl.DateTimeFormat("en", { timeZone: item.timezone });
+                } catch {
+                  return false;
+                }
+                seenZones[item.id] = true;
+                return true;
+              })
+              .slice(0, 6)
+              .map(function (item) {
+                return {
+                  id: item.id,
+                  label: item.label.trim().slice(0, 40),
+                  timezone: item.timezone,
+                };
+              })
+          : [];
+        result.zones = zones.length ? zones : fallback.zones.slice();
+      } else if (name === "rss") {
+        result.feedUrl =
+          typeof value.feedUrl === "string" && /^https:\/\/\S{1,492}$/i.test(value.feedUrl.trim())
+            ? value.feedUrl.trim()
+            : "";
+        result.maxItems =
+          Number.isInteger(value.maxItems) && value.maxItems >= 1 && value.maxItems <= 10
+            ? value.maxItems
+            : 5;
+        result.rotateSeconds =
+          Number.isInteger(value.rotateSeconds) &&
+          (value.rotateSeconds === 0 || (value.rotateSeconds >= 5 && value.rotateSeconds <= 3600))
+            ? value.rotateSeconds
+            : 15;
+      } else if (name === "devMonitor") {
+        result.showServerMetrics = bool(value.showServerMetrics, true);
+        var seenDevIds = {};
+        result.items = Array.isArray(value.items)
+          ? value.items
+              .filter(function (item) {
+                if (
+                  !item ||
+                  typeof item.id !== "string" ||
+                  !item.id ||
+                  typeof item.name !== "string" ||
+                  !item.name.trim() ||
+                  seenDevIds[item.id]
+                )
+                  return false;
+                seenDevIds[item.id] = true;
+                return true;
+              })
+              .slice(0, 12)
+              .map(function (item) {
+                return {
+                  id: item.id,
+                  name: item.name.trim().slice(0, 60),
+                  category: choice(item.category, ["ci", "ai", "service", "deploy"], "service"),
+                  status: choice(
+                    item.status,
+                    ["healthy", "running", "warning", "failing", "idle"],
+                    "healthy",
+                  ),
+                  detail: typeof item.detail === "string" ? item.detail.trim().slice(0, 120) : "",
+                };
+              })
+          : [];
       }
       return result;
     }
@@ -776,6 +910,10 @@
         birthdays: local("birthdays"),
         tasks: local("tasks"),
         pomodoro: local("pomodoro"),
+        system: local("system"),
+        worldClock: local("worldClock"),
+        rss: local("rss"),
+        devMonitor: local("devMonitor"),
       },
     };
   }
