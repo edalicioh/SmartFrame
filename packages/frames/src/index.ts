@@ -353,6 +353,7 @@ export {
   executePlayerControlDeckCommand,
   fetchControlDeckAgentStatus,
   getControlDeckAgentConfig,
+  isControlDeckHostAuthorizedForHousehold,
   listControlDeckBindings,
   updateControlDeckBinding,
 } from "./control-deck";
