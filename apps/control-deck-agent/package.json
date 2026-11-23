@@ -1,0 +1,10 @@
+{
+  "name": "@smartframe/control-deck-agent",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@smartframe/contracts": "*",
+    "zod": "4.6.7"
+  }
+}

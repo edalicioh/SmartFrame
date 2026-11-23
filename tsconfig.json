@@ -16,6 +16,7 @@
   "include": [
     "packages/**/*.ts",
     "apps/worker/**/*.ts",
+    "apps/control-deck-agent/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "prisma.config.ts",

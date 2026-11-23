@@ -10,12 +10,14 @@
   "workspaces": [
     "apps/web",
     "apps/worker",
+    "apps/control-deck-agent",
     "packages/*"
   ],
   "scripts": {
     "android:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-android.ps1",
     "android:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android.ps1",
     "tablet:usb": "node scripts/tablet-usb.mjs",
+    "control-deck:agent": "node --env-file-if-exists=.env --import tsx apps/control-deck-agent/src/index.ts",
     "dev": "npm run player:sync && npm run dev --workspace=@smartframe/web",
     "dev:worker": "node --env-file-if-exists=.env --import tsx apps/worker/src/index.ts",
     "build": "npm run player:sync && npm run db:generate && npm run build --workspace=@smartframe/web",
