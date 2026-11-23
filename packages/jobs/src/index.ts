@@ -86,13 +86,27 @@ export async function runOneJob(database: PrismaClient, now = new Date()) {
           where: { expiresAt: { lt: new Date(now.getTime() - 86_400_000) } },
         }),
         database.requestLimit.deleteMany({
-          where: { windowStart: { lt: new Date(now.getTime() - 86_400_000) } },
+          where: {
+            OR: [
+              { windowStart: { lt: new Date(now.getTime() - 86_400_000) } },
+              {
+                key: { startsWith: "wh:" },
+                windowStart: { lt: new Date(now.getTime() - 3_600_000) },
+              },
+            ],
+          },
         }),
         database.job.deleteMany({
           where: {
             status: "completed",
             finishedAt: { lt: new Date(now.getTime() - 7 * 86_400_000) },
           },
+        }),
+        database.deviceNotification.deleteMany({
+          where: { expiresAt: { lt: new Date(now.getTime() - 3_600_000) } },
+        }),
+        database.widgetSnapshot.deleteMany({
+          where: { key: { startsWith: "push:" }, expiresAt: { lt: now } },
         }),
       ]);
     } else {

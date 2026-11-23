@@ -334,4 +334,32 @@ export async function acknowledgeFrame(
 export async function readBackground(id: string) {
   return readFile(/* turbopackIgnore: true */ mediaPath(id));
 }
+export {
+  authorizeWebhook,
+  createWebhookKey,
+  handleWebhookGoto,
+  handleWebhookNotify,
+  handleWebhookPush,
+  handleWebhookRefresh,
+  listWebhookKeys,
+  revokeWebhookKey,
+} from "./webhooks";
+export {
+  buildPlayerControlDeckData,
+  createControlDeckBindingRevision,
+  createControlDeckBinding,
+  deleteControlDeckBinding,
+  dispatchControlDeckAgentCommand,
+  executePlayerControlDeckCommand,
+  fetchControlDeckAgentStatus,
+  getControlDeckAgentConfig,
+  listControlDeckBindings,
+  updateControlDeckBinding,
+} from "./control-deck";
+export type {
+  ControlDeckAgentConfig,
+  ControlDeckAgentStatusResponse,
+  ControlDeckBindingRecord,
+  ControlDeckDispatchResponse,
+} from "./control-deck";
 export type { PhotoFrame };

@@ -46,6 +46,21 @@ export async function jsonBody(request: Request) {
   }
 }
 
+export async function optionalJsonObject(request: Request): Promise<Record<string, unknown>> {
+  const raw = (await limitedBody(request, 16_384)).toString("utf8").trim();
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new FrameError(400, "JSON inválido.");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new FrameError(400, "JSON inválido.");
+  }
+  return parsed as Record<string, unknown>;
+}
+
 export async function frameResponse(action: () => Promise<Response>) {
   try {
     return await action();

@@ -345,6 +345,59 @@ describe("cotações online por par", () => {
     }
   });
 
+  it("inclui feeds push referenciados pela configuração mesmo fora dos 30 mais recentes", async () => {
+    const now = new Date();
+    await db.widgetSnapshot.createMany({
+      data: Array.from({ length: 35 }, (_, index) => ({
+        key: `push:${householdId}:unreferenced-${index}`,
+        payload: {
+          key: `unreferenced-${index}`,
+          name: `Feed ${index}`,
+          category: "service",
+          status: "healthy",
+          detail: "",
+          value: null,
+          updatedAt: now.toISOString(),
+        },
+        updatedAt: new Date(now.getTime() + index * 1000),
+        expiresAt: new Date(now.getTime() + 60_000),
+      })),
+    });
+    await db.widgetSnapshot.create({
+      data: {
+        key: `push:${householdId}:important-feed`,
+        payload: {
+          key: "important-feed",
+          name: "Feed importante",
+          category: "deploy",
+          status: "running",
+          detail: "Deploy em andamento",
+          value: null,
+          updatedAt: now.toISOString(),
+        },
+        updatedAt: new Date(now.getTime() - 60_000),
+        expiresAt: new Date(now.getTime() + 60_000),
+      },
+    });
+
+    const data = await onlineWidgetData(
+      db,
+      {
+        weather: { enabled: false, city: "" },
+        currencies: { enabled: false },
+        devMonitor: {
+          enabled: true,
+          items: [{ pushKey: "important-feed" }],
+        },
+      },
+      householdId,
+    );
+    expect(data.devMonitor?.pushedFeeds).toContainEqual(
+      expect.objectContaining({ key: "important-feed", status: "running" }),
+    );
+    expect(data.devMonitor?.pushedFeeds).toHaveLength(31);
+  });
+
   it("sanitiza feeds RSS/Atom sem HTML e cacheia por 15 minutos", async () => {
     const parsed = parseRssXml(`<?xml version="1.0" encoding="UTF-8"?>
       <rss version="2.0">

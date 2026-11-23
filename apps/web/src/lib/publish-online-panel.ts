@@ -1,7 +1,7 @@
 import "server-only";
 import { dashboardPhotoIds, readStoredOnlineDashboard } from "@smartframe/contracts";
 import type { PrismaClient } from "@smartframe/database";
-import { FrameError } from "@smartframe/frames";
+import { createControlDeckBindingRevision, FrameError } from "@smartframe/frames";
 
 type Publication = {
   householdId: string;
@@ -30,6 +30,34 @@ export async function publishOnlinePanel(db: PrismaClient, input: Publication) {
     if (panel.draftRevision !== input.expectedRevision)
       throw new FrameError(409, "O painel foi alterado. Atualize e tente novamente.");
     const config = readStoredOnlineDashboard(panel.draft ?? {});
+    const bindingIds = [...new Set(config.widgets.controlDeck.tiles.map((tile) => tile.bindingId))];
+    const bindings = bindingIds.length
+      ? await tx.controlDeckBinding.findMany({
+          where: { id: { in: bindingIds }, householdId: input.householdId },
+          select: { id: true, kind: true, action: true, target: true },
+        })
+      : [];
+    const bindingRevisions = new Map(
+      bindings.map((binding) => [
+        binding.id,
+        createControlDeckBindingRevision(binding),
+      ]),
+    );
+    const configWithBindingRevisions = {
+      ...config,
+      widgets: {
+        ...config.widgets,
+        controlDeck: {
+          ...config.widgets.controlDeck,
+          tiles: config.widgets.controlDeck.tiles.map((tile) => ({
+            ...tile,
+            ...(bindingRevisions.has(tile.bindingId)
+              ? { bindingRevision: bindingRevisions.get(tile.bindingId)! }
+              : {}),
+          })),
+        },
+      },
+    };
     const ids = dashboardPhotoIds(config);
     const media = ids.length
       ? await tx.media.findMany({
@@ -49,7 +77,9 @@ export async function publishOnlinePanel(db: PrismaClient, input: Publication) {
         400,
         "Todas as fotos selecionadas devem estar prontas, válidas e pertencer à residência.",
       );
-    const version = await tx.layoutVersion.create({ data: { layoutId: panel.id, config } });
+    const version = await tx.layoutVersion.create({
+      data: { layoutId: panel.id, config: configWithBindingRevisions },
+    });
     const updated = await tx.layout.updateMany({
       where: {
         id: panel.id,
@@ -73,7 +103,18 @@ export async function publishOnlinePanel(db: PrismaClient, input: Publication) {
     if (activate)
       await tx.device.update({
         where: { id: device.id },
-        data: { activePanelId: panel.id, activePanelVersionId: version.id },
+        data: {
+          activePanelId: panel.id,
+          activePanelVersionId: version.id,
+          ...(device.activePanelId !== panel.id || device.activePanelVersionId !== version.id
+            ? {
+                targetPageId: null,
+                targetPageNonce: null,
+                targetPageDuration: null,
+                targetPageExpiresAt: null,
+              }
+            : {}),
+        },
       });
     return `online:${version.id}`;
   });

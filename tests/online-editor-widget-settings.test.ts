@@ -10,10 +10,18 @@ describe("preview provider settings", () => {
       system: { enabled: false },
       rss: { enabled: false, feedUrl: "https://feeds.example.com/rss.xml", maxItems: 8 },
       devMonitor: { enabled: false, showServerMetrics: false },
+      controlDeck: {
+        enabled: false,
+        tiles: [{ id: "tile-1", bindingId: "bind-1", label: "Mudo", icon: "mute" }],
+      },
     },
     pages: [
       { id: "first", title: "Primeira", enabledWidgets: ["system", "rss"] },
-      { id: "second", title: "Segunda", enabledWidgets: ["devMonitor", "weather", "currencies"] },
+      {
+        id: "second",
+        title: "Segunda",
+        enabledWidgets: ["devMonitor", "weather", "currencies", "controlDeck"],
+      },
     ],
   });
 
@@ -25,6 +33,10 @@ describe("preview provider settings", () => {
       system: { enabled: true },
       rss: { enabled: true, feedUrl: "https://feeds.example.com/rss.xml", maxItems: 8 },
       devMonitor: { enabled: true, showServerMetrics: false },
+      controlDeck: {
+        enabled: true,
+        tiles: [{ id: "tile-1", bindingId: "bind-1", label: "Mudo", icon: "mute" }],
+      },
     });
     expect(config).toEqual(before);
   });
@@ -48,6 +60,7 @@ describe("preview provider settings", () => {
     expect(settings.currencies.enabled).toBe(true);
     expect(settings.rss.enabled).toBe(false);
     expect(settings.devMonitor.enabled).toBe(false);
+    expect(settings.controlDeck).toEqual({ enabled: false, tiles: [] });
   });
 
   it("still sanitizes an invalid unsaved RSS URL when enabled only on a page", () => {

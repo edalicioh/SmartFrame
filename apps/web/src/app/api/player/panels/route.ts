@@ -68,7 +68,13 @@ export async function POST(request: Request) {
           activePanelId: panelId,
           activePanelVersionId: access.versionId,
           ...(current.activePanelId !== panelId || current.activePanelVersionId !== access.versionId
-            ? { appliedRevision: null }
+            ? {
+                appliedRevision: null,
+                targetPageId: null,
+                targetPageNonce: null,
+                targetPageDuration: null,
+                targetPageExpiresAt: null,
+              }
             : {}),
         },
       });

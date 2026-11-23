@@ -21,5 +21,9 @@ export function previewWidgetSettings(config: OnlineDashboard) {
       enabled: enabled("devMonitor"),
       showServerMetrics: config.widgets.devMonitor.showServerMetrics,
     },
+    controlDeck: {
+      enabled: enabled("controlDeck"),
+      tiles: config.widgets.controlDeck.tiles,
+    },
   };
 }

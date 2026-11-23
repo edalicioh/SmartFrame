@@ -12,6 +12,8 @@ import {
   currencyPairSchema,
   defaultCurrencyPairs,
   isSafePublicHttpsUrl,
+  pushedFeedEntrySchema,
+  type PushedFeedEntry,
 } from "@smartframe/contracts";
 import type { PrismaClient } from "@smartframe/database";
 import { publicHttpsDispatcher } from "./public-https";
@@ -273,15 +275,28 @@ type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
 type JsonObject = { [key: string]: JsonValue };
 
+const MIN_FORCE_REFRESH_COOLDOWN_MS = 15_000;
+
 async function refresh(
   db: PrismaClient,
   key: string,
   load: () => Promise<JsonObject>,
   force: boolean,
   ttl = TTL,
+  minForceCooldownMs = 0,
 ) {
   const cached = await db.widgetSnapshot.findUnique({ where: { key } });
-  if (!force && cached && cached.expiresAt > new Date()) return;
+  const nowMs = Date.now();
+  if (!force && cached && cached.expiresAt.getTime() > nowMs) return;
+  if (
+    force &&
+    minForceCooldownMs > 0 &&
+    cached &&
+    !cached.failedAt &&
+    nowMs - cached.updatedAt.getTime() < minForceCooldownMs
+  ) {
+    return;
+  }
   try {
     const payload = await load();
     const updatedAt = new Date();
@@ -394,7 +409,11 @@ type OnlineSettings = {
   currencies: { enabled: boolean; pairs?: string[] };
   system?: { enabled: boolean };
   rss?: { enabled: boolean; feedUrl?: string; maxItems?: number };
-  devMonitor?: { enabled: boolean; showServerMetrics?: boolean };
+  devMonitor?: {
+    enabled: boolean;
+    showServerMetrics?: boolean;
+    items?: Array<{ pushKey?: string }>;
+  };
 };
 const onlineWeatherKey = (city: string) =>
   `online:weather:${city.trim().toLocaleLowerCase("pt-BR")}`;
@@ -456,6 +475,7 @@ function refreshOnlineSource(
   key: string,
   load: () => Promise<JsonObject>,
   ttl = TTL,
+  force = false,
 ): Promise<void> {
   let jobs = onlineRefreshes.get(db);
   if (!jobs) {
@@ -464,7 +484,7 @@ function refreshOnlineSource(
   }
   const existing = jobs.get(key);
   if (existing) return existing;
-  const job = refresh(db, key, load, false, ttl);
+  const job = refresh(db, key, load, force, ttl, MIN_FORCE_REFRESH_COOLDOWN_MS);
   jobs.set(key, job);
   void job
     .finally(() => {
@@ -478,21 +498,34 @@ function refreshOnlineSource(
 export async function refreshOnlineWidgets(
   db: PrismaClient,
   settings: OnlineSettings,
+  force = false,
 ): Promise<void> {
   const tasks: Promise<void>[] = [];
   if (settings.weather.enabled)
     tasks.push(
-      refreshOnlineSource(db, onlineWeatherKey(settings.weather.city), async () => {
-        const cities = await searchCities(settings.weather.city);
-        const city =
-          cities.find((item) => /^(Brasil|Brazil)$/i.test(item.country ?? "")) ?? cities[0];
-        if (!city) throw new Error("Cidade não encontrada.");
-        return loadWeather(city.latitude, city.longitude, city.timezone ?? "America/Sao_Paulo");
-      }),
+      refreshOnlineSource(
+        db,
+        onlineWeatherKey(settings.weather.city),
+        async () => {
+          const cities = await searchCities(settings.weather.city);
+          const city =
+            cities.find((item) => /^(Brasil|Brazil)$/i.test(item.country ?? "")) ?? cities[0];
+          if (!city) throw new Error("Cidade não encontrada.");
+          return loadWeather(city.latitude, city.longitude, city.timezone ?? "America/Sao_Paulo");
+        },
+        TTL,
+        force,
+      ),
     );
   for (const base of new Set(selectedPairs(settings).map((pair) => pair.split("/")[0])))
     tasks.push(
-      refreshOnlineSource(db, spotKey(base), () => loadSpot(base), CURRENCY_REFRESH_SECONDS * 1000),
+      refreshOnlineSource(
+        db,
+        spotKey(base),
+        () => loadSpot(base),
+        CURRENCY_REFRESH_SECONDS * 1000,
+        force,
+      ),
     );
   for (const pair of selectedPairs(settings).filter(hasMarketStats))
     tasks.push(
@@ -501,6 +534,7 @@ export async function refreshOnlineWidgets(
         marketStatsKey(pair),
         () => loadMarketStats(pair),
         CURRENCY_REFRESH_SECONDS * 1000,
+        force,
       ),
     );
   const rssUrl = settings.rss?.enabled ? (settings.rss.feedUrl?.trim() ?? "") : "";
@@ -519,6 +553,7 @@ export async function refreshOnlineWidgets(
           return parseRssXml(decoder.decode(bytes));
         },
         RSS_TTL,
+        force,
       ),
     );
   }
@@ -529,6 +564,7 @@ export async function onlineWidgetData(
   db: PrismaClient,
   settings: OnlineSettings,
   householdId: string,
+  options?: { forceRefresh?: boolean },
 ) {
   if (!householdId) throw new Error("Residência autenticada necessária para os widgets.");
   const pairs = selectedPairs(settings);
@@ -537,10 +573,29 @@ export async function onlineWidgetData(
   const rssUrl = settings.rss?.enabled ? (settings.rss.feedUrl?.trim() ?? "") : "";
   const validRssUrl = rssUrl && isSafePublicHttpsUrl(rssUrl) ? rssUrl : "";
   const wantSystem = Boolean(settings.system?.enabled);
+  const wantDevMonitor = Boolean(settings.devMonitor?.enabled);
   const wantDevMetrics = Boolean(
-    settings.devMonitor?.enabled && settings.devMonitor.showServerMetrics !== false,
+    wantDevMonitor && settings.devMonitor?.showServerMetrics !== false,
   );
-  const [weather, records, statsRecords, rssRecord, systemMetrics, devMetrics] = await Promise.all([
+  const referencedPushKeys = wantDevMonitor
+    ? [
+        ...new Set(
+          (settings.devMonitor?.items ?? [])
+            .map((item) => item.pushKey?.trim() ?? "")
+            .filter((pushKey) => pushKey.length > 0),
+        ),
+      ]
+    : [];
+  const [
+    weather,
+    records,
+    statsRecords,
+    rssRecord,
+    systemMetrics,
+    devMetrics,
+    pushSnapshots,
+    referencedPushSnapshots,
+  ] = await Promise.all([
     settings.weather.enabled
       ? db.widgetSnapshot.findUnique({ where: { key: onlineWeatherKey(settings.weather.city) } })
       : null,
@@ -569,12 +624,40 @@ export async function onlineWidgetData(
           updatedAt: new Date().toISOString(),
         }))
       : null,
+    wantDevMonitor
+      ? db.widgetSnapshot.findMany({
+          where: {
+            key: { startsWith: `push:${householdId}:` },
+            expiresAt: { gt: new Date() },
+          },
+          orderBy: { updatedAt: "desc" },
+          take: 30,
+        })
+      : [],
+    wantDevMonitor && referencedPushKeys.length > 0
+      ? db.widgetSnapshot.findMany({
+          where: {
+            key: {
+              in: referencedPushKeys.map((pushKey) => `push:${householdId}:${pushKey}`),
+            },
+            expiresAt: { gt: new Date() },
+          },
+        })
+      : [],
   ]);
   // Providers may take longer than the tablet's HTTP deadline. Return the last cache
   // immediately and refresh in the background; the next normal poll receives new data.
-  void refreshOnlineWidgets(db, settings).catch(() => {
+  void refreshOnlineWidgets(db, settings, Boolean(options?.forceRefresh)).catch(() => {
     console.warn("SmartFrame: atualização dos widgets online indisponível.");
   });
+  const pushedFeeds: PushedFeedEntry[] = [];
+  const pushSnapshotsByKey = new Map(
+    [...pushSnapshots, ...referencedPushSnapshots].map((snapshot) => [snapshot.key, snapshot]),
+  );
+  for (const snapshot of pushSnapshotsByKey.values()) {
+    const parsedFeed = pushedFeedEntrySchema.safeParse(snapshot.payload);
+    if (parsedFeed.success) pushedFeeds.push(parsedFeed.data);
+  }
   const old = (record: { updatedAt: Date; failedAt: Date | null }, ttl = TTL) =>
     Date.now() - record.updatedAt.getTime() >= ttl ||
     (!!record.failedAt && record.failedAt >= record.updatedAt);
@@ -644,7 +727,11 @@ export async function onlineWidgetData(
             stale: old(rssRecord, RSS_TTL),
           }
         : null,
-    devMonitor: devMetrics,
+    devMonitor: wantDevMetrics
+      ? { ...devMetrics!, pushedFeeds }
+      : wantDevMonitor
+        ? { pushedFeeds }
+        : null,
   };
 }
 
