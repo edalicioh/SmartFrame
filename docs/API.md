@@ -41,13 +41,15 @@ proporção, via Sharp. Testes automatizados não substituem validação em apar
 
 - `GET /player/{deviceId}` serve a página pareada. O ID na URL não é segredo.
 - `GET /api/player/config?deviceId=ID` retorna somente a configuração publicada do
-  dispositivo. A consulta periódica é a cada 15 segundos por padrão.
+  dispositivo, incluindo `notifications` ativas e `pageDirective` (quando houver comando
+  remoto `/api/goto` ou regra `time_range` vigente). A consulta periódica é a cada 15 segundos por padrão.
 - Na consulta seguinte, o player envia `appliedRevision=online%3AVERSION` em
   `GET /api/player/config`, somente após aplicar a configuração com sucesso. O
   servidor só registra a confirmação se ela corresponder à publicação atual.
   Receber a resposta não confirma aplicação. `POST /api/player/heartbeat` permanece
   exclusivo do protocolo legado, não é utilizado pelo APK v0.4.
 - `GET /api/player/online-media/{id}?v=sha256` entrega mídia da publicação autorizada.
+- `POST /api/player/notifications/dismiss` marca uma notificação direcionada ao dispositivo como dispensada.
 - `GET /api/player/panels` lista apenas painéis disponibilizados ao dispositivo autenticado,
   além do painel enviado e revisões enviada/aplicada. `POST /api/player/panels`, com
   `{panelId}`, ativa a versão aprovada para o próprio dispositivo e retorna `{revision}`.
@@ -71,6 +73,41 @@ Rotas offline antigas podem permanecer para compatibilidade, mas não são o cam
 principal do editor ou do APK v0.4.
 
 Somente os endpoints descritos nesta página estão implementados. A lista mais ampla do PRD é o alvo futuro.
+
+## Webhooks de entrada e chaves de automação
+
+Endpoints de entrada aceitam somente chaves dedicadas com prefixo `sf_wh_` enviadas nos
+cabeçalhos `Authorization: Bearer sf_wh_...` ou `X-Webhook-Key: sf_wh_...` (nunca na query string).
+Credenciais Bearer de tablets e sessões de navegador não autorizam webhooks.
+
+| Método   | Endpoint             | Autenticação            | Descrição                                                                               |
+| -------- | -------------------- | ----------------------- | --------------------------------------------------------------------------------------- |
+| `POST`   | `/api/push/{key}`    | Webhook Key (`push`)    | Armazena feed externo em `WidgetSnapshot` (`devMonitor`) e avalia `push_event`          |
+| `POST`   | `/api/notify`        | Webhook Key (`notify`)  | Envia toast/alerta para um dispositivo, painel ou residência e avalia `notify_event`    |
+| `POST`   | `/api/goto/{page}`   | Webhook Key (`goto`)    | Navega dispositivos para `{page}` (`id`, `0..7`, `next`, `prev`) com `refresh` opcional |
+| `POST`   | `/api/refresh`       | Webhook Key (`refresh`) | Solicita atualização imediata dos widgets online dos dispositivos-alvo                  |
+| `GET`    | `/api/webhooks/keys` | Sessão administrativa   | Lista chaves da residência (somente prefixo, permissões e uso; nunca hash)              |
+| `POST`   | `/api/webhooks/keys` | Sessão admin + `Origin` | Gera nova chave (`secret` retornado uma única vez)                                      |
+| `DELETE` | `/api/webhooks/keys` | Sessão admin + `Origin` | Revoga `{id}` da residência                                                             |
+| `POST`   | `/api/webhooks/test` | Sessão admin + `Origin` | Dispara comando de teste (`notify`, `goto`, `push`, `refresh`) a partir do editor       |
+
+- **Taxa e parâmetros de webhooks**:
+  - Taxa: até `60` req/min por chave, `120` req/min por IP (pré-autenticação) e `300` req/min global; corpo JSON limitado a `16 KiB`.
+  - Capacidade: até `25` chaves de webhook ativas por residência, até `50` feeds `push:*` ativos por residência (`ttlSeconds` entre `30` e `86400`), e retenção das `50` notificações ativas mais recentes por dispositivo.
+  - Parâmetros suportados em corpo JSON (ou query string em `/api/goto/{page}` e `/api/refresh`): `deviceId`, `panelId`, `durationSeconds` (`3..120` em `/api/notify`; `0..3600` em `/api/goto`), e `refresh` (booleano em `/api/goto`).
+
+## Modo Control Deck
+
+Endpoints do Control Deck operam com IDs opacos (`bindingId`) no painel publicado e nunca expõem caminhos físicos, argumentos, scripts ou o token local do agente (`apps/control-deck-agent`) ao navegador/WebView. Consulte [CONTROL-DECK.md](CONTROL-DECK.md).
+
+| Método   | Endpoint                           | Autenticação            | Descrição                                                                                        |
+| -------- | ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/control-deck/status`         | Sessão administrativa   | Consulta estado real do agente local (`configured`, `reachable`, `status` e atalhos opacos)      |
+| `GET`    | `/api/control-deck/bindings`       | Sessão administrativa   | Lista vínculos opacos da residência (até `50` registros)                                         |
+| `POST`   | `/api/control-deck/bindings`       | Sessão admin + `Origin` | Cria vínculo opaco (`shortcut`, `media`, `volume`, `app_volume`, `brightness`, `mic_ptt`)        |
+| `PUT`    | `/api/control-deck/bindings`       | Sessão admin + `Origin` | Atualiza vínculo opaco da residência                                                             |
+| `DELETE` | `/api/control-deck/bindings`       | Sessão admin + `Origin` | Remove vínculo por `{id}` ou `?id=`                                                              |
+| `POST`   | `/api/player/control-deck/execute` | Bearer nativo do tablet | Executa ação opaca no host (`200` `ok`/`unavailable`/`rejected`/`error`, `503` `error` idempotente, `504` `unknown` sem reenvio, `403`/`409` para dispositivo/revisão inválidos, rate `60/min` comandos e `120/min` renovações PTT) |
 
 ## Saúde
 

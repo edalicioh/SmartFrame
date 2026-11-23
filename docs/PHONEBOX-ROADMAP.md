@@ -4,14 +4,14 @@ Este documento organiza as 6 fases de evolução para incorporar ao SmartFrame o
 
 ## Visão geral das fases
 
-| Fase       | Frente                                                                     | Status           | Base atual no repositório                                                                                                                                         |
-| :--------- | :------------------------------------------------------------------------- | :--------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Fase 1** | Sistema de Aparência em Camadas (`APPEARANCE.md`)                          | **Implementada** | [widget-style.ts](../packages/contracts/src/widget-style.ts), [APPEARANCE.md](APPEARANCE.md), `smartframe-player`, `/layouts`                                     |
-| **Fase 2** | Editor Visual em Grade Livre + Templates                                   | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts` |
-| **Fase 3** | Múltiplas Páginas e _Smart Stack_                                          | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts` |
-| **Fase 4** | Novos Widgets (Sistema, Tarefas interativas, Relógio Mundial, RSS, Dev/IA) | **Implementada** | [widgets/src/index.ts](../packages/widgets/src/index.ts), `/api/player/tasks`, `smartframe-player`, `/layouts`                                                    |
-| **Fase 5** | Webhooks de Entrada e Regras Automáticas                                   | Planejada        | Rotas em `apps/web/src/app/api` e fila em `packages/jobs`                                                                                                         |
-| **Fase 6** | Modo Control Deck (`CONTROL-DECK.md`)                                      | Planejada        | Autenticação de dispositivo em `packages/frames` e agente local                                                                                                   |
+| Fase       | Frente                                                                     | Status           | Base atual no repositório                                                                                                                                                   |
+| :--------- | :------------------------------------------------------------------------- | :--------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fase 1** | Sistema de Aparência em Camadas (`APPEARANCE.md`)                          | **Implementada** | [widget-style.ts](../packages/contracts/src/widget-style.ts), [APPEARANCE.md](APPEARANCE.md), `smartframe-player`, `/layouts`                                               |
+| **Fase 2** | Editor Visual em Grade Livre + Templates                                   | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts`           |
+| **Fase 3** | Múltiplas Páginas e _Smart Stack_                                          | **Implementada** | [online-dashboard.ts](../packages/contracts/src/online-dashboard.ts), [widget-grid.ts](../packages/contracts/src/widget-grid.ts), `smartframe-player`, `/layouts`           |
+| **Fase 4** | Novos Widgets (Sistema, Tarefas interativas, Relógio Mundial, RSS, Dev/IA) | **Implementada** | [widgets/src/index.ts](../packages/widgets/src/index.ts), `/api/player/tasks`, `smartframe-player`, `/layouts`                                                              |
+| **Fase 5** | Webhooks de Entrada e Regras Automáticas                                   | **Implementada** | `/api/push/[key]`, `/api/notify`, `/api/goto/[page]`, `/api/refresh`, `packages/contracts/src/rules.ts`, `packages/frames/src/webhooks.ts`, `smartframe-player`, `/layouts` |
+| **Fase 6** | Modo Control Deck (`CONTROL-DECK.md`)                                      | **Implementada** | [control-deck.ts](../packages/contracts/src/control-deck.ts), `apps/control-deck-agent`, `/api/control-deck/*`, `/api/player/control-deck/execute`, `smartframe-player`, `ControlDeckClient.kt`, `/layouts` |
 
 ---
 
@@ -50,20 +50,37 @@ Este documento organiza as 6 fases de evolução para incorporar ao SmartFrame o
 
 ---
 
-## Fase 5 — Webhooks de Entrada e Regras Automáticas (Planejada)
+## Fase 5 — Webhooks de Entrada e Regras Automáticas (Implementada)
 
-- Endpoints autenticados por chave de webhook dedicada (isolada da credencial Bearer dos tablets):
-  - `POST /api/push/<key>` para alimentar widgets de valor/status externo.
-  - `POST /api/notify` para notificações temporárias (_toasts_) e alertas visuais no tablet.
-  - `POST /api/goto/<page>` e atualização sob demanda.
-- Motor de regras declarativas para troca automática de página conforme eventos (ex.: alerta de CI, início de foco, notificação prioritária ou horário).
+- Autenticação dedicada por chaves de webhook (`WebhookKey` com hash SHA-256 e prefixo `sf_wh_...`, permissões granulares `push`, `notify`, `goto`, `refresh` e limitação de taxa em `RequestLimit`), isolada das sessões administrativas e das credenciais Bearer dos tablets:
+  - `POST /api/push/<key>` recebe estados/métricas externas em `WidgetSnapshot`, reflete no widget `devMonitor` e avalia regras `push_event`.
+  - `POST /api/notify` envia notificações temporárias (_toasts_ e alertas visuais) entregues no polling do tablet com renderização via `textContent`.
+  - `POST /api/goto/<page>` e `POST /api/refresh` alternam páginas remotamente (por ID, índice, `next` ou `prev`) com duração opcional e atualização sob demanda de widgets.
+- Motor de regras declarativas (`packages/contracts/src/rules.ts`) integrado ao contrato `onlineDashboardSchema` e à aba **Automações** em `/layouts`, suportando gatilhos `push_event`, `notify_event` e `time_range` com ações `goto_page` e `show_notification`.
 
 ---
 
-## Fase 6 — Modo Control Deck (Planejada)
+## Fase 6 — Modo Control Deck (Implementada)
 
-Inspirado no `CONTROL-DECK.md` do PhoneBox, mantendo a fronteira estrita de segurança do SmartFrame:
+Inspirado no `CONTROL-DECK.md` do PhoneBox, mantendo a fronteira estrita de segurança do SmartFrame (documentação completa em [CONTROL-DECK.md](CONTROL-DECK.md)):
 
 - **Identificação por ID opaco**: o tablet exibe e envia apenas o ID do vínculo (`bindingId`); caminhos físicos de executáveis, argumentos, scripts e credenciais nunca são enviados ao dispositivo nem transitam pelo navegador do player.
-- **Ações no host**: botões estilo _Control Deck_ para atalhos locais, controle de mídia, volume de saída/aplicativos, microfone / _Push-to-Talk_ com expiração automática (_lease_ de segurança) e controle de brilho.
-- **Sem valores fictícios e sem reenvios cegos**: dispositivos ou integrações ausentes exibem estado indisponível; comandos não idempotentes com perda de resposta reportam resultado desconhecido em vez de repetir cegamente.
+- **Agente local dedicado (`apps/control-deck-agent`)**: serviço Node/TS em loopback (`127.0.0.1` / `::1`) autenticado por Bearer token (`>= 32` caracteres) com drivers Windows e Linux sem interpolação de shell, allowlist local de atalhos (`SMARTFRAME_CONTROL_DECK_SHORTCUTS_FILE`) e _lease_ automático de segurança para Push-to-Talk (`2..30`s).
+- **Ações no host**: botões estilo _Control Deck_ para atalhos locais, controle de mídia, volume de saída/aplicativos, microfone / _Push-to-Talk_ e controle de brilho, integrados à aba **Control Deck** em `/layouts`, ao `smartframe-player` e à bridge nativa Android `SmartFrameControlDeck` ([ControlDeckClient.kt](../apps/android/app/src/main/java/com/smartframe/player/ControlDeckClient.kt)).
+- **Sem valores fictícios e sem reenvios cegos**: dispositivos ou integrações ausentes exibem estado indisponível (`level: null`, `muted: null`); comandos não idempotentes com perda de resposta reportam resultado desconhecido (`status: "unknown"`, HTTP `504`) sem repetir cegamente.
+
+---
+
+## O que ainda falta
+
+### 1. Fechamento operacional das Fases 5 e 6 (implementadas no código)
+
+- **Code review, build e smoke HTTP da Fase 5**: concluídos (revisões Web, Player e Segurança aplicadas; `npm run check`, `npm run build`, `npm run test:smoke` e `npm run test:smoke:local` verdes).
+- **Migrations em banco real**: as migrations [20261120120000_webhooks_and_rules](../packages/database/prisma/migrations/20261120120000_webhooks_and_rules/migration.sql) e [20261120180000_control_deck_bindings](../packages/database/prisma/migrations/20261120180000_control_deck_bindings/migration.sql) foram validadas no banco isolado do Vitest; antes de subir o ambiente real, fazer backup consistente e rodar `npm run db:migrate`.
+- **Validação do agente local em host Windows/Linux real**: subir `npm run control-deck:agent` com `SMARTFRAME_CONTROL_DECK_TOKEN` e `SMARTFRAME_CONTROL_DECK_URL` configurados no host alvo e validar controles de mídia, Core Audio/pactl, brilho e atalhos reais.
+- **Validação em aparelho físico Android (APK atualizado)**: compilar/instalar build compatível com a bridge `SmartFrameControlDeck` e testar exibição/fechamento de _toasts_, `/api/goto/<page>`, atualização de `devMonitor` via `/api/push/<key>`, disparo de regras `time_range` e execução/PTT no Control Deck no tablet pareado.
+
+### 2. Evoluções futuras (pós-roadmap)
+
+- **Múltiplas instâncias do mesmo widget na mesma página**: evolução futura para `schemaVersion: 2` (referenciada na Fase 2).
+- **Bridge nativa opcional no APK para dispensa persistida de notificações**: hoje `POST /api/player/notifications/dismiss` existe na API e o player já deduplica e dispensa _toasts_ em memória no navegador (`smartframe-player/js/app.js`) para manter compatibilidade total com o `OnlinePlayer.kt` atual sem exigir recompilação imediata do APK.
