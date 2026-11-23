@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dashboardRuleSchema } from "./rules";
 import { currencyPairSchema } from "./currencies";
 import {
   dashboardGridItemSchema,
@@ -456,7 +457,7 @@ function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
-/** Generate a valid, non-overlapping default grid layout covering all 14 widgets. */
+/** Generate a valid, non-overlapping default grid layout covering all 15 widgets. */
 export function createDefaultDashboardGridLayout(
   config: OnlineDashboard = defaultOnlineDashboard,
 ): DashboardGridLayout {
@@ -479,10 +480,11 @@ export function createDefaultDashboardGridLayout(
       { widgetId: "birthdays", x: 10, y: 15, w: 5, h: 3 },
       { widgetId: "tasks", x: 15, y: 15, w: 5, h: 3 },
       { widgetId: "pomodoro", x: 20, y: 15, w: 4, h: 3 },
-      { widgetId: "system", x: 0, y: 18, w: 6, h: 6 },
-      { widgetId: "worldClock", x: 6, y: 18, w: 6, h: 6 },
-      { widgetId: "rss", x: 12, y: 18, w: 6, h: 6 },
-      { widgetId: "devMonitor", x: 18, y: 18, w: 6, h: 6 },
+      { widgetId: "system", x: 0, y: 18, w: 6, h: 3 },
+      { widgetId: "worldClock", x: 6, y: 18, w: 6, h: 3 },
+      { widgetId: "rss", x: 12, y: 18, w: 6, h: 3 },
+      { widgetId: "devMonitor", x: 18, y: 18, w: 6, h: 3 },
+      { widgetId: "controlDeck", x: 0, y: 21, w: 12, h: 3 },
     ],
     portrait: [
       { widgetId: "photos", x: 0, y: 0, w: 12, h: 10 },
@@ -496,9 +498,10 @@ export function createDefaultDashboardGridLayout(
       { widgetId: "tasks", x: 6, y: 20, w: 6, h: 4 },
       { widgetId: "pomodoro", x: 0, y: 24, w: 6, h: 4 },
       { widgetId: "worldClock", x: 6, y: 24, w: 6, h: 4 },
-      { widgetId: "system", x: 0, y: 28, w: 6, h: 6 },
-      { widgetId: "rss", x: 6, y: 28, w: 6, h: 6 },
-      { widgetId: "devMonitor", x: 0, y: 34, w: 12, h: 6 },
+      { widgetId: "system", x: 0, y: 28, w: 6, h: 4 },
+      { widgetId: "rss", x: 6, y: 28, w: 6, h: 4 },
+      { widgetId: "devMonitor", x: 0, y: 32, w: 12, h: 4 },
+      { widgetId: "controlDeck", x: 0, y: 36, w: 12, h: 4 },
     ],
   };
 }
@@ -802,6 +805,7 @@ export function applyPanelTemplate(
       worldClock: { ...current.widgets.worldClock, enabled: enabled.has("worldClock") },
       rss: { ...current.widgets.rss, enabled: enabled.has("rss") },
       devMonitor: { ...current.widgets.devMonitor, enabled: enabled.has("devMonitor") },
+      controlDeck: { ...current.widgets.controlDeck, enabled: enabled.has("controlDeck") },
     },
     gridLayout: {
       enabled: true,
@@ -827,6 +831,9 @@ function defaultWidgetBoxSize(
   }
   if (key === "pomodoro") {
     return orientation === "landscape" ? { w: 6, h: 4 } : { w: 6, h: 5 };
+  }
+  if (key === "controlDeck") {
+    return orientation === "landscape" ? { w: 8, h: 5 } : { w: 12, h: 5 };
   }
   if (key === "system" || key === "worldClock" || key === "rss" || key === "devMonitor") {
     return orientation === "landscape" ? { w: 6, h: 5 } : { w: 6, h: 5 };
@@ -1176,6 +1183,43 @@ export function readStoredOnlineDashboard(input: unknown): OnlineDashboard {
   if (strict.success) return strict.data;
   if (input === null || typeof input !== "object" || Array.isArray(input)) throw strict.error;
   const record = input as Record<string, unknown>;
+
+  // Preserve previously stored configurations whose enabled time_range rules have
+  // durations shorter than refreshSeconds; polling still filters them safely.
+  const parsedLegacyRules =
+    Array.isArray(record.rules) ? z.array(dashboardRuleSchema).max(20).safeParse(record.rules) : null;
+  if (parsedLegacyRules?.success) {
+    const withRulesCleared = { ...record };
+    delete withRulesCleared.rules;
+    const baseWithoutShortRules = onlineDashboardSchema.safeParse(withRulesCleared);
+    if (baseWithoutShortRules.success) {
+      return { ...baseWithoutShortRules.data, rules: parsedLegacyRules.data };
+    }
+    const gridCandidate = withRulesCleared.gridLayout;
+    if (
+      gridCandidate &&
+      typeof gridCandidate === "object" &&
+      !Array.isArray(gridCandidate) &&
+      (gridCandidate as Record<string, unknown>).enabled === true
+    ) {
+      const layout = gridCandidate as Record<string, unknown>;
+      const withoutGridAndRules = { ...withRulesCleared };
+      delete withoutGridAndRules.gridLayout;
+      const restBase = onlineDashboardSchema.safeParse(withoutGridAndRules);
+      if (restBase.success) {
+        const arranged = autoArrangeDashboardGrid({
+          ...restBase.data,
+          gridLayout: {
+            enabled: true,
+            landscape: validStoredGridItems(layout.landscape),
+            portrait: validStoredGridItems(layout.portrait),
+          },
+        });
+        return { ...arranged, rules: parsedLegacyRules.data };
+      }
+    }
+  }
+
   const grid = record.gridLayout;
   if (grid === null || typeof grid !== "object" || Array.isArray(grid)) throw strict.error;
   const layout = grid as Record<string, unknown>;

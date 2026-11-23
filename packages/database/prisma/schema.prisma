@@ -74,36 +74,45 @@ model Installation {
 }
 
 model Household {
-  id        String   @id @default(cuid())
-  name      String
-  ownerId   String   @unique
-  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  createdAt DateTime @default(now())
-  devices   Device[]
-  albums    Album[]
-  media     Media[]
-  layouts   Layout[]
-  auditLogs AuditLog[]
-  pairingCodes PairingCode[]
+  id            String               @id @default(cuid())
+  name          String
+  ownerId       String               @unique
+  owner         User                 @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt     DateTime             @default(now())
+  devices       Device[]
+  albums        Album[]
+  media         Media[]
+  layouts       Layout[]
+  auditLogs     AuditLog[]
+  pairingCodes  PairingCode[]
+  webhookKeys         WebhookKey[]
+  notifications       DeviceNotification[]
+  controlDeckBindings ControlDeckBinding[]
 }
 
 model Device {
-  id              String    @id @default(cuid())
-  householdId     String
-  household       Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  name            String
-  tokenHash       String?   @unique
-  timezone        String    @default("America/Sao_Paulo")
-  cacheLimitBytes BigInt    @default(2147483648)
-  lastSeenAt      DateTime?
-  appliedRevision String?
-  revokedAt       DateTime?
-  createdAt       DateTime  @default(now())
-  activePanelId   String?
-  activePanel     Layout?   @relation("DevicePanel", fields: [activePanelId], references: [id], onDelete: SetNull)
+  id                   String               @id @default(cuid())
+  householdId          String
+  household            Household            @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name                 String
+  tokenHash            String?              @unique
+  timezone             String               @default("America/Sao_Paulo")
+  cacheLimitBytes      BigInt               @default(2147483648)
+  lastSeenAt           DateTime?
+  appliedRevision      String?
+  revokedAt            DateTime?
+  createdAt            DateTime             @default(now())
+  activePanelId        String?
+  activePanel          Layout?              @relation("DevicePanel", fields: [activePanelId], references: [id], onDelete: SetNull)
   activePanelVersionId String?
-  activePanelVersion LayoutVersion? @relation("DevicePanelVersion", fields: [activePanelVersionId], references: [id], onDelete: SetNull)
-  allowedPanels   DevicePanelAccess[]
+  activePanelVersion   LayoutVersion?       @relation("DevicePanelVersion", fields: [activePanelVersionId], references: [id], onDelete: SetNull)
+  targetPageId         String?
+  targetPageNonce      String?
+  targetPageDuration   Int?
+  targetPageExpiresAt  DateTime?
+  refreshRequestedAt   DateTime?
+  allowedPanels        DevicePanelAccess[]
+  notifications        DeviceNotification[]
 
   @@index([householdId, createdAt])
 }
@@ -227,4 +236,53 @@ model Job {
   finishedAt  DateTime?
 
   @@index([status, availableAt])
+}
+
+model WebhookKey {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  keyHash     String    @unique
+  keyPrefix   String
+  permissions String    @default("push,notify,goto,refresh")
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  @@index([householdId, revokedAt])
+}
+
+model DeviceNotification {
+  id              String    @id @default(cuid())
+  householdId     String
+  household       Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  deviceId        String?
+  device          Device?   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  title           String?
+  message         String
+  severity        String    @default("info")
+  durationSeconds Int       @default(8)
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+  dismissedAt     DateTime?
+
+  @@index([householdId, expiresAt])
+  @@index([deviceId, expiresAt])
+}
+
+model ControlDeckBinding {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  label       String
+  kind        String
+  action      String
+  target      Json
+  idempotent  Boolean   @default(false)
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([householdId, createdAt])
 }

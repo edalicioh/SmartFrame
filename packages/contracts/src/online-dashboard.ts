@@ -1,6 +1,8 @@
 import { z } from "zod";
 import ipaddr from "ipaddr.js";
 import { onlineCurrenciesSchema } from "./currencies";
+import { controlDeckWidgetSchema } from "./control-deck";
+import { dashboardRuleSchema, isScheduleRulePollSafe, pushKeyRegex } from "./rules";
 import {
   scopedAppearanceFields,
   widgetAppearanceOverrideSchema,
@@ -82,6 +84,11 @@ export const devMonitorItemSchema = z
     category: z.enum(["ci", "ai", "service", "deploy"]).default("service"),
     status: z.enum(["healthy", "running", "warning", "failing", "idle"]).default("healthy"),
     detail: z.string().trim().max(120).default(""),
+    pushKey: z
+      .string()
+      .trim()
+      .pipe(z.union([z.literal(""), z.string().regex(pushKeyRegex)]))
+      .default(""),
   })
   .strict();
 
@@ -100,6 +107,7 @@ export const dashboardWidgetKeys = [
   "worldClock",
   "rss",
   "devMonitor",
+  "controlDeck",
 ] as const;
 
 export type DashboardWidgetKey = (typeof dashboardWidgetKeys)[number];
@@ -126,6 +134,7 @@ export const gridWidgetCatalog = {
   worldClock: { label: "Relógio mundial", minWidth: 3, minHeight: 3 },
   rss: { label: "Feed RSS", minWidth: 4, minHeight: 3 },
   devMonitor: { label: "Monitor Dev/IA", minWidth: 4, minHeight: 3 },
+  controlDeck: { label: "Control Deck", minWidth: 4, minHeight: 3 },
 } as const satisfies Record<
   DashboardWidgetKey,
   { label: string; minWidth: number; minHeight: number }
@@ -553,6 +562,7 @@ export const onlineDashboardSchema = z
           })
           .strict()
           .prefault({}),
+        controlDeck: controlDeckWidgetSchema.prefault({}),
       })
       .strict()
       .prefault({}),
@@ -560,6 +570,14 @@ export const onlineDashboardSchema = z
     smartStack: smartStackSchema.optional(),
     pages: z.array(dashboardPageSchema).min(1).max(8).optional(),
     pageSettings: pageSettingsSchema.optional(),
+    rules: z
+      .array(dashboardRuleSchema)
+      .max(20)
+      .refine(
+        (items) => new Set(items.map((item) => item.id)).size === items.length,
+        "Regras duplicadas",
+      )
+      .optional(),
   })
   .strict()
   .superRefine((dashboard, ctx) => {
@@ -580,40 +598,65 @@ export const onlineDashboardSchema = z
         path: dashboard.gridLayout ? ["gridLayout", "enabled"] : ["smartStack", "enabled"],
       });
     }
-    if (!dashboard.pages) return;
-    const seenPageIds = new Set<string>();
-    dashboard.pages.forEach((page, pageIndex) => {
-      if (seenPageIds.has(page.id)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "ID de página duplicado",
-          path: ["pages", pageIndex, "id"],
-        });
-      }
-      seenPageIds.add(page.id);
-      const enabledSet = new Set(page.enabledWidgets);
-      const effectiveGrid = page.gridLayout ?? dashboard.gridLayout;
-      const effectiveStack = page.smartStack ?? dashboard.smartStack;
-      validateGridLayoutForScope(
-        effectiveGrid,
-        (key) => enabledSet.has(key),
-        effectiveStack,
-        ["pages", pageIndex, "gridLayout"],
-        ctx,
-      );
-      const activeStack = effectiveStack?.enabled
-        ? effectiveStack.widgets.filter((key) => enabledSet.has(key))
-        : [];
-      if (activeStack.length >= 2 && !(effectiveGrid && effectiveGrid.enabled)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Smart Stack requer grade livre ativada",
-          path: page.gridLayout
-            ? ["pages", pageIndex, "gridLayout", "enabled"]
-            : ["pages", pageIndex, page.smartStack ? "smartStack" : "gridLayout"],
-        });
-      }
-    });
+    if (dashboard.pages) {
+      const seenPageIds = new Set<string>();
+      dashboard.pages.forEach((page, pageIndex) => {
+        if (seenPageIds.has(page.id)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "ID de página duplicado",
+            path: ["pages", pageIndex, "id"],
+          });
+        }
+        seenPageIds.add(page.id);
+        const enabledSet = new Set(page.enabledWidgets);
+        const effectiveGrid = page.gridLayout ?? dashboard.gridLayout;
+        const effectiveStack = page.smartStack ?? dashboard.smartStack;
+        validateGridLayoutForScope(
+          effectiveGrid,
+          (key) => enabledSet.has(key),
+          effectiveStack,
+          ["pages", pageIndex, "gridLayout"],
+          ctx,
+        );
+        const activeStack = effectiveStack?.enabled
+          ? effectiveStack.widgets.filter((key) => enabledSet.has(key))
+          : [];
+        if (activeStack.length >= 2 && !(effectiveGrid && effectiveGrid.enabled)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Smart Stack requer grade livre ativada",
+            path: page.gridLayout
+              ? ["pages", pageIndex, "gridLayout", "enabled"]
+              : ["pages", pageIndex, page.smartStack ? "smartStack" : "gridLayout"],
+          });
+        }
+      });
+    }
+    if (dashboard.rules) {
+      const pageIds = new Set((dashboard.pages ?? []).map((page) => page.id));
+      dashboard.rules.forEach((rule, ruleIndex) => {
+        if (rule.action.type === "goto_page" && !pageIds.has(rule.action.pageId)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "Página alvo da regra não encontrada",
+            path: ["rules", ruleIndex, "action", "pageId"],
+          });
+        }
+        if (
+          rule.enabled &&
+          rule.trigger.type === "time_range" &&
+          !isScheduleRulePollSafe(rule, dashboard.refreshSeconds)
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message:
+              "Janela de horário menor que o intervalo de polling seria ignorada no player",
+            path: ["rules", ruleIndex, "trigger", "endTime"],
+          });
+        }
+      });
+    }
   });
 
 export type OnlineDashboard = z.infer<typeof onlineDashboardSchema>;
