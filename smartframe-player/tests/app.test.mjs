@@ -20,11 +20,11 @@ test("page IDs matching object property names are accepted", () => {
   assert.equal(config.pages[1].id, "toString");
 });
 
-test("pages preserve all fourteen supported widgets", () => {
+test("pages preserve all fifteen supported widgets", () => {
   const window = {};
   runInNewContext(configSource, { window, Intl });
   const keys = Object.keys(window.SmartFrame.defaults.widgets);
-  assert.equal(keys.length, 14);
+  assert.equal(keys.length, 15);
   const config = window.SmartFrame.normalizeConfig({
     pages: [{ id: "all", title: "Todos", enabledWidgets: keys }],
   });
@@ -475,14 +475,21 @@ test("player recalcula as margens da grade ao mover um widget para a borda", () 
   assert.equal(h.elements.clock.style.values["--grid-margin-bottom-landscape"], "0");
 });
 
-function setupInteractive(preview = true, nativeTasks = undefined) {
+function setupInteractive(
+  preview = true,
+  nativeTasks = undefined,
+  nativeControlDeck = undefined,
+  storage = new Map(),
+) {
   const listeners = {},
     documentListeners = {},
     timers = [],
+    activeTimers = new Map(),
     intervals = new Map(),
     localCalls = {},
     timezoneWidgetUpdates = { clock: [], calendar: [] };
   let nextIntervalId = 0;
+  let nextTimeoutId = 0;
   function createNode(tag = "div") {
     const attrs = {};
     const eventMap = {};
@@ -531,6 +538,7 @@ function setupInteractive(preview = true, nativeTasks = undefined) {
       "smart-stack-nav",
       "page-nav",
       "page-overview",
+      "notification-toast",
       "photos",
       "clock",
       "weather",
@@ -545,6 +553,7 @@ function setupInteractive(preview = true, nativeTasks = undefined) {
       "worldClock",
       "rss",
       "devMonitor",
+      "controlDeck",
     ].map((id) => [id, createNode("div")]),
   );
   elements["widget-stack"].children = [
@@ -561,6 +570,7 @@ function setupInteractive(preview = true, nativeTasks = undefined) {
     elements.worldClock,
     elements.rss,
     elements.devMonitor,
+    elements.controlDeck,
   ];
   const defaults = {
     revision: "",
@@ -587,6 +597,7 @@ function setupInteractive(preview = true, nativeTasks = undefined) {
         "worldClock",
         "rss",
         "devMonitor",
+        "controlDeck",
       ].map((name) => [name, { enabled: name === "photos" || name === "clock", items: [] }]),
     ),
   };
@@ -641,6 +652,11 @@ function setupInteractive(preview = true, nativeTasks = undefined) {
   const window = {
     SmartFrame: app,
     SmartFrameTasks: nativeTasks,
+    SmartFrameControlDeck: nativeControlDeck,
+    localStorage: {
+      getItem: (key) => (storage.has(key) ? storage.get(key) : null),
+      setItem: (key, value) => storage.set(key, String(value)),
+    },
     parent,
     addEventListener(name, fn) {
       listeners[name] = fn;
@@ -678,9 +694,13 @@ function setupInteractive(preview = true, nativeTasks = undefined) {
     setTimeout: (fn, delay) => {
       fn.delay = delay;
       timers.push(fn);
-      return timers.length;
+      const id = ++nextTimeoutId;
+      activeTimers.set(id, fn);
+      return id;
     },
-    clearTimeout() {},
+    clearTimeout: (id) => {
+      activeTimers.delete(id);
+    },
     setInterval: (fn, delay) => {
       fn.delay = delay;
       timers.push(fn);
@@ -693,9 +713,12 @@ function setupInteractive(preview = true, nativeTasks = undefined) {
   return {
     app,
     window,
+    document,
     listeners,
+    documentListeners,
     elements,
     intervals,
+    activeTimers,
     localCalls,
     timezoneWidgetUpdates,
     fetches,
@@ -1243,4 +1266,700 @@ test("preview never writes tasks even when a native bridge is available", () => 
   h.localCalls.tasks.context.onToggleTask("t1", true, () => {});
   assert.equal(messages.length, 0);
   assert.equal(h.fetches.length, 0);
+});
+
+test("player exibe fila de toasts com textContent, deduplicação e auto-dismiss seguro", () => {
+  const h = setupInteractive(false);
+  const notificationMessages = [];
+  h.window.SmartFrameNotifications = {
+    postMessage: (message) => notificationMessages.push(JSON.parse(message)),
+  };
+  const alertsConfig = {
+    ...h.app.defaults,
+    revision: "online:v5",
+    notifications: [
+      {
+        id: "n-1",
+        title: "<b>CI</b>",
+        message: "<script>alert(1)</script> Falha no build",
+        severity: "alert",
+        durationSeconds: 5,
+      },
+      {
+        id: "n-2",
+        title: "Deploy",
+        message: "Publicado com sucesso",
+        severity: "success",
+        durationSeconds: 10,
+      },
+    ],
+  };
+  h.app.applyConfig(alertsConfig);
+
+  const toast = h.elements["notification-toast"];
+  assert.equal(toast.hidden, false);
+  assert.equal(toast.className, "notification-toast severity-alert");
+  assert.equal(toast.children[0].children[0].textContent, "<b>CI</b>");
+  assert.equal(toast.children[1].textContent, "<script>alert(1)</script> Falha no build");
+  assert.equal(h.app.getState().activeNotification, "n-1");
+
+  // Reenviar n-1 no próximo polling não duplica na fila.
+  h.app.applyConfig({ ...alertsConfig, notifications: [alertsConfig.notifications[0]] });
+
+  // Timer de auto-dismiss de 5s dispara n-2 da fila.
+  const fiveSecTimer = [...h.timers].reverse().find((fn) => fn.delay === 5000);
+  assert.ok(fiveSecTimer);
+  fiveSecTimer();
+
+  assert.equal(toast.hidden, false);
+  assert.equal(toast.className, "notification-toast severity-success");
+  assert.equal(toast.children[1].textContent, "Publicado com sucesso");
+  assert.equal(h.app.getState().activeNotification, "n-2");
+
+  // Fechar manualmente oculta o toast e libera o estado.
+  const closeButton = toast.children[0].children[1];
+  closeButton.click();
+  assert.equal(toast.hidden, true);
+  assert.equal(h.app.getState().activeNotification, null);
+  assert.deepEqual(notificationMessages, [{ notificationId: "n-2" }]);
+
+  // Chamar timer antigo não fecha nem causa erro em estado posterior.
+  fiveSecTimer();
+  assert.equal(toast.hidden, true);
+});
+
+test("player aplica pageDirective remoto sem sobrescrever navegação manual posterior", () => {
+  const h = setupInteractive(false);
+  const pages = [
+    { id: "p1", title: "Principal", enabledWidgets: ["photos", "clock"] },
+    { id: "p2", title: "Alertas", enabledWidgets: ["devMonitor"] },
+  ];
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:nonce-1", pageId: "p2", source: "goto", durationSeconds: 30 },
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+
+  // Mesmo polling repetindo o mesmo directive ID não sobrescreve mudança manual.
+  h.app.setPage("p1");
+  assert.equal(h.app.getState().activePageId, "p1");
+  const thirtySecRevert = h.timers.find((fn) => fn.delay === 30000);
+  assert.ok(thirtySecRevert);
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:nonce-1", pageId: "p2", source: "goto", durationSeconds: 30 },
+  });
+  assert.equal(h.app.getState().activePageId, "p1");
+
+  // Timer de reversão antigo invalidado pela troca manual não interfere.
+  thirtySecRevert();
+  assert.equal(h.app.getState().activePageId, "p1");
+
+  // Nova diretiva com "next" e duração temporária reverte automaticamente no vencimento.
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:nonce-2", pageId: "next", source: "goto", durationSeconds: 45 },
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+  const revert45 = [...h.timers].reverse().find((fn) => fn.delay === 45000);
+  assert.ok(revert45);
+  revert45();
+  assert.equal(h.app.getState().activePageId, "p1");
+});
+
+test("auto-rotação não interrompe pageDirective temporário antes do término da duração", () => {
+  const h = setupInteractive(true);
+  const pages = [
+    { id: "p1", title: "Principal", enabledWidgets: ["photos", "clock"] },
+    { id: "p2", title: "Alertas", enabledWidgets: ["devMonitor"] },
+  ];
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pageSettings: { autoRotateSeconds: 10, showIndicators: true, swipeEnabled: true },
+    pages,
+    pageDirective: { id: "goto:timed-1", pageId: "p2", source: "goto", durationSeconds: 45 },
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+
+  const rotateInterval = [...h.intervals.values()].find((fn) => fn.delay === 10000);
+  assert.ok(rotateInterval);
+  // Disparos de auto-rotação durante a vigência da diretiva temporária não trocam a página nem cancelam a reversão.
+  rotateInterval();
+  rotateInterval();
+  assert.equal(h.app.getState().activePageId, "p2");
+
+  const revert45 = [...h.timers].reverse().find((fn) => fn.delay === 45000);
+  assert.ok(revert45);
+  revert45();
+  assert.equal(h.app.getState().activePageId, "p1");
+
+  // Após o término da diretiva temporária, a auto-rotação volta a avançar normalmente.
+  const resumedRotate = [...h.intervals.values()].find((fn) => fn.delay === 10000);
+  assert.ok(resumedRotate);
+  resumedRotate();
+  assert.equal(h.app.getState().activePageId, "p2");
+});
+
+test("mudança de revisão cancela reversão temporária mesmo se a página de retorno permanece", () => {
+  const h = setupInteractive(true);
+  const pages = [
+    { id: "p1", title: "Principal", enabledWidgets: ["photos", "clock"] },
+    { id: "p2", title: "Alertas", enabledWidgets: ["devMonitor"] },
+  ];
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v1",
+    pages,
+    pageDirective: { id: "goto:revision-1", pageId: "p2", source: "goto", durationSeconds: 30 },
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+  const oldRevert = [...h.timers].reverse().find((fn) => fn.delay === 30000);
+  assert.ok(oldRevert);
+  assert.ok([...h.activeTimers.values()].includes(oldRevert));
+
+  // A nova revisão mantém p1, mas não deve herdar o timer temporário de navegação.
+  h.app.applyConfig({ ...h.app.defaults, revision: "online:v2", pages });
+  assert.equal(h.app.getState().activePageId, "p2");
+  assert.equal([...h.activeTimers.values()].includes(oldRevert), false);
+
+  // Mesmo que um callback já enfileirado rode, ele não reverte para p1.
+  oldRevert();
+  assert.equal(h.app.getState().activePageId, "p2");
+});
+
+test("pageDirective temporário restaura reversão após ocultar e reexibir o player", () => {
+  const h = setupInteractive(true);
+  const pages = [
+    { id: "p1", title: "Principal", enabledWidgets: ["photos", "clock"] },
+    { id: "p2", title: "Alertas", enabledWidgets: ["devMonitor"] },
+  ];
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:vis-1", pageId: "p2", source: "goto", durationSeconds: 30 },
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+  const initialRevert = [...h.timers].reverse().find((fn) => fn.delay === 30000);
+  assert.ok(initialRevert);
+
+  // Ocultar invalida o timer antigo; reexibir agenda um novo timer e ignora a mesma diretiva repetida no poll.
+  h.document.hidden = true;
+  h.documentListeners.visibilitychange();
+  initialRevert();
+  assert.equal(h.app.getState().activePageId, "p2");
+
+  h.document.hidden = false;
+  h.documentListeners.visibilitychange();
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:vis-1", pageId: "p2", source: "goto", durationSeconds: 30 },
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+
+  const restoredRevert = h.timers.at(-1);
+  assert.ok(restoredRevert);
+  assert.notEqual(restoredRevert, initialRevert);
+  restoredRevert();
+  assert.equal(h.app.getState().activePageId, "p1");
+});
+
+test("goto temporário mantém o hold na página alvo e republicação aplica o destino novo", () => {
+  const h = setupInteractive(true);
+  const pages = [
+    { id: "p1", title: "Principal", enabledWidgets: ["photos"] },
+    { id: "p2", title: "Alertas", enabledWidgets: ["clock"] },
+  ];
+  h.app.applyConfig({ ...h.app.defaults, revision: "online:v1", pages, activePageId: "p2" });
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v1",
+    pages,
+    pageDirective: { id: "same-target", pageId: "p2", source: "goto", durationSeconds: 30 },
+  });
+  assert.ok([...h.activeTimers.values()].some((fn) => fn.delay === 30000));
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v2",
+    pages,
+    pageDirective: { id: "same-target", pageId: "p1", source: "schedule", durationSeconds: 0 },
+  });
+  assert.equal(h.app.getState().activePageId, "p1");
+});
+
+test("goto relativo consome nonce uma vez por dispositivo e publicação mesmo após reload", () => {
+  const storage = new Map();
+  const pages = [
+    { id: "p1", title: "Um", enabledWidgets: ["photos"] },
+    { id: "p2", title: "Dois", enabledWidgets: ["clock"] },
+  ];
+  const directiveConfig = {
+    revision: "online:v-relative",
+    pages,
+    pageDirective: { id: "relative-nonce", pageId: "next", source: "goto", durationSeconds: 0 },
+  };
+  const first = setupInteractive(true, undefined, undefined, storage);
+  first.app.applyConfig({ ...first.app.defaults, ...directiveConfig });
+  assert.equal(first.app.getState().activePageId, "p2");
+
+  const reloaded = setupInteractive(true, undefined, undefined, storage);
+  reloaded.app.applyConfig({ ...reloaded.app.defaults, ...directiveConfig });
+  assert.equal(reloaded.app.getState().activePageId, "p1");
+});
+
+test("pageDirective resolve IDs numéricos de página antes de interpretar como índice", () => {
+  const h = setupInteractive(true);
+  const pages = [
+    { id: "1", title: "Página ID 1 na posição 0", enabledWidgets: ["photos"] },
+    { id: "0", title: "Página ID 0 na posição 1", enabledWidgets: ["clock"] },
+    { id: "extra", title: "Página Extra na posição 2", enabledWidgets: ["weather"] },
+  ];
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:num-0", pageId: "0", source: "goto", durationSeconds: 0 },
+  });
+  assert.equal(h.app.getState().activePageId, "0");
+  assert.equal(h.app.getState().activePageIndex, 1);
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:num-1", pageId: "1", source: "goto", durationSeconds: 0 },
+  });
+  assert.equal(h.app.getState().activePageId, "1");
+  assert.equal(h.app.getState().activePageIndex, 0);
+
+  // Índices numéricos que não colidem com IDs continuam funcionando como fallback.
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v5",
+    pages,
+    pageDirective: { id: "goto:idx-2", pageId: "2", source: "goto", durationSeconds: 0 },
+  });
+  assert.equal(h.app.getState().activePageId, "extra");
+  assert.equal(h.app.getState().activePageIndex, 2);
+});
+
+test("visibilitychange retoma fila de notificações, swipe sobre toast não troca página e remoção da página de retorno libera auto-rotação", () => {
+  const h = setupInteractive(true);
+  const pages = [
+    { id: "p1", title: "Principal", enabledWidgets: ["photos", "clock"] },
+    { id: "p2", title: "Alertas", enabledWidgets: ["devMonitor"] },
+    { id: "p3", title: "Extra", enabledWidgets: ["notes"] },
+  ];
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v6",
+    pageSettings: { autoRotateSeconds: 10, showIndicators: true, swipeEnabled: true },
+    pages,
+    pageDirective: { id: "rule:sched-1", pageId: "p2", source: "rule", durationSeconds: 30 },
+    notifications: [
+      { id: "q1", title: "Primeiro", message: "Msg 1", durationSeconds: 5 },
+      { id: "q2", title: "Segundo", message: "Msg 2", durationSeconds: 5 },
+    ],
+  });
+  assert.equal(h.app.getState().activePageId, "p2");
+  assert.equal(h.app.getState().activeNotification, "q1");
+
+  // Swipe iniciado sobre o toast não troca de página.
+  const toastSwipe = setupInteractive(true);
+  toastSwipe.app.applyConfig({
+    ...toastSwipe.app.defaults,
+    revision: "online:v6-swipe",
+    pages,
+    notifications: [{ id: "q-swipe", title: "Toast", message: "Msg", durationSeconds: 5 }],
+  });
+  toastSwipe.elements.dashboard.events.pointerdown({
+    pointerId: 2,
+    clientX: 300,
+    clientY: 20,
+    target: toastSwipe.elements["notification-toast"],
+  });
+  toastSwipe.elements.dashboard.events.pointerup({
+    pointerId: 2,
+    clientX: 100,
+    clientY: 20,
+  });
+  assert.equal(toastSwipe.app.getState().activePageId, "p1");
+
+  // Ocultar limpa toastTimer e revertPageTimer; reexibir mostra o próximo item da fila (q2).
+  h.document.hidden = true;
+  h.documentListeners.visibilitychange();
+  assert.equal(h.activeTimers.size, 0);
+  h.document.hidden = false;
+  h.documentListeners.visibilitychange();
+  assert.equal(h.app.getState().activeNotification, "q2");
+
+  // Remover p1 (página de retorno) limpa revertTargetPageId e destrava auto-rotação.
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:v7",
+    pageSettings: { autoRotateSeconds: 10, showIndicators: true, swipeEnabled: true },
+    pages: [
+      { id: "p2", title: "Alertas", enabledWidgets: ["devMonitor"] },
+      { id: "p3", title: "Extra", enabledWidgets: ["notes"] },
+    ],
+    pageDirective: { id: "goto:prev-1", pageId: "prev", source: "goto", durationSeconds: 0 },
+  });
+  assert.equal(h.app.getState().activePageId, "p3");
+  const rotateInterval = [...h.intervals.values()].find((fn) => fn.delay === 10000);
+  assert.ok(rotateInterval);
+  rotateInterval();
+  assert.equal(h.app.getState().activePageId, "p2");
+});
+
+test("config normaliza devMonitor pushKey com trim e rejeita ids inválidos", () => {
+  const window = {};
+  runInNewContext(configSource, { window, Intl });
+  const cfg = window.SmartFrame.normalizeConfig({
+    widgets: {
+      devMonitor: {
+        enabled: true,
+        items: [
+          { id: "d1", name: "CI", pushKey: "  ci-main  " },
+          { id: "d2", name: "Inv", pushKey: "invalid key!" },
+        ],
+      },
+    },
+  });
+  assert.equal(cfg.widgets.devMonitor.items[0].pushKey, "ci-main");
+  assert.equal(cfg.widgets.devMonitor.items[1].pushKey, "");
+});
+
+test("config normaliza controlDeck estritamente sem propagar caminho, args, script ou target", () => {
+  const window = {};
+  runInNewContext(configSource, { window, Intl });
+  const rawTiles = Array.from({ length: 18 }, (_, i) => ({
+    id: i === 0 ? "constructor" : i === 1 ? "constructor" : "tile-" + i,
+    bindingId: "bind-" + i,
+    label: "  Botão \x00" + i + "  ",
+    icon: i === 0 ? "terminal" : i === 2 ? "invalid-icon" : "mic",
+    path: "/usr/bin/rm",
+    args: ["-rf"],
+    script: "echo pwn",
+    target: { shortcutId: "secret" },
+  }));
+  const cfg = window.SmartFrame.normalizeConfig({
+    widgets: {
+      controlDeck: {
+        enabled: true,
+        title: "Deck",
+        columns: 99,
+        path: "/etc/passwd",
+        target: { host: "evil" },
+        script: "bad",
+        args: ["--bad"],
+        tiles: rawTiles,
+      },
+    },
+  });
+
+  const deck = cfg.widgets.controlDeck;
+  assert.equal(deck.enabled, true);
+  assert.equal(deck.columns, 3);
+  assert.equal("path" in deck, false);
+  assert.equal("target" in deck, false);
+  assert.equal("script" in deck, false);
+  assert.equal("args" in deck, false);
+  // Tile 1 duplicated "constructor" and is skipped; remaining valid tiles capped at 16.
+  assert.equal(deck.tiles.length, 16);
+  assert.deepEqual(JSON.parse(JSON.stringify(deck.tiles[0])), {
+    id: "constructor",
+    bindingId: "bind-0",
+    label: "Botão 0",
+    icon: "terminal",
+  });
+  assert.equal(deck.tiles[1].id, "tile-2");
+  assert.equal(deck.tiles[1].icon, "bolt");
+  for (const tile of deck.tiles) {
+    assert.deepEqual(Object.keys(tile).sort(), ["bindingId", "icon", "id", "label"]);
+  }
+});
+
+test("Control Deck usa ponte nativa SmartFrameControlDeck, timeout 12s sem retry e respeita preview", () => {
+  // Sem ponte nativa: execução desabilitada.
+  const noBridge = setupInteractive(false);
+  assert.equal(noBridge.localCalls.controlDeck.context.canExecuteControlDeck, false);
+  const noBridgeResults = [];
+  noBridge.localCalls.controlDeck.context.onControlDeckExecute(
+    { bindingId: "b1", command: "trigger", idempotent: false },
+    (res) => noBridgeResults.push(res),
+  );
+  assert.equal(noBridgeResults[0].status, "unavailable");
+
+  // Em preview=1: sempre somente leitura mesmo com ponte nativa disponível.
+  const previewMessages = [];
+  const previewBridge = { postMessage: (d) => previewMessages.push(d) };
+  const previewH = setupInteractive(true, undefined, previewBridge);
+  previewH.app.applyConfig({ ...previewH.app.defaults, revision: "online:prev" });
+  assert.equal(previewH.localCalls.controlDeck.context.canExecuteControlDeck, false);
+  const previewResults = [];
+  previewH.localCalls.controlDeck.context.onControlDeckExecute(
+    { bindingId: "b1", command: "trigger", idempotent: false },
+    (res) => previewResults.push(res),
+  );
+  assert.equal(previewMessages.length, 0);
+  assert.equal(previewResults[0].status, "unavailable");
+
+  // Online com ponte nativa: ok, unavailable, timeout não idempotente -> unknown sem retry, timeout idempotente -> unavailable.
+  const sent = [];
+  const bridge = { postMessage: (data) => sent.push(JSON.parse(data)) };
+  const h = setupInteractive(false, undefined, bridge);
+  assert.equal(h.localCalls.controlDeck.context.canExecuteControlDeck, true);
+
+  // Antes de revisão online válida não envia.
+  const beforeRev = [];
+  h.localCalls.controlDeck.context.onControlDeckExecute(
+    { bindingId: "b1", command: "trigger", idempotent: false },
+    (res) => beforeRev.push(res),
+  );
+  assert.equal(sent.length, 0);
+  assert.equal(beforeRev[0].status, "unavailable");
+
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:deck-1",
+    widgets: {
+      ...h.app.defaults.widgets,
+      controlDeck: { enabled: true, title: "Deck", columns: 3, tiles: [] },
+    },
+    widgetData: {
+      controlDeck: {
+        available: true,
+        checkedAt: "2026-11-20T09:00:00Z",
+        hostStatus: {},
+        bindings: {},
+      },
+    },
+  });
+  assert.equal(h.localCalls.controlDeck.setData.at(-1).available, true);
+
+  const results = [];
+  h.localCalls.controlDeck.context.onControlDeckExecute(
+    {
+      executionId: "exec-ok-1",
+      bindingId: "b-vol",
+      command: "set_level",
+      value: 75,
+      idempotent: true,
+    },
+    (res) => results.push(res),
+  );
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0], {
+    requestId: "deck-1",
+    executionId: "exec-ok-1",
+    revision: "online:deck-1",
+    bindingId: "b-vol",
+    command: "set_level",
+    value: 75,
+    idempotent: true,
+  });
+  assert.equal("token" in sent[0], false);
+  bridge.onmessage({
+    data: JSON.stringify({
+      requestId: "deck-1",
+      status: "ok",
+      idempotent: true,
+      state: { level: 75 },
+    }),
+  });
+  assert.equal(results[0].status, "ok");
+  assert.equal(results[0].state.level, 75);
+
+  // Resposta unavailable do host.
+  h.localCalls.controlDeck.context.onControlDeckExecute(
+    {
+      executionId: "exec-unavail-2",
+      bindingId: "b-ptt",
+      command: "ptt_acquire",
+      leaseSeconds: 10,
+      idempotent: true,
+    },
+    (res) => results.push(res),
+  );
+  bridge.onmessage({
+    data: JSON.stringify({
+      requestId: "deck-2",
+      status: "unavailable",
+      idempotent: true,
+      message: "Agente offline",
+    }),
+  });
+  assert.equal(results[1].status, "unavailable");
+  assert.equal(results[1].message, "Agente offline");
+
+  // Watchdog de 12000ms em comando não idempotente -> unknown sem retry!
+  h.localCalls.controlDeck.context.onControlDeckExecute(
+    {
+      executionId: "exec-nonidemp-3",
+      bindingId: "b-short",
+      command: "trigger",
+      idempotent: false,
+    },
+    (res) => results.push(res),
+  );
+  const watchdogNonIdemp = [...h.activeTimers.values()].find((fn) => fn.delay === 12000);
+  assert.ok(watchdogNonIdemp);
+  watchdogNonIdemp();
+  assert.equal(sent.length, 3); // Zero retries!
+  assert.deepEqual(JSON.parse(JSON.stringify(results[2])), {
+    status: "unknown",
+    idempotent: false,
+    message: "Sem resposta do host; resultado desconhecido (não reenviado).",
+  });
+
+  // Watchdog de 12000ms em comando idempotente -> unavailable.
+  h.localCalls.controlDeck.context.onControlDeckExecute(
+    {
+      executionId: "exec-idemp-4",
+      bindingId: "b-vol",
+      command: "set_level",
+      value: 40,
+      idempotent: true,
+    },
+    (res) => results.push(res),
+  );
+  const watchdogIdemp = [...h.activeTimers.values()].find((fn) => fn.delay === 12000);
+  assert.ok(watchdogIdemp);
+  watchdogIdemp();
+  assert.equal(sent.length, 4);
+  assert.deepEqual(JSON.parse(JSON.stringify(results[3])), {
+    status: "unavailable",
+    idempotent: true,
+    message: "Sem resposta do host.",
+  });
+});
+
+test("swipes iniciados dentro de #controlDeck não trocam de página nem alternam Smart Stack", () => {
+  const h = setupInteractive(true);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    widgets: {
+      ...h.app.defaults.widgets,
+      controlDeck: { enabled: true, title: "Deck", columns: 3, tiles: [] },
+    },
+    pages: [
+      { id: "p1", title: "Deck", enabledWidgets: ["controlDeck"] },
+      { id: "p2", title: "Fotos", enabledWidgets: ["photos"] },
+    ],
+  });
+  const sliderChild = h.document.createElement("input");
+  h.elements.controlDeck.appendChild(sliderChild);
+
+  h.elements.dashboard.events.pointerdown({
+    clientX: 300,
+    clientY: 120,
+    target: sliderChild,
+  });
+  h.elements.dashboard.events.pointerup({
+    clientX: 100,
+    clientY: 120,
+  });
+  assert.equal(h.app.getState().activePageId, "p1");
+
+  h.elements.dashboard.events.pointerdown({
+    clientX: 300,
+    clientY: 120,
+    target: h.elements.controlDeck,
+  });
+  h.elements.dashboard.events.pointerup({
+    clientX: 100,
+    clientY: 120,
+  });
+  assert.equal(h.app.getState().activePageId, "p1");
+});
+
+test("ptt_renew nao dispara schedule(0), e onmessage malformado ou comando invalido e ignorado", () => {
+  const sent = [];
+  const bridge = {
+    postMessage(payload) {
+      sent.push(JSON.parse(payload));
+    },
+    onmessage: null,
+  };
+  const h = setupInteractive(false, undefined, bridge);
+  h.app.applyConfig({
+    ...h.app.defaults,
+    revision: "online:deck-ptt",
+    widgets: {
+      ...h.app.defaults.widgets,
+      controlDeck: { enabled: true, title: "D", columns: 3, tiles: [] },
+    },
+  });
+  const res = [];
+  h.localCalls.controlDeck.context.onControlDeckExecute(
+    { bindingId: "", command: "trigger" },
+    (r) => res.push(r),
+  );
+  assert.equal(res[0].status, "unavailable");
+  assert.equal(sent.length, 0);
+
+  bridge.onmessage({ data: "{invalid-json" });
+  const zeroTimersBefore = [...h.activeTimers.values()].filter((t) => t.delay === 0).length;
+  h.localCalls.controlDeck.context.onControlDeckExecute(
+    {
+      executionId: "exec-ptt-renew-1",
+      bindingId: "b-mic",
+      command: "ptt_renew",
+      leaseId: "lease-1",
+      idempotent: true,
+    },
+    () => {},
+  );
+  bridge.onmessage({ data: JSON.stringify({ requestId: sent[0].requestId, status: "ok" }) });
+  assert.equal([...h.activeTimers.values()].filter((t) => t.delay === 0).length, zeroTimersBefore);
+});
+
+test("regra agendada já aplicada não dispara novamente após /goto na mesma revisão e janela", () => {
+  const h = setupInteractive(false);
+  const base = {
+    ...h.app.defaults,
+    revision: "online:rev-sched-1",
+    pages: [
+      { id: "p1", title: "Principal", enabledWidgets: ["photos"] },
+      { id: "p2", title: "Alertas", enabledWidgets: ["devMonitor"] },
+    ],
+  };
+  const ruleDirective = {
+    id: "schedule:r1:2026-11-21:09:00-18:00",
+    pageId: "p2",
+    source: "rule",
+    durationSeconds: 30,
+  };
+  h.app.applyConfig({ ...base, pageDirective: ruleDirective });
+  assert.equal(h.app.getState().activePageId, "p2");
+
+  h.app.applyConfig({
+    ...base,
+    pageDirective: { id: "goto:g1", pageId: "p1", source: "goto", durationSeconds: 0 },
+  });
+  assert.equal(h.app.getState().activePageId, "p1");
+
+  h.app.applyConfig({ ...base, pageDirective: ruleDirective });
+  assert.equal(h.app.getState().activePageId, "p1");
+
+  // Nova revisão volta a permitir aplicar a diretiva.
+  h.app.applyConfig({ ...base, revision: "online:rev-sched-2", pageDirective: ruleDirective });
+  assert.equal(h.app.getState().activePageId, "p2");
 });

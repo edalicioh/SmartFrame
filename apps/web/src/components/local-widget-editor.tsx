@@ -13,7 +13,8 @@ type LocalKey =
   | "system"
   | "worldClock"
   | "rss"
-  | "devMonitor";
+  | "devMonitor"
+  | "controlDeck";
 
 const LOCAL_WIDGET_METADATA: ReadonlyArray<{ key: LocalKey; label: string; description: string }> =
   [
@@ -49,6 +50,12 @@ const LOCAL_WIDGET_METADATA: ReadonlyArray<{ key: LocalKey; label: string; descr
       key: "devMonitor",
       label: "Monitor Dev/IA",
       description: "Acompanhe telemetria do servidor, pipelines, deploys e agentes.",
+    },
+    {
+      key: "controlDeck",
+      label: "Control Deck",
+      description:
+        "Acione controles locais do host diretamente pelo tablet (gerencie vínculos e botões na aba Control Deck).",
     },
   ];
 
@@ -629,6 +636,21 @@ export function LocalWidgetEditor({
                           }
                         />
                       </label>
+                      <label>
+                        Chave de push (webhook opcional)
+                        <input
+                          maxLength={64}
+                          placeholder="ex: ci-main"
+                          value={item.pushKey ?? ""}
+                          onChange={(e) =>
+                            update("devMonitor", {
+                              items: widgets.devMonitor.items.map((row) =>
+                                row.id === item.id ? { ...row, pushKey: e.target.value } : row,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
                       <button
                         type="button"
                         onClick={() =>
@@ -654,6 +676,7 @@ export function LocalWidgetEditor({
                             category: "ci",
                             status: "healthy",
                             detail: "",
+                            pushKey: "",
                           },
                         ],
                       })
@@ -662,6 +685,12 @@ export function LocalWidgetEditor({
                     Adicionar item Dev/IA
                   </button>
                 </>
+              )}
+              {key === "controlDeck" && (
+                <small>
+                  Gerencie os vínculos do host, o status do agente local e os botões deste widget na
+                  aba <strong>Control Deck</strong>.
+                </small>
               )}
             </div>
           )}

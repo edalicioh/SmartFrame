@@ -147,6 +147,14 @@
         showServerMetrics: true,
         items: [],
       },
+      controlDeck: {
+        enabled: false,
+        backgroundColor: "",
+        appearance: null,
+        title: "Control Deck",
+        columns: 3,
+        tiles: [],
+      },
     },
   };
   var presets = ["default", "cards", "flat", "borderless", "seamless"];
@@ -367,6 +375,7 @@
     worldClock: [3, 3],
     rss: [4, 3],
     devMonitor: [4, 3],
+    controlDeck: [4, 3],
   };
   function normalizeGridItems(list, orientation) {
     if (!Array.isArray(list)) return [];
@@ -719,7 +728,7 @@
             : 15;
       } else if (name === "devMonitor") {
         result.showServerMetrics = bool(value.showServerMetrics, true);
-        var seenDevIds = {};
+        var seenDevIds = Object.create(null);
         result.items = Array.isArray(value.items)
           ? value.items
               .filter(function (item) {
@@ -747,9 +756,87 @@
                     "healthy",
                   ),
                   detail: typeof item.detail === "string" ? item.detail.trim().slice(0, 120) : "",
+                  pushKey:
+                    typeof item.pushKey === "string" &&
+                    /^[A-Za-z0-9_-]{1,64}$/.test(item.pushKey.trim())
+                      ? item.pushKey.trim()
+                      : "",
                 };
               })
           : [];
+      } else if (name === "controlDeck") {
+        var deckIcons = [
+          "bolt",
+          "play",
+          "next",
+          "prev",
+          "stop",
+          "volume",
+          "mute",
+          "app",
+          "mic",
+          "sun",
+          "terminal",
+        ];
+        var stripControlText = function (raw) {
+          if (typeof raw !== "string") return "";
+          var out = "";
+          for (var i = 0; i < raw.length; i++) {
+            var code = raw.charCodeAt(i);
+            if (
+              (code >= 0 && code <= 8) ||
+              code === 11 ||
+              code === 12 ||
+              (code >= 14 && code <= 31) ||
+              code === 127
+            )
+              continue;
+            out += raw.charAt(i);
+          }
+          return out.trim();
+        };
+        var seenTileIds = Object.create(null);
+        var deckColumns =
+          Number.isInteger(value.columns) && value.columns >= 2 && value.columns <= 4
+            ? value.columns
+            : 3;
+        var deckTiles = Array.isArray(value.tiles)
+          ? value.tiles
+              .filter(function (item) {
+                if (
+                  !item ||
+                  typeof item !== "object" ||
+                  Array.isArray(item) ||
+                  typeof item.id !== "string" ||
+                  !/^[A-Za-z0-9_-]{1,64}$/.test(item.id) ||
+                  seenTileIds[item.id] ||
+                  typeof item.bindingId !== "string" ||
+                  !/^[A-Za-z0-9_-]{1,128}$/.test(item.bindingId)
+                )
+                  return false;
+                var cleanLabel = stripControlText(item.label).slice(0, 40).trim();
+                if (!cleanLabel) return false;
+                seenTileIds[item.id] = true;
+                return true;
+              })
+              .slice(0, 16)
+              .map(function (item) {
+                return {
+                  id: item.id,
+                  bindingId: item.bindingId,
+                  label: stripControlText(item.label).slice(0, 40).trim(),
+                  icon: choice(item.icon, deckIcons, "bolt"),
+                };
+              })
+          : [];
+        return {
+          enabled: result.enabled,
+          backgroundColor: result.backgroundColor,
+          appearance: result.appearance,
+          title: result.title,
+          columns: deckColumns,
+          tiles: deckTiles,
+        };
       }
       return result;
     }
@@ -914,6 +1001,7 @@
         worldClock: local("worldClock"),
         rss: local("rss"),
         devMonitor: local("devMonitor"),
+        controlDeck: local("controlDeck"),
       },
     };
   }

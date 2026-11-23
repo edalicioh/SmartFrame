@@ -438,4 +438,446 @@ test("novos widgets (system, worldClock, rss, devMonitor) renderizam dados sanit
   assert.equal(dev.root.children[0].textContent, "Dev/IA");
   assert.equal(dev.root.children[1].children[0].textContent, "Node v24.0.0");
   assert.equal(dev.root.children[2].children[0].children[1].textContent, "Em execução");
+
+  // Feeds recebidos via /api/push atualizam cartões vinculados e anexam novos feeds sanitizados.
+  const devPush = setup("devMonitor");
+  devPush.widget.update({
+    title: "Monitoramento",
+    showServerMetrics: false,
+    items: [
+      {
+        id: "ci-local",
+        name: "Pipeline CI",
+        category: "ci",
+        status: "idle",
+        detail: "Sem execução",
+        pushKey: "ci-main",
+      },
+    ],
+  });
+  devPush.widget.setData({
+    pushedFeeds: [
+      {
+        key: "ci-main",
+        name: "Ignorado",
+        category: "ci",
+        status: "failing",
+        detail: "<script>3 falhas</script>",
+        value: null,
+      },
+      {
+        key: "coffee",
+        name: "Cafeteira",
+        category: "service",
+        status: "healthy",
+        detail: "",
+        value: "Pronto",
+      },
+    ],
+  });
+  const rows = devPush.root.children[1].children;
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].children[0].children[0].textContent, "[CI] Pipeline CI");
+  assert.equal(rows[0].children[0].children[1].textContent, "<script>3 falhas</script>");
+  assert.equal(rows[0].children[1].textContent, "Falha");
+  assert.equal(rows[1].children[0].children[0].textContent, "[SRV] Cafeteira");
+  assert.equal(rows[1].children[0].children[1].textContent, "Pronto");
+
+  // detail null e status desconhecido usam fallback seguro sem exibir "null".
+  devPush.widget.setData({
+    pushedFeeds: [
+      {
+        key: "ci-main",
+        name: "Pipeline CI",
+        category: "ci",
+        status: "unknown-state",
+        detail: null,
+        value: null,
+      },
+    ],
+  });
+  const fallbackRow = devPush.root.children[1].children[0];
+  assert.equal(fallbackRow.children[0].children[1].textContent, "Sem execução");
+  assert.equal(fallbackRow.children[1].className, "dev-status-badge dev-status-healthy");
+  devPush.widget.destroy();
+});
+
+test("controlDeck exibe estado indisponível e prévia sem valores fictícios", () => {
+  const h = setup("controlDeck", undefined, { canExecuteControlDeck: false });
+  h.widget.update({
+    title: "Mesa de Controle",
+    columns: 2,
+    tiles: [
+      { id: "t1", bindingId: "b-vol", label: "Volume", icon: "volume" },
+      { id: "t2", bindingId: "b-term", label: "<script>Terminal</script>", icon: "terminal" },
+    ],
+  });
+
+  const header = h.root.children[0];
+  const notice = h.root.children[1];
+  const grid = h.root.children[3];
+  assert.equal(header.children[0].textContent, "Mesa de Controle");
+  assert.equal(header.children[1].textContent, "Host indisponível");
+  assert.equal(notice.hidden, false);
+  assert.equal(grid.children.length, 2);
+  assert.equal(grid.children[0].disabled, true);
+  assert.equal(grid.children[0].children[1].textContent, "Indisponível");
+  assert.equal(grid.children[1].children[0].children[1].textContent, "<script>Terminal</script>");
+
+  // Mesmo recebendo bindings com valores reais, sliders em host indisponível mostram "—" e ficam disabled.
+  h.widget.setData({
+    available: false,
+    bindings: {
+      "b-vol": {
+        bindingId: "b-vol",
+        label: "Volume",
+        kind: "volume",
+        action: "set_level",
+        idempotent: true,
+        available: false,
+        level: null,
+        muted: null,
+        leaseSeconds: null,
+      },
+      "b-term": {
+        bindingId: "b-term",
+        label: "Terminal",
+        kind: "shortcut",
+        action: "launch",
+        idempotent: false,
+        available: false,
+        level: null,
+        muted: null,
+        leaseSeconds: null,
+      },
+    },
+  });
+  const updatedHeader = h.root.children[0];
+  const updatedGrid = h.root.children[3];
+  assert.equal(updatedHeader.children[1].textContent, "Host indisponível");
+  assert.equal(updatedGrid.children[0].children[0].children[2].textContent, "—");
+  assert.equal(updatedGrid.children[0].children[1].disabled, true);
+  assert.equal(updatedGrid.children[1].disabled, true);
+  h.widget.destroy();
+});
+
+test("controlDeck trava clique pendente e exibe feedback para unknown sem reenvio", () => {
+  const sent = [];
+  const h = setup("controlDeck", undefined, {
+    canExecuteControlDeck: true,
+    onControlDeckExecute: (payload, onDone) => sent.push({ payload, onDone }),
+  });
+  h.widget.update({
+    title: "Atalhos",
+    columns: 3,
+    tiles: [{ id: "t-short", bindingId: "b-short", label: "Abrir App", icon: "bolt" }],
+  });
+  h.widget.setData({
+    available: true,
+    bindings: {
+      "b-short": {
+        bindingId: "b-short",
+        label: "Abrir App",
+        kind: "shortcut",
+        action: "launch",
+        idempotent: false,
+        available: true,
+        level: null,
+        muted: null,
+        leaseSeconds: null,
+      },
+    },
+  });
+
+  const feedback = h.root.children[2];
+  const btn = h.root.children[3].children[0];
+  assert.equal(h.root.children[0].children[1].textContent, "Conectado");
+  assert.equal(h.root.children[1].hidden, true);
+  assert.equal(btn.disabled, false);
+
+  // Primeiro clique dispara; segundo clique enquanto pendente é bloqueado.
+  btn.click();
+  btn.click();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.command, "trigger");
+  assert.equal(sent[0].payload.idempotent, false);
+  assert.equal(btn.attributes["aria-disabled"], "true");
+
+  sent[0].onDone({
+    status: "unknown",
+    idempotent: false,
+    message: "Sem confirmação do servidor; resultado desconhecido (não reenviado).",
+  });
+  assert.equal(sent.length, 1);
+  assert.equal(btn.attributes["aria-disabled"], "false");
+  assert.equal(feedback.hidden, false);
+  assert.match(feedback.textContent, /Resultado desconhecido — não reenviado/);
+
+  // Próximo clique após desbloqueio funciona normalmente e trata unavailable.
+  btn.click();
+  assert.equal(sent.length, 2);
+  sent[1].onDone({ status: "unavailable", idempotent: false, message: "Agente offline." });
+  assert.equal(feedback.textContent, "Agente offline.");
+  h.widget.destroy();
+});
+
+test("controlDeck slider exibe nível real, envia set_level e não reinventa valor ao falhar", () => {
+  const sent = [];
+  const h = setup("controlDeck", undefined, {
+    canExecuteControlDeck: true,
+    onControlDeckExecute: (payload, onDone) => sent.push({ payload, onDone }),
+  });
+  h.widget.update({
+    title: "Áudio & Tela",
+    columns: 2,
+    tiles: [
+      { id: "t-vol", bindingId: "b-vol", label: "Volume", icon: "volume" },
+      { id: "t-br", bindingId: "b-br", label: "Brilho", icon: "sun" },
+    ],
+  });
+  h.widget.setData({
+    available: true,
+    bindings: {
+      "b-vol": {
+        bindingId: "b-vol",
+        label: "Volume",
+        kind: "volume",
+        action: "set_level",
+        idempotent: true,
+        available: true,
+        level: 42,
+        muted: false,
+        leaseSeconds: null,
+      },
+      "b-br": {
+        bindingId: "b-br",
+        label: "Brilho",
+        kind: "brightness",
+        action: "set_level",
+        idempotent: true,
+        available: false,
+        level: null,
+        muted: null,
+        leaseSeconds: null,
+      },
+    },
+  });
+
+  const grid = h.root.children[3];
+  const volWrap = grid.children[0];
+  const volValue = volWrap.children[0].children[2];
+  const volSlider = volWrap.children[1];
+  const brWrap = grid.children[1];
+  const brValue = brWrap.children[0].children[2];
+  const brSlider = brWrap.children[1];
+
+  assert.equal(volValue.textContent, "42%");
+  assert.equal(volSlider.value, "42");
+  assert.equal(volSlider.disabled, false);
+  assert.equal(brValue.textContent, "—");
+  assert.equal(brSlider.disabled, true);
+
+  volSlider.value = "78";
+  volSlider.input();
+  assert.equal(volValue.textContent, "78%");
+  volSlider.change();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.bindingId, "b-vol");
+  assert.equal(sent[0].payload.command, "set_level");
+  assert.equal(sent[0].payload.value, 78);
+  assert.equal(sent[0].payload.idempotent, true);
+
+  sent[0].onDone({
+    status: "ok",
+    idempotent: true,
+    message: "Volume ajustado.",
+    state: { level: 78 },
+  });
+  assert.equal(volValue.textContent, "78%");
+  assert.equal(volSlider.value, "78");
+
+  // Em falha, retorna ao valor real conhecido do servidor.
+  volSlider.value = "10";
+  volSlider.change();
+  sent[1].onDone({ status: "unavailable", idempotent: true, message: "Host desconectado." });
+  assert.equal(volValue.textContent, "42%");
+  h.widget.destroy();
+});
+
+test("controlDeck Push-to-Talk adquire, renova na metade do lease e libera em pointerup, pause e destroy", () => {
+  const sent = [];
+  const h = setup("controlDeck", undefined, {
+    canExecuteControlDeck: true,
+    onControlDeckExecute: (payload, onDone) => sent.push({ payload, onDone }),
+  });
+  h.widget.update({
+    title: "Microfone",
+    columns: 2,
+    tiles: [{ id: "t-ptt", bindingId: "b-ptt", label: "Falar", icon: "mic" }],
+  });
+  h.widget.setData({
+    available: true,
+    bindings: {
+      "b-ptt": {
+        bindingId: "b-ptt",
+        label: "Falar",
+        kind: "mic_ptt",
+        action: "hold_unmute",
+        idempotent: true,
+        available: true,
+        level: null,
+        muted: true,
+        leaseSeconds: 10,
+      },
+    },
+  });
+
+  const pttBtn = h.root.children[3].children[0];
+  pttBtn.pointerdown({ button: 0, stopPropagation() {} });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.command, "ptt_acquire");
+  assert.equal(sent[0].payload.leaseSeconds, 10);
+  assert.equal(sent[0].payload.leaseRequestId, sent[0].payload.executionId);
+
+  sent[0].onDone({
+    status: "ok",
+    idempotent: true,
+    message: "PTT ativo",
+    lease: { leaseId: "lease-1", expiresAt: "2027-03-01T02:00:10Z", leaseSeconds: 10 },
+  });
+  assert.equal(pttBtn.attributes["aria-pressed"], "true");
+  assert.equal(h.timers.size, 1);
+  assert.equal([...h.timers.values()][0].delay, 5000);
+
+  // Renovação automática na metade do lease.
+  h.tick();
+  assert.equal(sent.length, 2);
+  assert.equal(sent[1].payload.command, "ptt_renew");
+  assert.equal(sent[1].payload.leaseId, "lease-1");
+  sent[1].onDone({
+    status: "ok",
+    idempotent: true,
+    lease: { leaseId: "lease-1", expiresAt: "2027-03-01T02:00:15Z", leaseSeconds: 10 },
+  });
+  assert.equal(h.timers.size, 1);
+
+  // Soltar envia ptt_release imediato e limpa timer de renovação.
+  pttBtn.pointerup({ stopPropagation() {} });
+  assert.equal(h.timers.size, 0);
+  assert.equal(sent.length, 3);
+  assert.equal(sent[2].payload.command, "ptt_release");
+  assert.equal(sent[2].payload.leaseId, "lease-1");
+  assert.equal(sent[2].payload.leaseRequestId, sent[0].payload.leaseRequestId);
+  assert.equal(pttBtn.attributes["aria-pressed"], "false");
+
+  // pause() com PTT ativo libera imediatamente.
+  pttBtn.pointerdown({ button: 0, stopPropagation() {} });
+  sent[3].onDone({
+    status: "ok",
+    idempotent: true,
+    lease: { leaseId: "lease-2", expiresAt: "2027-03-01T02:00:25Z", leaseSeconds: 10 },
+  });
+  assert.equal(h.timers.size, 1);
+  h.widget.pause();
+  assert.equal(h.timers.size, 0);
+  assert.equal(sent.at(-1).payload.command, "ptt_release");
+  assert.equal(sent.at(-1).payload.leaseId, "lease-2");
+
+  // destroy() com PTT ativo (mesmo antes do reply de acquire) libera ao concluir ou imediatamente.
+  h.widget.resume();
+  const pttAfterResume = h.root.children[3].children[0];
+  pttAfterResume.pointerdown({ button: 0, stopPropagation() {} });
+  const pendingAcquire = sent.at(-1);
+  h.widget.destroy();
+  assert.equal(sent.at(-1).payload.command, "ptt_release");
+  pendingAcquire.onDone({
+    status: "ok",
+    idempotent: true,
+    lease: { leaseId: "lease-3", expiresAt: "2027-03-01T02:00:35Z", leaseSeconds: 10 },
+  });
+  assert.equal(sent.at(-1).payload.command, "ptt_release");
+  assert.equal(sent.at(-1).payload.leaseId, "lease-3");
+  assert.equal(sent.at(-1).payload.leaseRequestId, pendingAcquire.payload.leaseRequestId);
+});
+
+test("controlDeck habilita slider de app_volume, bloqueia input durante pending e libera PTT em reconstrução de structureKey", () => {
+  const sent = [];
+  const h = setup("controlDeck", undefined, {
+    canExecuteControlDeck: true,
+    onControlDeckExecute: (payload, onDone) => sent.push({ payload, onDone }),
+  });
+  h.widget.update({
+    title: "Deck",
+    columns: 2,
+    tiles: [
+      { id: "t-app", bindingId: "b-app", label: "Spotify", icon: "app" },
+      { id: "t-ptt", bindingId: "b-ptt", label: "Falar", icon: "mic" },
+    ],
+  });
+  h.widget.setData({
+    available: true,
+    bindings: {
+      "b-app": {
+        bindingId: "b-app",
+        label: "Spotify",
+        kind: "app_volume",
+        action: "set_level",
+        idempotent: true,
+        available: true,
+        level: null,
+        muted: null,
+        leaseSeconds: null,
+      },
+      "b-ptt": {
+        bindingId: "b-ptt",
+        label: "Falar",
+        kind: "mic_ptt",
+        action: "hold_unmute",
+        idempotent: true,
+        available: true,
+        level: null,
+        muted: true,
+        leaseSeconds: 6,
+      },
+    },
+  });
+
+  const grid = h.root.children[3];
+  const appSlider = grid.children[0].children[1];
+  const appVal = grid.children[0].children[0].children[2];
+  assert.equal(appSlider.disabled, false);
+  assert.equal(appVal.textContent, "—");
+
+  appSlider.value = "65";
+  appSlider.input();
+  assert.equal(appVal.textContent, "65%");
+  appSlider.change();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.command, "set_level");
+
+  // Enquanto pending === true, input e change subsequentes são ignorados.
+  appSlider.value = "20";
+  appSlider.input();
+  assert.equal(appSlider.value, "50");
+  appSlider.change();
+  assert.equal(sent.length, 1);
+  sent[0].onDone({ status: "ok", idempotent: true, state: { level: 65 } });
+  assert.equal(appSlider.value, "65");
+
+  // Adquirir PTT e mudar structureKey antes de soltar libera o lease imediatamente.
+  const pttBtn = grid.children[1];
+  pttBtn.pointerdown({ button: 0, stopPropagation() {} });
+  sent[1].onDone({
+    status: "ok",
+    idempotent: true,
+    lease: { leaseId: "lease-struct-1", expiresAt: "2027-03-01T02:01:00Z", leaseSeconds: 6 },
+  });
+  h.widget.update({
+    title: "Deck",
+    columns: 2,
+    tiles: [{ id: "t-ptt", bindingId: "b-ptt", label: "Falar", icon: "mic" }],
+  });
+  assert.equal(sent.at(-1).payload.command, "ptt_release");
+  assert.equal(sent.at(-1).payload.leaseId, "lease-struct-1");
+  h.widget.destroy();
 });

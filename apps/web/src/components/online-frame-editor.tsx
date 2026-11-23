@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocalWidgetEditor } from "./local-widget-editor";
+import { AutomationsEditor } from "./online-editor/automations-editor";
+import { ControlDeckEditor } from "./online-editor/control-deck-editor";
 import { PhotoLibrary } from "./online-editor/photo-library";
 import { ValidatedNumberField } from "./online-editor/validated-number-field";
 import {
@@ -32,6 +34,7 @@ import {
   resolveActivePageConfig,
   resolveScopedAppearance,
   type AppearancePreset,
+  type ControlDeckPlayerWidgetData,
   type DashboardGridItem,
   type DashboardGridLayout,
   type DashboardPage,
@@ -620,7 +623,9 @@ type Photo = {
   height?: number | null;
 };
 type Pairing = { code: string; expiresAt: string; serverURL: string };
-type WidgetData = Awaited<ReturnType<typeof import("@smartframe/widgets").onlineWidgetData>>;
+type WidgetData = Awaited<ReturnType<typeof import("@smartframe/widgets").onlineWidgetData>> & {
+  controlDeck?: ControlDeckPlayerWidgetData;
+};
 type ListStatus = "loading" | "ready" | "error";
 
 function EditorFeedback({ error, notice }: { error: string; notice: string }) {
@@ -638,12 +643,14 @@ function EditorFeedback({ error, notice }: { error: string; notice: string }) {
   );
 }
 
+type EditorSection = "photos" | "widgets" | "controlDeck" | "appearance" | "automations";
+
 function EditorSectionNavigation({
   value,
   onChange,
 }: {
-  value: "photos" | "widgets" | "appearance";
-  onChange: (value: "photos" | "widgets" | "appearance") => void;
+  value: EditorSection;
+  onChange: (value: EditorSection) => void;
 }) {
   return (
     <nav className="online-section-nav" aria-label="Seções de edição">
@@ -651,7 +658,9 @@ function EditorSectionNavigation({
         [
           ["photos", "Fotos"],
           ["widgets", "Widgets"],
+          ["controlDeck", "Control Deck"],
           ["appearance", "Aparência"],
+          ["automations", "Automações"],
         ] as const
       ).map(([key, label]) => (
         <button
@@ -703,7 +712,7 @@ export function OnlineFrameEditor() {
   const [widgetData, setWidgetData] = useState<WidgetData | null>(null);
   const [currencyBase, setCurrencyBase] = useState("USD");
   const [currencyTarget, setCurrencyTarget] = useState("BRL");
-  const [editorSection, setEditorSection] = useState<"photos" | "widgets" | "appearance">("photos");
+  const [editorSection, setEditorSection] = useState<EditorSection>("photos");
   const [mobilePane, setMobilePane] = useState<"configure" | "preview">("configure");
   const [photoAnnouncement, setPhotoAnnouncement] = useState("");
   const [photoUploadStatus, setPhotoUploadStatus] = useState("");
@@ -766,6 +775,7 @@ export function OnlineFrameEditor() {
 
   // The preview iframe never polls or receives device credentials. Its parent uses
   // the authenticated, shared server cache, including for unsaved pair selections.
+  const [deckRefreshNonce, setDeckRefreshNonce] = useState(0);
   const widgetSettings = JSON.stringify(previewWidgetSettings(config));
   useEffect(() => {
     if (!panelId) return;
@@ -802,7 +812,7 @@ export function OnlineFrameEditor() {
       clearTimeout(timer);
       controller?.abort();
     };
-  }, [panelId, widgetSettings]);
+  }, [panelId, widgetSettings, deckRefreshNonce]);
 
   const previewPageId = resolvedPage.page?.id ?? "";
   const sendPreview = useCallback(() => {
@@ -1090,6 +1100,7 @@ export function OnlineFrameEditor() {
       worldClock: { ...baseWidgets.worldClock, enabled: isEnabled("worldClock") },
       rss: { ...baseWidgets.rss, enabled: isEnabled("rss") },
       devMonitor: { ...baseWidgets.devMonitor, enabled: isEnabled("devMonitor") },
+      controlDeck: { ...baseWidgets.controlDeck, enabled: isEnabled("controlDeck") },
     };
   }
 
@@ -2323,6 +2334,13 @@ export function OnlineFrameEditor() {
                         };
                         delete nextConfig.pages;
                         delete nextConfig.pageSettings;
+                        if (nextConfig.rules) {
+                          const filteredRules = nextConfig.rules.filter(
+                            (rule) => rule.action.type !== "goto_page",
+                          );
+                          if (filteredRules.length) nextConfig.rules = filteredRules;
+                          else delete nextConfig.rules;
+                        }
                         change(nextConfig);
                         changeActivePage("", nextConfig);
                       }}
@@ -2410,11 +2428,19 @@ export function OnlineFrameEditor() {
                             const targetId = resolvedPage.page?.id ?? config.pages![0].id;
                             const remaining = config.pages!.filter((page) => page.id !== targetId);
                             if (remaining.length === 0) return;
-                            const nextConfig = {
+                            const remainingIds = new Set(remaining.map((page) => page.id));
+                            const filteredRules = config.rules?.filter(
+                              (rule) =>
+                                rule.action.type !== "goto_page" ||
+                                remainingIds.has(rule.action.pageId),
+                            );
+                            const nextConfig: OnlineDashboard = {
                               ...config,
                               pages: remaining,
                               widgets: syncGlobalWidgetsFromPages(config.widgets, remaining),
                             };
+                            if (filteredRules?.length) nextConfig.rules = filteredRules;
+                            else delete nextConfig.rules;
                             change(nextConfig);
                             changeActivePage(remaining[0].id, nextConfig);
                           }}
@@ -2805,6 +2831,11 @@ export function OnlineFrameEditor() {
                         "Monitor Dev/IA",
                         config.theme === "dark" ? "#1d3045" : "#ffffff",
                       ],
+                      [
+                        "controlDeck",
+                        "Control Deck",
+                        config.theme === "dark" ? "#1d3045" : "#ffffff",
+                      ],
                     ] as const
                   ).map(([key, label, fallback]) => {
                     const widgetEntry = config.widgets[key];
@@ -3016,6 +3047,30 @@ export function OnlineFrameEditor() {
                   </label>
                 </details>
               </fieldset>
+            </div>
+            <div className="online-editor-section" hidden={editorSection !== "controlDeck"}>
+              <ControlDeckEditor
+                config={config}
+                enabled={widgetChecked("controlDeck")}
+                toggleDisabled={widgetToggleDisabled("controlDeck")}
+                onEnabledChange={(nextEnabled) => widget("controlDeck", nextEnabled)}
+                onChange={change}
+                onBindingsChanged={() => setDeckRefreshNonce((prev) => prev + 1)}
+                controlsDisabled={controlsDisabled}
+                onNotice={setNotice}
+                onError={setError}
+              />
+            </div>
+            <div className="online-editor-section" hidden={editorSection !== "automations"}>
+              <AutomationsEditor
+                config={config}
+                onChange={change}
+                devices={devices}
+                selectedDeviceId={deviceId}
+                controlsDisabled={controlsDisabled}
+                onNotice={setNotice}
+                onError={setError}
+              />
             </div>
             <div className="online-save">
               <button disabled={controlsDisabled} onClick={() => void save(false)}>

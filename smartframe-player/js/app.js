@@ -6,10 +6,26 @@
     smartStackNav = document.getElementById("smart-stack-nav"),
     pageNav = document.getElementById("page-nav"),
     pageOverview = document.getElementById("page-overview"),
+    notificationToast = document.getElementById("notification-toast"),
     config = null,
     pollTimer = null,
     pageTimer = null,
     stackTimer = null,
+    toastTimer = null,
+    toastSeq = 0,
+    activeNotification = null,
+    notificationQueue = [],
+    seenNotificationIds = Object.create(null),
+    seenNotificationOrder = [],
+    lastDirectiveKey = "",
+    appliedDirectiveKeys = Object.create(null),
+    appliedDirectiveOrder = [],
+    revertPageTimer = null,
+    revertTargetPageId = "",
+    revertStartedAt = 0,
+    revertDurationMs = 0,
+    revertExpiresAt = 0,
+    revertSeq = 0,
     pageTimerKey = "",
     stackTimerKey = "",
     controller = null,
@@ -37,6 +53,7 @@
     "worldClock",
     "rss",
     "devMonitor",
+    "controlDeck",
   ];
   var nativeTasks = window.SmartFrameTasks,
     nativeTasksSupported = Boolean(nativeTasks && typeof nativeTasks.postMessage === "function"),
@@ -61,10 +78,138 @@
       schedule(0);
     };
   }
+  var nativeControlDeck = window.SmartFrameControlDeck,
+    nativeControlDeckSupported = Boolean(
+      nativeControlDeck && typeof nativeControlDeck.postMessage === "function",
+    ),
+    nativeDeckSeq = 0,
+    pendingControlDeck = Object.create(null);
+  if (!preview && nativeControlDeckSupported) {
+    nativeControlDeck.onmessage = function (event) {
+      var reply;
+      try {
+        reply = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (!reply || typeof reply.requestId !== "string") return;
+      var pending = pendingControlDeck[reply.requestId];
+      if (!pending) return;
+      delete pendingControlDeck[reply.requestId];
+      clearTimeout(pending.timer);
+      if (typeof pending.onDone === "function") pending.onDone(reply);
+      if (pending.command !== "ptt_renew") schedule(0);
+    };
+  }
   var localContext = {
       timezone: "America/Sao_Paulo",
       revision: "",
       canToggleTasks: preview || nativeTasksSupported,
+      canExecuteControlDeck: !preview && nativeControlDeckSupported,
+      onControlDeckExecute: function (requestPayload, onDone) {
+        var idempotent = Boolean(requestPayload && requestPayload.idempotent);
+        var finish = function (result) {
+          if (typeof onDone === "function") onDone(result);
+        };
+        if (
+          preview ||
+          !nativeControlDeckSupported ||
+          !requestPayload ||
+          typeof requestPayload !== "object" ||
+          !config ||
+          !/^online:[A-Za-z0-9_-]{1,128}$/.test(config.revision) ||
+          typeof requestPayload.bindingId !== "string" ||
+          !/^[A-Za-z0-9_-]{1,128}$/.test(requestPayload.bindingId)
+        ) {
+          finish({
+            status: "unavailable",
+            idempotent: idempotent,
+            message: preview ? "Prévia somente leitura." : "Host ou revisão indisponível.",
+          });
+          return;
+        }
+        var allowedCommands = [
+          "trigger",
+          "set_level",
+          "set_mute",
+          "ptt_acquire",
+          "ptt_renew",
+          "ptt_release",
+        ];
+        var command =
+          typeof requestPayload.command === "string" ? requestPayload.command : "trigger";
+        if (allowedCommands.indexOf(command) < 0) {
+          finish({
+            status: "rejected",
+            idempotent: idempotent,
+            message: "Comando inválido.",
+          });
+          return;
+        }
+        var requestId = "deck-" + ++nativeDeckSeq;
+        var executionId =
+          typeof requestPayload.executionId === "string" &&
+          /^[A-Za-z0-9_-]{8,64}$/.test(requestPayload.executionId)
+            ? requestPayload.executionId
+            : "deckexec-" + Date.now().toString(36) + "-" + nativeDeckSeq;
+        var messagePayload = {
+          requestId: requestId,
+          executionId: executionId,
+          revision: config.revision,
+          bindingId: requestPayload.bindingId,
+          command: command,
+          idempotent: idempotent,
+        };
+        if (requestPayload.value !== undefined && requestPayload.value !== null)
+          messagePayload.value = requestPayload.value;
+        if (requestPayload.muted !== undefined && requestPayload.muted !== null)
+          messagePayload.muted = requestPayload.muted;
+        if (requestPayload.leaseSeconds !== undefined && requestPayload.leaseSeconds !== null)
+          messagePayload.leaseSeconds = requestPayload.leaseSeconds;
+        if (requestPayload.leaseId !== undefined && requestPayload.leaseId !== null)
+          messagePayload.leaseId = requestPayload.leaseId;
+        if (requestPayload.leaseRequestId !== undefined && requestPayload.leaseRequestId !== null)
+          messagePayload.leaseRequestId = requestPayload.leaseRequestId;
+        var expireControlDeck = function () {
+          var pending = pendingControlDeck[requestId];
+          if (!pending) return;
+          delete pendingControlDeck[requestId];
+          clearTimeout(pending.timer);
+          if (!pending.idempotent) {
+            finish({
+              status: "unknown",
+              idempotent: false,
+              message: "Sem resposta do host; resultado desconhecido (não reenviado).",
+            });
+          } else {
+            finish({
+              status: "unavailable",
+              idempotent: true,
+              message: "Sem resposta do host.",
+            });
+          }
+        };
+        pendingControlDeck[requestId] = {
+          command: command,
+          idempotent: idempotent,
+          onDone: finish,
+          timer: setTimeout(expireControlDeck, 12000),
+        };
+        try {
+          nativeControlDeck.postMessage(JSON.stringify(messagePayload));
+        } catch {
+          var pending = pendingControlDeck[requestId];
+          if (pending) {
+            delete pendingControlDeck[requestId];
+            clearTimeout(pending.timer);
+          }
+          finish({
+            status: "unavailable",
+            idempotent: idempotent,
+            message: "Transporte nativo indisponível.",
+          });
+        }
+      },
       onToggleTask: function (taskId, completed, rollback, settle) {
         if (preview) {
           if (typeof settle === "function") settle(true);
@@ -519,7 +664,14 @@
       pageTimerKey = pageKey;
       if (pageInterval > 0) {
         pageTimer = setInterval(function () {
-          if (document.hidden || overviewOpen || Date.now() < interactionPausedUntil) return;
+          if (
+            document.hidden ||
+            overviewOpen ||
+            revertPageTimer ||
+            revertTargetPageId ||
+            Date.now() < interactionPausedUntil
+          )
+            return;
           setPage(activePageIndex + 1);
         }, pageInterval * 1000);
       }
@@ -672,12 +824,38 @@
     scheduleInteractiveTimers(effective);
     return effective;
   }
+  function clearRevertDirective() {
+    clearTimeout(revertPageTimer);
+    revertPageTimer = null;
+    revertTargetPageId = "";
+    revertStartedAt = 0;
+    revertDurationMs = 0;
+    revertExpiresAt = 0;
+    revertSeq++;
+  }
+  function scheduleRevertDirective(delayMs) {
+    clearTimeout(revertPageTimer);
+    revertPageTimer = null;
+    if (!revertTargetPageId || document.hidden) return;
+    var mySeq = ++revertSeq;
+    var targetId = revertTargetPageId;
+    revertPageTimer = setTimeout(
+      function () {
+        if (revertSeq === mySeq) setPage(targetId);
+      },
+      Math.max(0, delayMs),
+    );
+  }
   function setPage(target) {
-    if (!config || !Array.isArray(config.pages) || config.pages.length === 0) return;
+    if (!config || !Array.isArray(config.pages) || config.pages.length === 0) {
+      clearRevertDirective();
+      return;
+    }
     var pages = config.pages;
     if (typeof target === "string") {
       for (var i = 0; i < pages.length; i++) {
         if (pages[i].id === target) {
+          clearRevertDirective();
           activePageIndex = i;
           activePageId = pages[i].id;
           activeStackIndex = 0;
@@ -685,13 +863,207 @@
           return;
         }
       }
+      clearRevertDirective();
       return;
     }
     var count = pages.length;
+    clearRevertDirective();
     activePageIndex = ((target % count) + count) % count;
     activePageId = pages[activePageIndex].id;
     activeStackIndex = 0;
     renderEffectiveView(true, config, false);
+  }
+  function rememberNotificationId(id) {
+    if (!id || seenNotificationIds[id]) return false;
+    seenNotificationIds[id] = true;
+    seenNotificationOrder.push(id);
+    if (seenNotificationOrder.length > 1000) {
+      var oldest = seenNotificationOrder.shift();
+      delete seenNotificationIds[oldest];
+    }
+    return true;
+  }
+  function dismissActiveNotification(persist) {
+    if (
+      persist === true &&
+      activeNotification &&
+      typeof activeNotification.id === "string" &&
+      window.SmartFrameNotifications &&
+      typeof window.SmartFrameNotifications.postMessage === "function"
+    ) {
+      try {
+        window.SmartFrameNotifications.postMessage(
+          JSON.stringify({ notificationId: activeNotification.id }),
+        );
+      } catch {}
+    }
+    clearTimeout(toastTimer);
+    toastTimer = null;
+    toastSeq++;
+    activeNotification = null;
+    if (notificationToast) {
+      notificationToast.hidden = true;
+      clearChildren(notificationToast);
+    }
+    if (!document.hidden && notificationQueue.length > 0) showNextNotification();
+  }
+  function showNextNotification() {
+    if (!notificationToast || activeNotification || document.hidden) return;
+    var item = null;
+    while (notificationQueue.length > 0) {
+      var candidate = notificationQueue.shift();
+      if (candidate && typeof candidate.message === "string" && candidate.message.trim()) {
+        item = candidate;
+        break;
+      }
+    }
+    if (!item) return;
+    activeNotification = item;
+    var seq = ++toastSeq;
+    var severity =
+      ["info", "success", "warning", "alert"].indexOf(item.severity) !== -1
+        ? item.severity
+        : "info";
+    notificationToast.className = "notification-toast severity-" + severity;
+    clearChildren(notificationToast);
+    if (typeof document.createElement === "function") {
+      var header = document.createElement("div");
+      header.className = "notification-toast-header";
+      var titleEl = document.createElement("strong");
+      titleEl.className = "notification-toast-title";
+      titleEl.textContent =
+        typeof item.title === "string" && item.title.trim() ? item.title.trim() : "SmartFrame";
+      header.appendChild(titleEl);
+      header.appendChild(
+        makeButton("notification-toast-close", "Fechar notificação", "✕", null, function () {
+          dismissActiveNotification(true);
+        }),
+      );
+      notificationToast.appendChild(header);
+      var bodyEl = document.createElement("p");
+      bodyEl.className = "notification-toast-message";
+      bodyEl.textContent = item.message;
+      notificationToast.appendChild(bodyEl);
+    }
+    notificationToast.hidden = false;
+    var durationSec =
+      Number.isInteger(item.durationSeconds) &&
+      item.durationSeconds >= 3 &&
+      item.durationSeconds <= 120
+        ? item.durationSeconds
+        : 8;
+    toastTimer = setTimeout(function () {
+      if (toastSeq === seq) dismissActiveNotification();
+    }, durationSec * 1000);
+  }
+  function enqueueNotifications(list) {
+    if (!Array.isArray(list) || !notificationToast) return;
+    for (var i = 0; i < list.length; i++) {
+      if (notificationQueue.length >= 100) break;
+      var item = list[i];
+      if (
+        !item ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        typeof item.message !== "string" ||
+        !item.message.trim()
+      )
+        continue;
+      if (activeNotification && activeNotification.id === item.id) continue;
+      if (
+        notificationQueue.some(function (queued) {
+          return queued.id === item.id;
+        })
+      )
+        continue;
+      if (rememberNotificationId(item.id)) notificationQueue.push(item);
+    }
+    if (!activeNotification && notificationQueue.length > 0) showNextNotification();
+  }
+  function applyPageDirective(directive, nextConfig) {
+    var directiveKey =
+      directive && typeof directive.id === "string"
+        ? String(nextConfig.revision || "") + ":" + directive.id
+        : "";
+    if (
+      !directive ||
+      typeof directive !== "object" ||
+      typeof directive.id !== "string" ||
+      !directive.id ||
+      directiveKey === lastDirectiveKey ||
+      Object.prototype.hasOwnProperty.call(appliedDirectiveKeys, directiveKey)
+    )
+      return;
+    var pages =
+      Array.isArray(nextConfig.pages) && nextConfig.pages.length > 0 ? nextConfig.pages : null;
+    if (!pages) return;
+    var targetPage = directive.pageId;
+    if (typeof targetPage !== "string" || !targetPage) return;
+    var relativeDirective = targetPage === "next" || targetPage === "prev";
+    var directiveStorageKey = "";
+    try {
+      var deviceId = deviceMatch ? deviceMatch[1] : null;
+      if (relativeDirective && deviceId && window.localStorage) {
+        directiveStorageKey =
+          "smartframe:directive:" + deviceId + ":" + String(nextConfig.revision || "");
+        if (window.localStorage.getItem(directiveStorageKey) === directive.id) return;
+      }
+    } catch {}
+
+    var hasPageId = function (candidateId) {
+      for (var j = 0; j < pages.length; j++) {
+        if (pages[j].id === candidateId) return j;
+      }
+      return -1;
+    };
+    var baseIndex = hasPageId(activePageId);
+    if (baseIndex < 0)
+      baseIndex = activePageIndex >= 0 && activePageIndex < pages.length ? activePageIndex : 0;
+    var revertIdx = revertTargetPageId ? hasPageId(revertTargetPageId) : -1;
+    var prevPageId = revertIdx >= 0 ? pages[revertIdx].id : pages[baseIndex].id;
+
+    var targetIndex = hasPageId(targetPage);
+    if (targetIndex < 0) {
+      if (targetPage === "next") {
+        targetIndex = (baseIndex + 1) % pages.length;
+      } else if (targetPage === "prev") {
+        targetIndex = (baseIndex - 1 + pages.length) % pages.length;
+      } else if (/^[0-7]$/.test(targetPage) && Number(targetPage) < pages.length) {
+        targetIndex = Number(targetPage);
+      }
+    }
+    if (targetIndex < 0) return;
+
+    lastDirectiveKey = directiveKey;
+    if (!Object.prototype.hasOwnProperty.call(appliedDirectiveKeys, directiveKey)) {
+      appliedDirectiveKeys[directiveKey] = true;
+      appliedDirectiveOrder.push(directiveKey);
+      if (appliedDirectiveOrder.length > 200) {
+        delete appliedDirectiveKeys[appliedDirectiveOrder.shift()];
+      }
+    }
+    if (directiveStorageKey) {
+      try {
+        window.localStorage.setItem(directiveStorageKey, directive.id);
+      } catch {}
+    }
+    clearRevertDirective();
+    activePageIndex = targetIndex;
+    activePageId = pages[targetIndex].id;
+    activeStackIndex = 0;
+
+    if (
+      Number.isInteger(directive.durationSeconds) &&
+      directive.durationSeconds > 0 &&
+      directive.durationSeconds <= 3600 &&
+      hasPageId(prevPageId) >= 0
+    ) {
+      revertTargetPageId = prevPageId;
+      revertStartedAt = Date.now();
+      revertDurationMs = directive.durationSeconds * 1000;
+      revertExpiresAt = revertStartedAt + revertDurationMs;
+      scheduleRevertDirective(revertDurationMs);
+    }
   }
   function stepSmartStack(delta) {
     if (!config) return;
@@ -709,16 +1081,39 @@
     if (!input || typeof input !== "object" || Array.isArray(input)) return config;
     var old = config,
       next = app.normalizeConfig(input, old);
+    if (old && old.revision !== next.revision) {
+      clearRevertDirective();
+      appliedDirectiveKeys = Object.create(null);
+      appliedDirectiveOrder = [];
+      lastDirectiveKey = "";
+    }
     if (typeof input.activePageId === "string" && Array.isArray(next.pages)) {
       for (var p = 0; p < next.pages.length; p++) {
         if (next.pages[p].id === input.activePageId) {
+          if (activePageId !== next.pages[p].id) {
+            clearRevertDirective();
+            activeStackIndex = 0;
+          }
           activePageId = next.pages[p].id;
           activePageIndex = p;
           break;
         }
       }
     }
-    if (!next.pages || next.pages.length <= 1) overviewOpen = false;
+    if (input.pageDirective) {
+      applyPageDirective(input.pageDirective, next);
+    }
+    if (!next.pages || next.pages.length <= 1) {
+      overviewOpen = false;
+      clearRevertDirective();
+    } else if (
+      revertTargetPageId &&
+      !next.pages.some(function (page) {
+        return page.id === revertTargetPageId;
+      })
+    ) {
+      clearRevertDirective();
+    }
     config = next;
     var appearance = next.appearance || {};
     app.timezone = next.timezone || "";
@@ -789,6 +1184,11 @@
         localRenderers.rss.setData(input.widgetData.rss || null);
       if (localRenderers.devMonitor && typeof localRenderers.devMonitor.setData === "function")
         localRenderers.devMonitor.setData(input.widgetData.devMonitor || null);
+      if (localRenderers.controlDeck && typeof localRenderers.controlDeck.setData === "function")
+        localRenderers.controlDeck.setData(input.widgetData.controlDeck || null);
+    }
+    if (Array.isArray(input.notifications)) {
+      enqueueNotifications(input.notifications);
     }
     return config;
   }
@@ -891,6 +1291,13 @@
     dashboard.addEventListener("pointerdown", function (event) {
       pauseAutoRotation();
       if (!event || (event.button !== undefined && event.button !== 0)) return;
+      if (
+        startedInWidget(event.target, "notification-toast") ||
+        startedInWidget(event.target, "controlDeck")
+      ) {
+        swipeOrigin = null;
+        return;
+      }
       swipeOrigin = {
         x: event.clientX,
         y: event.clientY,
@@ -943,6 +1350,17 @@
       pageTimer = null;
       clearInterval(stackTimer);
       stackTimer = null;
+      clearTimeout(toastTimer);
+      toastTimer = null;
+      toastSeq++;
+      clearTimeout(revertPageTimer);
+      revertPageTimer = null;
+      revertSeq++;
+      activeNotification = null;
+      if (notificationToast) {
+        notificationToast.hidden = true;
+        clearChildren(notificationToast);
+      }
       if (controller) controller.abort();
       app.carousel.pause();
       app.currencies.pause();
@@ -960,7 +1378,17 @@
         var visible = config._visibleMap ? config._visibleMap[name] : config.widgets[name].enabled;
         if (localRenderers[name] && visible) localRenderers[name].resume();
       });
+      if (revertTargetPageId) {
+        var elapsedMs = Date.now() - revertStartedAt;
+        var remainingMs = elapsedMs < 50 ? revertDurationMs : revertExpiresAt - Date.now();
+        if (remainingMs <= 0) {
+          setPage(revertTargetPageId);
+        } else {
+          scheduleRevertDirective(remainingMs);
+        }
+      }
       if (config) scheduleInteractiveTimers(resolveEffectiveView(config));
+      if (!activeNotification && notificationQueue.length > 0) showNextNotification();
       if (!preview) poll();
     }
   });
@@ -972,6 +1400,7 @@
   app.setPage = setPage;
   app.stepSmartStack = stepSmartStack;
   app.toggleOverview = toggleOverview;
+  app.dismissNotification = dismissActiveNotification;
   app.getState = function () {
     var effective = config ? resolveEffectiveView(config) : null;
     return {
@@ -980,6 +1409,7 @@
       activeStackIndex: activeStackIndex,
       overviewOpen: overviewOpen,
       stackWidgets: effective ? effective.stackWidgets.slice() : [],
+      activeNotification: activeNotification ? activeNotification.id : null,
     };
   };
   applyConfig(app.defaults);

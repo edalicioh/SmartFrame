@@ -45,7 +45,32 @@
     "worldClock",
     "rss",
     "devMonitor",
+    "controlDeck",
   ];
+  var DECK_ICONS = {
+    bolt: "⚡",
+    play: "▶",
+    next: "⏭",
+    prev: "⏮",
+    stop: "⏹",
+    volume: "🔊",
+    mute: "🔇",
+    app: "◫",
+    mic: "🎙",
+    sun: "☀",
+    terminal: ">_",
+  };
+  var DECK_IDEMPOTENT_ACTIONS = {
+    "volume:set_mute": true,
+    "volume:set_level": true,
+    "app_volume:set_level": true,
+    "brightness:set_level": true,
+    "mic_ptt:set_mute": true,
+    "mic_ptt:hold_unmute": true,
+  };
+  function hasOwn(target, key) {
+    return Object.prototype.hasOwnProperty.call(target, key);
+  }
   var DEV_STATUS_LABELS = {
     healthy: "Saudável",
     running: "Em execução",
@@ -101,6 +126,712 @@
       function () {
         return Date.now();
       };
+    var deckExecSeq = 0;
+    var deckState = {
+      mounted: false,
+      structureKey: "",
+      header: null,
+      titleEl: null,
+      statusBadge: null,
+      noticeEl: null,
+      feedbackEl: null,
+      feedbackText: "",
+      feedbackClass: "control-deck-feedback",
+      gridEl: null,
+      emptyEl: null,
+      tiles: Object.create(null),
+      ptt: {
+        holding: false,
+        active: false,
+        bindingId: "",
+        tileId: "",
+        leaseId: null,
+        leaseRequestId: null,
+        leaseSeconds: 10,
+        renewTimer: null,
+        seq: 0,
+      },
+    };
+
+    function nextExecutionId() {
+      return "deckexec-" + ++deckExecSeq + "-" + Math.max(0, Math.floor(now())).toString(36);
+    }
+    function getDeckBinding(bindingId) {
+      var bindings =
+        widgetData && widgetData.bindings && typeof widgetData.bindings === "object"
+          ? widgetData.bindings
+          : null;
+      if (!bindings || !hasOwn(bindings, bindingId)) return null;
+      var binding = bindings[bindingId];
+      return binding && typeof binding === "object" ? binding : null;
+    }
+    function getDeckMode(binding) {
+      if (!binding) return "button";
+      if (
+        (binding.kind === "volume" ||
+          binding.kind === "app_volume" ||
+          binding.kind === "brightness") &&
+        binding.action === "set_level"
+      )
+        return "slider";
+      if (binding.kind === "mic_ptt" && binding.action === "hold_unmute") return "ptt";
+      return "button";
+    }
+    function setDeckFeedback(status, message) {
+      if (status === "unknown") {
+        deckState.feedbackText = "Resultado desconhecido — não reenviado";
+        deckState.feedbackClass = "control-deck-feedback is-unknown";
+      } else if (status === "unavailable") {
+        deckState.feedbackText =
+          typeof message === "string" && message.trim() ? message.trim() : "Host indisponível";
+        deckState.feedbackClass = "control-deck-feedback is-error";
+      } else if (status === "rejected" || status === "error") {
+        deckState.feedbackText =
+          typeof message === "string" && message.trim()
+            ? message.trim()
+            : "Comando recusado pelo host.";
+        deckState.feedbackClass = "control-deck-feedback is-error";
+      } else {
+        deckState.feedbackText =
+          typeof message === "string" && message.trim() ? message.trim() : "Comando executado.";
+        deckState.feedbackClass = "control-deck-feedback is-ok";
+      }
+      if (deckState.feedbackEl) {
+        deckState.feedbackEl.textContent = deckState.feedbackText;
+        deckState.feedbackEl.className = deckState.feedbackClass;
+        deckState.feedbackEl.hidden = !deckState.feedbackText;
+      }
+    }
+    function clearPttRenewTimer() {
+      if (deckState.ptt.renewTimer !== null) {
+        clearTimer(deckState.ptt.renewTimer);
+        deckState.ptt.renewTimer = null;
+      }
+    }
+    function sendDeckCommand(payload, onDone) {
+      if (typeof context.onControlDeckExecute !== "function") {
+        onDone({
+          status: "unavailable",
+          idempotent: Boolean(payload && payload.idempotent),
+          message: "Transporte nativo indisponível.",
+        });
+        return;
+      }
+      try {
+        context.onControlDeckExecute(payload, onDone);
+      } catch {
+        onDone({
+          status: "unavailable",
+          idempotent: Boolean(payload && payload.idempotent),
+          message: "Transporte nativo indisponível.",
+        });
+      }
+    }
+    function releasePtt(skipRender) {
+      var ptt = deckState.ptt;
+      clearPttRenewTimer();
+      var hadSession = ptt.holding || ptt.active || Boolean(ptt.leaseId);
+      if (!hadSession) return;
+      var bindingId = ptt.bindingId;
+      var leaseId = ptt.leaseId;
+      var leaseRequestId = ptt.leaseRequestId;
+      ptt.holding = false;
+      ptt.active = false;
+      ptt.leaseId = null;
+      ptt.leaseRequestId = null;
+      ptt.seq++;
+      if (!skipRender && !disposed && !paused && settings) renderControlDeck();
+      if (bindingId && context.canExecuteControlDeck) {
+        var releasePayload = {
+          executionId: nextExecutionId(),
+          bindingId: bindingId,
+          command: "ptt_release",
+          idempotent: true,
+        };
+        if (leaseId) releasePayload.leaseId = leaseId;
+        if (leaseRequestId) releasePayload.leaseRequestId = leaseRequestId;
+        sendDeckCommand(releasePayload, function (reply) {
+          if (disposed) return;
+          if (reply && reply.status && reply.status !== "ok") {
+            setDeckFeedback(reply.status, reply.message);
+          } else if (reply && reply.status === "ok" && !paused) {
+            setDeckFeedback("ok", reply.message || "Microfone silenciado.");
+          }
+          if (!paused && settings) renderControlDeck();
+        });
+      }
+    }
+    function schedulePttRenew(seq, bindingId, leaseId, leaseSeconds) {
+      clearPttRenewTimer();
+      var ptt = deckState.ptt;
+      if (disposed || paused || !ptt.holding || ptt.seq !== seq || !leaseId) return;
+      var halfLeaseMs = Math.max(1000, Math.floor((leaseSeconds * 1000) / 2));
+      ptt.renewTimer = setTimer(function () {
+        ptt.renewTimer = null;
+        if (disposed || paused || !ptt.holding || ptt.seq !== seq || ptt.leaseId !== leaseId)
+          return;
+        sendDeckCommand(
+          {
+            executionId: nextExecutionId(),
+            bindingId: bindingId,
+            command: "ptt_renew",
+            leaseSeconds: leaseSeconds,
+            leaseId: leaseId,
+            idempotent: true,
+          },
+          function (reply) {
+            if (disposed || paused || !ptt.holding || ptt.seq !== seq) return;
+            if (reply && reply.status === "ok") {
+              var nextLeaseId =
+                reply.lease && typeof reply.lease.leaseId === "string"
+                  ? reply.lease.leaseId
+                  : leaseId;
+              var nextLeaseSec =
+                reply.lease && Number.isInteger(reply.lease.leaseSeconds)
+                  ? reply.lease.leaseSeconds
+                  : leaseSeconds;
+              ptt.leaseId = nextLeaseId;
+              ptt.leaseSeconds = nextLeaseSec;
+              schedulePttRenew(seq, bindingId, nextLeaseId, nextLeaseSec);
+            } else {
+              ptt.holding = false;
+              ptt.active = false;
+              ptt.leaseId = null;
+              ptt.leaseRequestId = null;
+              clearPttRenewTimer();
+              setDeckFeedback((reply && reply.status) || "rejected", reply && reply.message);
+              renderControlDeck();
+            }
+          },
+        );
+      }, halfLeaseMs);
+    }
+    function createDeckTileEntry(tile, mode) {
+      var iconText = DECK_ICONS[tile.icon] || DECK_ICONS.bolt;
+      if (mode === "slider") {
+        var wrap = document.createElement("div");
+        wrap.className = "control-deck-tile control-deck-slider-wrap";
+        var top = document.createElement("div");
+        top.className = "control-deck-tile-top";
+        var iconEl = line(top, "span", iconText, "control-deck-icon");
+        iconEl.setAttribute("aria-hidden", "true");
+        var labelEl = line(top, "span", tile.label, "control-deck-tile-label");
+        var valueEl = line(top, "span", "—", "control-deck-tile-value");
+        wrap.appendChild(top);
+        var slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = "0";
+        slider.max = "100";
+        slider.step = "1";
+        slider.className = "control-deck-slider";
+        slider.setAttribute("aria-label", tile.label);
+        wrap.appendChild(slider);
+        var sliderEntry = {
+          mode: "slider",
+          tile: tile,
+          rootEl: wrap,
+          iconEl: iconEl,
+          labelEl: labelEl,
+          valueEl: valueEl,
+          slider: slider,
+          pending: false,
+          dragging: false,
+          hasInteracted: false,
+          lastCommittedValue: "50",
+          overrideLevel: null,
+          overrideDataStamp: null,
+        };
+        slider.addEventListener("pointerdown", function (event) {
+          if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+          if (slider.disabled || sliderEntry.pending) return;
+          sliderEntry.dragging = true;
+        });
+        slider.addEventListener("pointerup", function () {
+          sliderEntry.dragging = false;
+        });
+        slider.addEventListener("pointercancel", function () {
+          sliderEntry.dragging = false;
+        });
+        slider.addEventListener("input", function () {
+          if (slider.disabled || sliderEntry.pending) {
+            slider.value = sliderEntry.lastCommittedValue;
+            return;
+          }
+          var live = Math.max(0, Math.min(100, Math.round(Number(slider.value))));
+          if (Number.isFinite(live)) sliderEntry.valueEl.textContent = live + "%";
+        });
+        slider.addEventListener("change", function () {
+          sliderEntry.dragging = false;
+          if (slider.disabled || sliderEntry.pending || !context.canExecuteControlDeck) return;
+          var binding = getDeckBinding(tile.bindingId);
+          if (!widgetData || widgetData.available !== true || !binding || !binding.available)
+            return;
+          var nextLevel = Math.max(0, Math.min(100, Math.round(Number(slider.value))));
+          if (!Number.isFinite(nextLevel)) return;
+          sliderEntry.pending = true;
+          sliderEntry.hasInteracted = true;
+          sliderEntry.overrideLevel = nextLevel;
+          sliderEntry.overrideDataStamp = widgetData;
+          sliderEntry.valueEl.textContent = nextLevel + "%";
+          slider.setAttribute("aria-disabled", "true");
+          sendDeckCommand(
+            {
+              executionId: nextExecutionId(),
+              bindingId: tile.bindingId,
+              command: "set_level",
+              value: nextLevel,
+              idempotent: true,
+            },
+            function (reply) {
+              if (disposed) return;
+              sliderEntry.pending = false;
+              if (reply && reply.status === "ok") {
+                if (reply.state && typeof reply.state.level === "number") {
+                  sliderEntry.overrideLevel = Math.max(
+                    0,
+                    Math.min(100, Math.round(reply.state.level)),
+                  );
+                  sliderEntry.overrideDataStamp = widgetData;
+                }
+                setDeckFeedback(
+                  "ok",
+                  reply.message ||
+                    tile.label + ": " + (sliderEntry.overrideLevel ?? nextLevel) + "%",
+                );
+              } else {
+                sliderEntry.overrideLevel = null;
+                setDeckFeedback((reply && reply.status) || "error", reply && reply.message);
+              }
+              if (!paused && settings) renderControlDeck();
+            },
+          );
+        });
+        return sliderEntry;
+      }
+      if (mode === "ptt") {
+        var pttBtn = document.createElement("button");
+        pttBtn.type = "button";
+        pttBtn.className = "control-deck-tile control-deck-ptt";
+        pttBtn.setAttribute("aria-pressed", "false");
+        var pttTop = document.createElement("div");
+        pttTop.className = "control-deck-tile-top";
+        var pttIcon = line(pttTop, "span", iconText, "control-deck-icon");
+        pttIcon.setAttribute("aria-hidden", "true");
+        var pttLabel = line(pttTop, "span", tile.label, "control-deck-tile-label");
+        pttBtn.appendChild(pttTop);
+        var pttMeta = line(pttBtn, "span", "Indisponível", "control-deck-tile-meta");
+        var pttEntry = {
+          mode: "ptt",
+          tile: tile,
+          rootEl: pttBtn,
+          iconEl: pttIcon,
+          labelEl: pttLabel,
+          metaEl: pttMeta,
+          disabled: true,
+        };
+        pttBtn.addEventListener("pointerdown", function (event) {
+          if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+          if (event && event.button !== undefined && event.button !== 0) return;
+          if (pttEntry.disabled || !context.canExecuteControlDeck || paused || disposed) return;
+          var binding = getDeckBinding(tile.bindingId);
+          if (!widgetData || widgetData.available !== true || !binding || !binding.available)
+            return;
+          var ptt = deckState.ptt;
+          if (ptt.holding && ptt.bindingId === tile.bindingId) return;
+          if (ptt.holding || ptt.active || ptt.leaseId) releasePtt(true);
+          if (
+            typeof pttBtn.setPointerCapture === "function" &&
+            event &&
+            event.pointerId !== undefined
+          ) {
+            try {
+              pttBtn.setPointerCapture(event.pointerId);
+            } catch {}
+          }
+          var leaseSeconds =
+            Number.isInteger(binding.leaseSeconds) &&
+            binding.leaseSeconds >= 2 &&
+            binding.leaseSeconds <= 30
+              ? binding.leaseSeconds
+              : 10;
+          ptt.holding = true;
+          ptt.active = false;
+          ptt.bindingId = tile.bindingId;
+          ptt.tileId = tile.id;
+          ptt.leaseId = null;
+          var leaseRequestId = nextExecutionId();
+          ptt.leaseRequestId = leaseRequestId;
+          ptt.leaseSeconds = leaseSeconds;
+          var seq = ++ptt.seq;
+          renderControlDeck();
+          sendDeckCommand(
+            {
+              executionId: leaseRequestId,
+              leaseRequestId: leaseRequestId,
+              bindingId: tile.bindingId,
+              command: "ptt_acquire",
+              leaseSeconds: leaseSeconds,
+              idempotent: true,
+            },
+            function (reply) {
+              var releasedEarly = !ptt.holding || ptt.seq !== seq || paused || disposed;
+              if (
+                reply &&
+                reply.status === "ok" &&
+                reply.lease &&
+                typeof reply.lease.leaseId === "string"
+              ) {
+                if (releasedEarly) {
+                  if (context.canExecuteControlDeck) {
+                    sendDeckCommand(
+                      {
+                        executionId: nextExecutionId(),
+                        bindingId: tile.bindingId,
+                        command: "ptt_release",
+                        leaseId: reply.lease.leaseId,
+                        leaseRequestId: leaseRequestId,
+                        idempotent: true,
+                      },
+                      function () {},
+                    );
+                  }
+                  return;
+                }
+                ptt.active = true;
+                ptt.leaseId = reply.lease.leaseId;
+                var effectiveLeaseSec = Number.isInteger(reply.lease.leaseSeconds)
+                  ? reply.lease.leaseSeconds
+                  : leaseSeconds;
+                ptt.leaseSeconds = effectiveLeaseSec;
+                setDeckFeedback("ok", reply.message || "Push-to-Talk ativo.");
+                schedulePttRenew(seq, tile.bindingId, ptt.leaseId, effectiveLeaseSec);
+                renderControlDeck();
+                return;
+              }
+              if (releasedEarly) return;
+              ptt.holding = false;
+              ptt.active = false;
+              ptt.leaseId = null;
+              ptt.leaseRequestId = null;
+              clearPttRenewTimer();
+              setDeckFeedback((reply && reply.status) || "unavailable", reply && reply.message);
+              renderControlDeck();
+            },
+          );
+        });
+        pttBtn.addEventListener("pointerup", function (event) {
+          if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+          if (deckState.ptt.bindingId === tile.bindingId) releasePtt(false);
+        });
+        pttBtn.addEventListener("pointercancel", function (event) {
+          if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+          if (deckState.ptt.bindingId === tile.bindingId) releasePtt(false);
+        });
+        pttBtn.addEventListener("lostpointercapture", function () {
+          if (deckState.ptt.bindingId === tile.bindingId) releasePtt(false);
+        });
+        pttBtn.addEventListener("blur", function () {
+          if (deckState.ptt.bindingId === tile.bindingId) releasePtt(false);
+        });
+        return pttEntry;
+      }
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "control-deck-tile";
+      var btnTop = document.createElement("div");
+      btnTop.className = "control-deck-tile-top";
+      var btnIcon = line(btnTop, "span", iconText, "control-deck-icon");
+      btnIcon.setAttribute("aria-hidden", "true");
+      var btnLabel = line(btnTop, "span", tile.label, "control-deck-tile-label");
+      btn.appendChild(btnTop);
+      var btnMeta = line(btn, "span", "—", "control-deck-tile-meta");
+      var btnEntry = {
+        mode: "button",
+        tile: tile,
+        rootEl: btn,
+        iconEl: btnIcon,
+        labelEl: btnLabel,
+        metaEl: btnMeta,
+        pending: false,
+        disabled: true,
+        effectiveMuted: null,
+        overrideMuted: null,
+        overrideDataStamp: null,
+      };
+      btn.addEventListener("click", function (event) {
+        if (event && typeof event.stopPropagation === "function") event.stopPropagation();
+        if (btnEntry.disabled || btnEntry.pending || !context.canExecuteControlDeck) return;
+        var binding = getDeckBinding(tile.bindingId);
+        if (!widgetData || widgetData.available !== true || !binding || !binding.available) return;
+        var actionKey = binding.kind + ":" + binding.action;
+        var idempotent =
+          typeof binding.idempotent === "boolean"
+            ? binding.idempotent
+            : Boolean(DECK_IDEMPOTENT_ACTIONS[actionKey]);
+        var payload = {
+          executionId: nextExecutionId(),
+          bindingId: tile.bindingId,
+          command: "trigger",
+          idempotent: idempotent,
+        };
+        if (
+          (binding.kind === "volume" || binding.kind === "mic_ptt") &&
+          binding.action === "set_mute"
+        ) {
+          payload.command = "set_mute";
+          payload.muted = !(btnEntry.effectiveMuted === true);
+        }
+        btnEntry.pending = true;
+        btn.setAttribute("aria-disabled", "true");
+        renderControlDeck();
+        sendDeckCommand(payload, function (reply) {
+          if (disposed) return;
+          btnEntry.pending = false;
+          if (reply && reply.state && typeof reply.state === "object") {
+            if (typeof reply.state.muted === "boolean") {
+              btnEntry.overrideMuted = reply.state.muted;
+              btnEntry.overrideDataStamp = widgetData;
+            }
+          }
+          setDeckFeedback((reply && reply.status) || "error", reply && reply.message);
+          if (!paused && settings) renderControlDeck();
+        });
+      });
+      return btnEntry;
+    }
+    function renderControlDeck() {
+      var canExecute = Boolean(context.canExecuteControlDeck);
+      var hostAvailable = Boolean(widgetData && widgetData.available === true);
+      var tiles = Array.isArray(settings.tiles) ? settings.tiles : [];
+      var columns =
+        Number.isInteger(settings.columns) && settings.columns >= 2 && settings.columns <= 4
+          ? settings.columns
+          : 3;
+
+      if (
+        (deckState.ptt.holding || deckState.ptt.active || deckState.ptt.leaseId) &&
+        !tiles.some(function (t) {
+          if (t.bindingId !== deckState.ptt.bindingId) return false;
+          var b = getDeckBinding(t.bindingId);
+          return Boolean(hostAvailable && b && b.available && getDeckMode(b) === "ptt");
+        })
+      ) {
+        releasePtt(true);
+      }
+
+      var structureKey = tiles
+        .map(function (tile) {
+          return tile.id + "|" + tile.bindingId + "|" + getDeckMode(getDeckBinding(tile.bindingId));
+        })
+        .join(";");
+
+      if (!deckState.mounted || deckState.structureKey !== structureKey) {
+        if (
+          deckState.mounted &&
+          (deckState.ptt.holding || deckState.ptt.active || deckState.ptt.leaseId)
+        ) {
+          releasePtt(true);
+        }
+        root.textContent = "";
+        var header = document.createElement("div");
+        header.className = "control-deck-header";
+        var titleEl = line(header, "h2", settings.title, "local-widget-title");
+        var statusBadge = line(
+          header,
+          "span",
+          hostAvailable ? "Conectado" : "Host indisponível",
+          "control-deck-status " + (hostAvailable ? "is-connected" : "is-offline"),
+        );
+        root.appendChild(header);
+
+        var noticeEl = line(
+          root,
+          "p",
+          "Prévia / somente leitura — comandos disponíveis apenas no tablet pareado.",
+          "control-deck-notice",
+        );
+        noticeEl.hidden = canExecute;
+
+        var feedbackEl = line(
+          root,
+          "p",
+          deckState.feedbackText,
+          deckState.feedbackClass || "control-deck-feedback",
+        );
+        feedbackEl.setAttribute("role", "status");
+        feedbackEl.setAttribute("aria-live", "polite");
+        feedbackEl.hidden = !deckState.feedbackText;
+
+        var newTiles = Object.create(null);
+        var gridEl = null;
+        var emptyEl = null;
+        if (tiles.length > 0) {
+          gridEl = document.createElement("div");
+          gridEl.className = "control-deck-grid";
+          gridEl.style.setProperty("--deck-columns", String(columns));
+          tiles.forEach(function (tile) {
+            var mode = getDeckMode(getDeckBinding(tile.bindingId));
+            var entry = createDeckTileEntry(tile, mode);
+            newTiles[tile.id] = entry;
+            gridEl.appendChild(entry.rootEl);
+          });
+          root.appendChild(gridEl);
+        } else {
+          emptyEl = line(root, "p", "Nenhum controle configurado", "local-widget-empty");
+        }
+
+        deckState.mounted = true;
+        deckState.structureKey = structureKey;
+        deckState.header = header;
+        deckState.titleEl = titleEl;
+        deckState.statusBadge = statusBadge;
+        deckState.noticeEl = noticeEl;
+        deckState.feedbackEl = feedbackEl;
+        deckState.gridEl = gridEl;
+        deckState.emptyEl = emptyEl;
+        deckState.tiles = newTiles;
+      } else {
+        if (deckState.titleEl.textContent !== settings.title)
+          deckState.titleEl.textContent = settings.title;
+        deckState.statusBadge.textContent = hostAvailable ? "Conectado" : "Host indisponível";
+        deckState.statusBadge.className =
+          "control-deck-status " + (hostAvailable ? "is-connected" : "is-offline");
+        deckState.noticeEl.hidden = canExecute;
+        deckState.feedbackEl.textContent = deckState.feedbackText;
+        deckState.feedbackEl.className = deckState.feedbackClass || "control-deck-feedback";
+        deckState.feedbackEl.hidden = !deckState.feedbackText;
+        if (deckState.gridEl) deckState.gridEl.style.setProperty("--deck-columns", String(columns));
+      }
+
+      tiles.forEach(function (tile) {
+        var entry = deckState.tiles[tile.id];
+        if (!entry) return;
+        var binding = getDeckBinding(tile.bindingId);
+        var iconText = DECK_ICONS[tile.icon] || DECK_ICONS.bolt;
+        if (entry.iconEl.textContent !== iconText) entry.iconEl.textContent = iconText;
+        if (entry.labelEl.textContent !== tile.label) entry.labelEl.textContent = tile.label;
+
+        if (entry.mode === "slider") {
+          if (entry.overrideDataStamp !== widgetData) {
+            entry.overrideLevel = null;
+          }
+          var hasServerNumericLevel = Boolean(binding && typeof binding.level === "number");
+          if (hasServerNumericLevel) {
+            entry.hasInteracted = false;
+          }
+          var rawLevel =
+            entry.overrideDataStamp === widgetData && typeof entry.overrideLevel === "number"
+              ? entry.overrideLevel
+              : hasServerNumericLevel
+                ? binding.level
+                : null;
+          var supportsBlindLevel = Boolean(
+            binding && binding.kind === "app_volume" && binding.action === "set_level",
+          );
+          var hasNumericLevel = typeof rawLevel === "number";
+          var levelAvailable = Boolean(
+            hostAvailable &&
+            binding &&
+            binding.available &&
+            (hasNumericLevel || supportsBlindLevel),
+          );
+          var sliderInteractive = Boolean(canExecute && levelAvailable);
+          entry.slider.disabled = !sliderInteractive;
+          entry.slider.setAttribute("aria-disabled", String(!sliderInteractive || entry.pending));
+          entry.slider.setAttribute("aria-label", tile.label);
+          if (!levelAvailable) {
+            entry.hasInteracted = false;
+            entry.lastCommittedValue = "50";
+            entry.valueEl.textContent = "—";
+            entry.rootEl.className = "control-deck-tile control-deck-slider-wrap is-unavailable";
+          } else if (!hasNumericLevel) {
+            if (!entry.dragging && !entry.pending) {
+              if (!entry.hasInteracted) {
+                entry.slider.value = "50";
+                entry.lastCommittedValue = "50";
+              } else {
+                entry.lastCommittedValue = String(entry.slider.value);
+              }
+              entry.valueEl.textContent = "—";
+            }
+            entry.rootEl.className =
+              "control-deck-tile control-deck-slider-wrap" +
+              (sliderInteractive ? "" : " is-readonly");
+          } else {
+            var clampedLevel = Math.max(0, Math.min(100, Math.round(rawLevel)));
+            entry.lastCommittedValue = String(clampedLevel);
+            if (!entry.dragging && !entry.pending) {
+              entry.slider.value = String(clampedLevel);
+              entry.valueEl.textContent = clampedLevel + "%";
+            }
+            entry.rootEl.className =
+              "control-deck-tile control-deck-slider-wrap" +
+              (sliderInteractive ? "" : " is-readonly");
+          }
+        } else if (entry.mode === "ptt") {
+          var pttAvailable = Boolean(hostAvailable && binding && binding.available);
+          var pttInteractive = Boolean(canExecute && pttAvailable);
+          var isMine = deckState.ptt.bindingId === tile.bindingId;
+          var pttPressed = Boolean(isMine && (deckState.ptt.holding || deckState.ptt.active));
+          entry.disabled = !pttInteractive;
+          entry.rootEl.disabled = !pttInteractive;
+          entry.rootEl.setAttribute("aria-pressed", String(pttPressed));
+          entry.rootEl.setAttribute("aria-disabled", String(!pttInteractive));
+          entry.rootEl.className =
+            "control-deck-tile control-deck-ptt" +
+            (pttPressed ? " is-active" : "") +
+            (pttAvailable ? "" : " is-unavailable");
+          entry.metaEl.textContent = !pttAvailable
+            ? "Indisponível"
+            : pttPressed
+              ? deckState.ptt.active
+                ? "No ar"
+                : "Ativando…"
+              : "Segure para falar";
+        } else {
+          if (entry.overrideDataStamp !== widgetData) {
+            entry.overrideMuted = null;
+          }
+          var btnAvailable = Boolean(hostAvailable && binding && binding.available);
+          var btnInteractive = Boolean(canExecute && btnAvailable);
+          entry.disabled = !btnInteractive;
+          entry.rootEl.disabled = !btnInteractive;
+          entry.rootEl.setAttribute("aria-disabled", String(!btnInteractive || entry.pending));
+          entry.rootEl.className = "control-deck-tile" + (btnAvailable ? "" : " is-unavailable");
+          var mutedVal =
+            entry.overrideDataStamp === widgetData && typeof entry.overrideMuted === "boolean"
+              ? entry.overrideMuted
+              : binding && typeof binding.muted === "boolean"
+                ? binding.muted
+                : null;
+          entry.effectiveMuted = mutedVal;
+          var isMuteControl = Boolean(
+            binding &&
+            (binding.action === "mute_toggle" ||
+              binding.action === "set_mute" ||
+              binding.action === "toggle_mute"),
+          );
+          if (isMuteControl && typeof mutedVal === "boolean") {
+            entry.rootEl.setAttribute("aria-pressed", String(mutedVal));
+            entry.metaEl.textContent = !btnAvailable
+              ? "Indisponível"
+              : entry.pending
+                ? "Enviando…"
+                : mutedVal
+                  ? "Silenciado"
+                  : "Ativo";
+          } else {
+            entry.metaEl.textContent = !btnAvailable
+              ? "Indisponível"
+              : entry.pending
+                ? "Enviando…"
+                : binding.kind === "shortcut"
+                  ? "Atalho"
+                  : "Acionar";
+          }
+        }
+      });
+    }
 
     function line(parent, tag, text, className) {
       var element = document.createElement(tag);
@@ -213,6 +944,7 @@
       timer = null;
       if (!settings || paused || disposed) return;
       if (type === "tasks") return renderTasks();
+      if (type === "controlDeck") return renderControlDeck();
       if (type !== "pomodoro") {
         root.textContent = "";
         line(root, "h2", settings.title, "local-widget-title");
@@ -471,7 +1203,7 @@
         }
       } else if (type === "devMonitor") {
         if (settings.showServerMetrics !== false) {
-          if (widgetData) {
+          if (widgetData && typeof widgetData.nodeVersion === "string") {
             var summary = document.createElement("div");
             summary.className = "dev-server-summary";
             line(summary, "span", "Node " + widgetData.nodeVersion, "dev-pill");
@@ -483,7 +1215,51 @@
             line(root, "p", "Coletando telemetria do servidor…", "local-widget-empty");
           }
         }
-        var devItems = Array.isArray(settings.items) ? settings.items : [];
+        var pushedFeeds =
+          widgetData && Array.isArray(widgetData.pushedFeeds) ? widgetData.pushedFeeds : [];
+        var pushedByKey = Object.create(null);
+        var usedPushKeys = Object.create(null);
+        pushedFeeds.forEach(function (feed) {
+          if (feed && typeof feed.key === "string" && !pushedByKey[feed.key]) {
+            pushedByKey[feed.key] = feed;
+          }
+        });
+        var rawDevItems = Array.isArray(settings.items) ? settings.items : [];
+        var devItems = rawDevItems.map(function (entry) {
+          var matchKey = entry.pushKey || entry.id;
+          var pushed = matchKey ? pushedByKey[matchKey] : null;
+          if (!pushed) return entry;
+          usedPushKeys[pushed.key] = true;
+          return {
+            id: entry.id,
+            name: entry.name || pushed.name,
+            category: entry.category || pushed.category,
+            status: pushed.status || entry.status,
+            detail:
+              typeof pushed.detail === "string" && pushed.detail !== ""
+                ? pushed.detail
+                : pushed.value !== null && pushed.value !== undefined
+                  ? String(pushed.value)
+                  : entry.detail,
+          };
+        });
+        pushedFeeds.forEach(function (feed) {
+          if (devItems.length >= 12 || !feed || typeof feed.key !== "string") return;
+          if (usedPushKeys[feed.key]) return;
+          usedPushKeys[feed.key] = true;
+          devItems.push({
+            id: "push-" + feed.key,
+            name: feed.name || feed.key,
+            category: feed.category || "service",
+            status: feed.status || "healthy",
+            detail:
+              typeof feed.detail === "string" && feed.detail !== ""
+                ? feed.detail
+                : feed.value !== null && feed.value !== undefined
+                  ? String(feed.value)
+                  : "",
+          });
+        });
         if (devItems.length) {
           var devList = document.createElement("div");
           devList.className = "dev-monitor-list";
@@ -500,11 +1276,12 @@
             );
             if (entry.detail) line(left, "span", entry.detail, "dev-monitor-detail");
             row.appendChild(left);
+            var safeStatus = DEV_STATUS_LABELS[entry.status] ? entry.status : "healthy";
             line(
               row,
               "span",
-              DEV_STATUS_LABELS[entry.status] || entry.status,
-              "dev-status-badge dev-status-" + entry.status,
+              DEV_STATUS_LABELS[safeStatus] || entry.status,
+              "dev-status-badge dev-status-" + safeStatus,
             );
             devList.appendChild(row);
           });
@@ -561,6 +1338,7 @@
         if (settings && !paused && !disposed) render();
       },
       pause: function () {
+        if (type === "controlDeck") releasePtt(true);
         paused = true;
         clearTimer(timer);
         timer = null;
@@ -572,6 +1350,7 @@
         }
       },
       destroy: function () {
+        if (type === "controlDeck") releasePtt(true);
         disposed = true;
         clearTimer(timer);
         timer = null;
@@ -579,6 +1358,9 @@
         pomodoroElements = null;
         taskTitle = taskEmpty = null;
         taskRows = [];
+        deckState.mounted = false;
+        deckState.structureKey = "";
+        deckState.tiles = Object.create(null);
       },
     };
   }

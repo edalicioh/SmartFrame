@@ -581,6 +581,7 @@
 }
 .online-section-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 0 0 14px;
   border-bottom: 1px solid var(--border);
@@ -1175,4 +1176,205 @@
 .online-smart-stack-actions button {
   padding: 2px 8px;
   min-width: 28px;
+}
+.automations-editor {
+  display: grid;
+  gap: 14px;
+}
+.rule-list,
+.webhook-key-list {
+  display: grid;
+  gap: 10px;
+}
+.rule-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+}
+.rule-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rule-row-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+.weekday-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.weekday-chip {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  margin: 0 !important;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: white;
+  font-size: 0.82rem;
+  font-weight: 500 !important;
+}
+.weekday-chip input {
+  width: auto !important;
+  margin: 0 !important;
+}
+.webhook-secret-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #16803c;
+  border-radius: 10px;
+  background: #effaf2;
+}
+.webhook-secret-box code {
+  word-break: break-all;
+  padding: 8px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+.webhook-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+.webhook-key-row small {
+  display: block;
+}
+.webhook-curl {
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: #172033;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre;
+}
+.control-deck-editor {
+  display: grid;
+  gap: 14px;
+}
+.control-deck-status-card,
+.control-deck-form,
+.control-deck-tile-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+}
+.control-deck-form {
+  margin-top: 12px;
+}
+.control-deck-status-header,
+.control-deck-tile-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.control-deck-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.control-deck-badge.is-online,
+.control-deck-badge.is-idempotent {
+  background: #e6f6ec;
+  color: #166534;
+}
+.control-deck-badge.is-offline {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.control-deck-badge.is-non-idempotent {
+  background: #fef3c7;
+  color: #92400e;
+}
+.control-deck-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.control-deck-cap-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.control-deck-cap-chip.is-available {
+  background: #effaf2;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+.control-deck-cap-chip.is-unavailable {
+  background: #f8fafc;
+  color: #64748b;
+}
+.control-deck-list {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+.control-deck-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+.control-deck-item-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.control-deck-item-meta strong {
+  overflow-wrap: anywhere;
+}
+.control-deck-item-meta small {
+  color: #526056;
+}
+.control-deck-item-actions,
+.control-deck-tile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.control-deck-tile-actions button {
+  padding: 5px 10px;
+}
+.control-deck-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+.control-deck-idempotency-hint {
+  margin: 0;
+  font-size: 0.85rem;
 }
