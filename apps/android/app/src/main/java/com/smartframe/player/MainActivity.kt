@@ -20,7 +20,10 @@ import android.widget.*
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Executors
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class MainActivity : Activity() {
@@ -29,6 +32,16 @@ class MainActivity : Activity() {
     private lateinit var statusView: TextView
     private var webView: WebView? = null
     private val executor = Executors.newSingleThreadScheduledExecutor()
+    private val controlDeckExecutor = Executors.newFixedThreadPool(4)
+    private val pttReleaseExecutor = Executors.newSingleThreadExecutor()
+    private val notificationExecutor = ThreadPoolExecutor(
+        1,
+        2,
+        30L,
+        TimeUnit.SECONDS,
+        ArrayBlockingQueue(32),
+        ThreadPoolExecutor.DiscardOldestPolicy(),
+    )
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var resumed = false
     @Volatile private var closed = false
@@ -94,6 +107,36 @@ class MainActivity : Activity() {
                             }
                         }
                     }
+                }
+                WebViewCompat.addWebMessageListener(this, "SmartFrameControlDeck", setOf(c.server)) { v, message, sourceOrigin, isMainFrame, reply ->
+                    if (closed || !isMainFrame || v !== webView || !DashboardUrl.sameOrigin(c.server, sourceOrigin.toString())) return@addWebMessageListener
+                    val cmd = try { ControlDeckClient.parse(message.data ?: "") } catch (_: Exception) { return@addWebMessageListener }
+                    val deadline = TaskWriteDeadline(timeoutMillis = 8_000L)
+                    val targetExecutor = if (cmd.command == "ptt_release") pttReleaseExecutor else controlDeckExecutor
+                    try {
+                        targetExecutor.execute {
+                            val responseJson = try {
+                                ControlDeckClient.execute(c, cmd, deadline)
+                            } catch (_: Exception) {
+                                ControlDeckClient.fallbackErrorJson(cmd)
+                            }
+                            handler.post {
+                                if (!closed && !isDestroyed && v === webView && credentials.read() == c) {
+                                    reply.postMessage(responseJson)
+                                }
+                            }
+                        }
+                    } catch (_: java.util.concurrent.RejectedExecutionException) {
+                    }
+                }
+                WebViewCompat.addWebMessageListener(this, "SmartFrameNotifications", setOf(c.server)) { v, message, sourceOrigin, isMainFrame, _ ->
+                    if (closed || !isMainFrame || v !== webView || !DashboardUrl.sameOrigin(c.server, sourceOrigin.toString())) return@addWebMessageListener
+                    val notificationId = try { NotificationClient.parse(message.data ?: "") } catch (_: Exception) { return@addWebMessageListener }
+                    try {
+                        notificationExecutor.execute {
+                            try { NotificationClient.dismiss(c.server, c.token, c.deviceId, notificationId) } catch (_: Exception) {}
+                        }
+                    } catch (_: java.util.concurrent.RejectedExecutionException) {}
                 }
             }
             webViewClient = object : WebViewClient() {
@@ -260,7 +303,7 @@ class MainActivity : Activity() {
             }
         }
     }
-    override fun onDestroy() { closed = true; cancelTimers(); handler.removeCallbacksAndMessages(null); executor.shutdownNow(); webView?.destroy(); window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
+    override fun onDestroy() { closed = true; cancelTimers(); handler.removeCallbacksAndMessages(null); executor.shutdownNow(); controlDeckExecutor.shutdownNow(); pttReleaseExecutor.shutdownNow(); notificationExecutor.shutdownNow(); webView?.destroy(); webView = null; window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); super.onDestroy() }
 }
 
 internal data class AvailablePanel(val id: String, val name: String, val current: Boolean, val updateAvailable: Boolean, val applied: Boolean)
