@@ -1,0 +1,109 @@
+{
+  "date": "2026-11-23T14:34:19.151Z",
+  "environment": {
+    "node": "v24.19.0",
+    "baseUrl": "http://127.0.0.1:43205",
+    "isolatedFixture": true
+  },
+  "checks": [
+    {
+      "id": "action_bar_visible_no_device",
+      "ok": true
+    },
+    {
+      "id": "save_draft_without_device",
+      "ok": true
+    },
+    {
+      "id": "publish_dialog_no_device_escape_focus",
+      "ok": true
+    },
+    {
+      "id": "publish_dialog_focus_device_select",
+      "ok": true
+    },
+    {
+      "id": "exit_guard_client_navigation_link",
+      "ok": true
+    },
+    {
+      "id": "exit_guard_history_back_forward_and_signout",
+      "ok": true
+    },
+    {
+      "id": "other_panel_active_distinguished",
+      "ok": true
+    },
+    {
+      "id": "publish_available_without_activating",
+      "ok": true
+    },
+    {
+      "id": "publish_activate_pending_confirmation",
+      "ok": true
+    },
+    {
+      "id": "player_ack_confirms_version",
+      "ok": true
+    },
+    {
+      "id": "draft_modified_after_confirm_and_device_switch",
+      "ok": true
+    },
+    {
+      "id": "conflict_409_preserve_and_reload",
+      "ok": true
+    },
+    {
+      "id": "partial_save_ok_publish_fail",
+      "ok": true
+    },
+    {
+      "id": "device_access_list_and_removal",
+      "ok": true
+    },
+    {
+      "id": "delete_active_panel_shows_409_guidance",
+      "ok": true
+    },
+    {
+      "id": "expired_pairing_code_ui",
+      "ok": true
+    },
+    {
+      "id": "revoke_device_confirmation_dialog",
+      "ok": true
+    },
+    {
+      "id": "homonymous_panels_disambiguated",
+      "ok": true
+    },
+    {
+      "id": "responsive_no_horizontal_overflow",
+      "desktopWidth": {
+        "sw": 1425,
+        "iw": 1440
+      },
+      "mobileWidth": {
+        "sw": 390,
+        "iw": 390
+      },
+      "longPanelTested": true,
+      "ok": true
+    },
+    {
+      "id": "exit_guard_fallback_without_navigation_api",
+      "ok": true
+    },
+    {
+      "id": "signout_inflight_locks_and_recovers_on_error",
+      "ok": true
+    },
+    {
+      "id": "signout_confirmed_redirects_to_login",
+      "ok": true
+    }
+  ],
+  "networkRequestsCount": 97,
+  "errors": []
+}

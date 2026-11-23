@@ -2,8 +2,12 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { getDatabase } from "@smartframe/database";
+import * as database from "@smartframe/database";
 import { issuePairingCode, redeemPairingCode } from "@smartframe/frames";
+import {
+  activeOnlineVersion,
+  activeOnlineVersionWithDevice,
+} from "../apps/web/src/lib/active-online-version";
 
 vi.mock("server-only", () => ({}));
 const panelAccess = vi.hoisted(() => vi.fn());
@@ -23,12 +27,13 @@ import {
   GET as listOptions,
   POST as switchPanel,
 } from "../apps/web/src/app/api/player/panels/route";
+import { POST as completeTask } from "../apps/web/src/app/api/player/tasks/route";
 import {
   GET as adminOptions,
   DELETE as removeOption,
 } from "../apps/web/src/app/api/devices/panels/route";
 
-const db = getDatabase();
+const db = database.getDatabase();
 const userId = randomUUID();
 let householdId: string;
 let first: { deviceId: string; token: string };
@@ -446,4 +451,357 @@ it("keeps legacy publications and approved versions in sync without changing oth
   ).toBe(other);
   expect((await switchPanel(playerRequest("POST", { panelId: panel.id }))).status).toBe(200);
   expect((await (await player(paired.token)).json()).refreshSeconds).toBe(60);
+});
+
+it("does not activate a legacy device fallback when publishing with activate=false", async () => {
+  const pairing = await issuePairingCode(db, householdId, userId);
+  const legacyDevice = await redeemPairingCode(db, pairing.code, "Legacy Fallback");
+  const otherPairing = await issuePairingCode(db, householdId, userId);
+  const otherDevice = await redeemPairingCode(db, otherPairing.code, "Other Tablet");
+  expect(
+    (
+      await saveLegacy(
+        request("PUT", {
+          deviceId: legacyDevice.deviceId,
+          expectedRevision: 0,
+          config: { refreshSeconds: 25 },
+        }),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await publishLegacy(
+        request("POST", { deviceId: legacyDevice.deviceId, expectedRevision: 1 }),
+      )
+    ).status,
+  ).toBe(200);
+  // Clear activePanelId to simulate a pre-migration legacy device whose fallback reads publishedVersionId.
+  await db.device.update({
+    where: { id: legacyDevice.deviceId },
+    data: { activePanelId: null, activePanelVersionId: null },
+  });
+  const legacyLayout = await db.layout.findUniqueOrThrow({
+    where: { key: `online:${legacyDevice.deviceId}` },
+  });
+  // Deleting the fallback panel while served by activePanelId === null must be blocked.
+  expect((await DELETE(request("DELETE", { id: legacyLayout.id }))).status).toBe(409);
+  expect(
+    (
+      await saveLegacy(
+        request("PUT", {
+          deviceId: legacyDevice.deviceId,
+          expectedRevision: 1,
+          config: {
+            refreshSeconds: 45,
+            widgets: {
+              tasks: {
+                enabled: true,
+                interactive: true,
+                items: [{ id: "t-cross", text: "Regar plantas", completed: false }],
+              },
+            },
+          },
+        }),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await publish(
+        request(
+          "POST",
+          {
+            panelId: legacyLayout.id,
+            deviceId: legacyDevice.deviceId,
+            expectedRevision: 2,
+            activate: false,
+          },
+          "/api/panels/publish",
+        ),
+      )
+    ).status,
+  ).toBe(200);
+  expect((await (await player(legacyDevice.token)).json()).refreshSeconds).toBe(25);
+  const crossPublish = await publish(
+    request(
+      "POST",
+      {
+        panelId: legacyLayout.id,
+        deviceId: otherDevice.deviceId,
+        expectedRevision: 2,
+        activate: true,
+      },
+      "/api/panels/publish",
+    ),
+  );
+  const staleLegacySnapshot = await db.device.findUniqueOrThrow({
+    where: { id: legacyDevice.deviceId },
+    select: { id: true, householdId: true, activePanelId: true, activePanelVersionId: true },
+  });
+  expect(crossPublish.status).toBe(200);
+  const crossRevision = (await crossPublish.json()).revision as string;
+  expect((await (await player(legacyDevice.token)).json()).refreshSeconds).toBe(25);
+  expect(
+    ((await activeOnlineVersion(db, staleLegacySnapshot))?.config as { refreshSeconds?: number })
+      ?.refreshSeconds,
+  ).toBe(25);
+  const otherConfig = await (await player(otherDevice.token)).json();
+  expect(otherConfig.refreshSeconds).toBe(45);
+  const taskToggle = await completeTask(
+    new Request("https://example.test/api/player/tasks", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${otherDevice.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        revision: crossRevision,
+        taskId: "t-cross",
+        completed: true,
+      }),
+    }),
+  );
+  expect(taskToggle.status).toBe(200);
+  const updatedPanelState = await (await GET(request("GET", undefined, `?id=${legacyLayout.id}`))).json();
+  expect(updatedPanelState.config.widgets.tasks.items[0]?.completed).toBe(true);
+  const options = await (
+    await listOptions(
+      new Request("https://example.test/api/player/panels", {
+        headers: { authorization: `Bearer ${otherDevice.token}` },
+      }),
+    )
+  ).json();
+  expect(options.panels.map((item: { id: string }) => item.id)).toContain(legacyLayout.id);
+  const replacementPanelId = (
+    await (await POST(request("POST", { name: "Substituto Legado" }))).json()
+  ).id as string;
+  expect(
+    (
+      await PUT(
+        request("PUT", {
+          id: replacementPanelId,
+          expectedRevision: 1,
+          config: { refreshSeconds: 60 },
+        }),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await publish(
+        request(
+          "POST",
+          {
+            panelId: replacementPanelId,
+            deviceId: legacyDevice.deviceId,
+            expectedRevision: 2,
+            activate: true,
+          },
+          "/api/panels/publish",
+        ),
+      )
+    ).status,
+  ).toBe(200);
+  // Stale pre-switch snapshot must re-read committed device state consistently with version lookup.
+  expect(
+    ((await activeOnlineVersion(db, staleLegacySnapshot))?.config as { refreshSeconds?: number })
+      ?.refreshSeconds,
+  ).toBe(60);
+  expect(
+    (
+      await publish(
+        request(
+          "POST",
+          {
+            panelId: replacementPanelId,
+            deviceId: otherDevice.deviceId,
+            expectedRevision: 2,
+            activate: true,
+          },
+          "/api/panels/publish",
+        ),
+      )
+    ).status,
+  ).toBe(200);
+  expect((await DELETE(request("DELETE", { id: legacyLayout.id }))).status).toBe(200);
+});
+
+it("does not activate an unpublished legacy draft when publishing with activate=false or to another device", async () => {
+  const pairingA = await issuePairingCode(db, householdId, userId);
+  const draftDevice = await redeemPairingCode(db, pairingA.code, "Draft Owner");
+  const pairingB = await issuePairingCode(db, householdId, userId);
+  const peerDevice = await redeemPairingCode(db, pairingB.code, "Peer Tablet");
+
+  expect(
+    (
+      await saveLegacy(
+        request("PUT", {
+          deviceId: draftDevice.deviceId,
+          expectedRevision: 0,
+          config: {
+            refreshSeconds: 33,
+            widgets: {
+              tasks: {
+                enabled: true,
+                interactive: true,
+                items: [{ id: "t-unpub", text: "Conferir estoque", completed: false }],
+              },
+            },
+          },
+        }),
+      )
+    ).status,
+  ).toBe(200);
+  const draftLayout = await db.layout.findUniqueOrThrow({
+    where: { key: `online:${draftDevice.deviceId}` },
+  });
+  expect(draftLayout.publishedVersionId).toBeNull();
+
+  // Making the unpublished legacy draft available to its own owner (activate=false) must not activate it.
+  expect(
+    (
+      await publish(
+        request(
+          "POST",
+          {
+            panelId: draftLayout.id,
+            deviceId: draftDevice.deviceId,
+            expectedRevision: 1,
+            activate: false,
+          },
+          "/api/panels/publish",
+        ),
+      )
+    ).status,
+  ).toBe(200);
+  expect((await player(draftDevice.token)).status).toBe(409);
+
+  // Publishing the unpublished legacy draft to another tablet (activate=true) must leave draftDevice unconfigured,
+  // serve it to peerDevice, and sync task completions back to the panel draft.
+  const peerPublish = await publish(
+    request(
+      "POST",
+      {
+        panelId: draftLayout.id,
+        deviceId: peerDevice.deviceId,
+        expectedRevision: 1,
+        activate: true,
+      },
+      "/api/panels/publish",
+    ),
+  );
+  expect(peerPublish.status).toBe(200);
+  const peerRevision = (await peerPublish.json()).revision as string;
+  expect((await player(draftDevice.token)).status).toBe(409);
+  expect((await (await player(peerDevice.token)).json()).refreshSeconds).toBe(33);
+
+  const peerTask = await completeTask(
+    new Request("https://example.test/api/player/tasks", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${peerDevice.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        revision: peerRevision,
+        taskId: "t-unpub",
+        completed: true,
+      }),
+    }),
+  );
+  expect(peerTask.status).toBe(200);
+  const reloadedDraft = await (await GET(request("GET", undefined, `?id=${draftLayout.id}`))).json();
+  expect(reloadedDraft.config.widgets.tasks.items[0]?.completed).toBe(true);
+});
+
+it("drops a stale pageDirective when a concurrent panel publish clears targetPageId before player config resolves", async () => {
+  const pairing = await issuePairingCode(db, householdId, userId);
+  const concurrentDevice = await redeemPairingCode(db, pairing.code, "Concurrent Player");
+  const pages = [
+    { id: "p1", title: "Pagina 1", enabledWidgets: ["clock"] },
+    { id: "p2", title: "Pagina 2", enabledWidgets: ["weather"] },
+  ];
+  const panelAId = (
+    await (await POST(request("POST", { name: "Painel A Paginado" }))).json()
+  ).id as string;
+  const panelBId = (
+    await (await POST(request("POST", { name: "Painel B Novo" }))).json()
+  ).id as string;
+  expect(
+    (await PUT(request("PUT", { id: panelAId, expectedRevision: 1, config: { refreshSeconds: 20, pages } }))).status,
+  ).toBe(200);
+  expect(
+    (await PUT(request("PUT", { id: panelBId, expectedRevision: 1, config: { refreshSeconds: 50, pages } }))).status,
+  ).toBe(200);
+  expect(
+    (
+      await publish(
+        request(
+          "POST",
+          { panelId: panelAId, deviceId: concurrentDevice.deviceId, expectedRevision: 2, activate: true },
+          "/api/panels/publish",
+        ),
+      )
+    ).status,
+  ).toBe(200);
+
+  await db.device.update({
+    where: { id: concurrentDevice.deviceId },
+    data: {
+      targetPageId: "next",
+      targetPageNonce: "nonce-stale",
+      targetPageDuration: 30,
+      targetPageExpiresAt: new Date(Date.now() + 60_000),
+    },
+  });
+  const staleAuthorizedDevice = await db.device.findUniqueOrThrow({
+    where: { id: concurrentDevice.deviceId },
+  });
+  expect(staleAuthorizedDevice.targetPageId).toBe("next");
+
+  expect(
+    (
+      await publish(
+        request(
+          "POST",
+          { panelId: panelBId, deviceId: concurrentDevice.deviceId, expectedRevision: 2, activate: true },
+          "/api/panels/publish",
+        ),
+      )
+    ).status,
+  ).toBe(200);
+
+  const resolved = await activeOnlineVersionWithDevice(db, staleAuthorizedDevice);
+  expect(resolved?.device.activePanelId).toBe(panelBId);
+  expect(resolved?.device.targetPageId).toBeNull();
+  expect((resolved?.version.config as { refreshSeconds?: number })?.refreshSeconds).toBe(50);
+
+  let deviceReads = 0;
+  const extendedDb = db.$extends({
+    query: {
+      device: {
+        async findFirst({ args, query }) {
+          const current = await query(args);
+          if (current?.id === concurrentDevice.deviceId && deviceReads++ === 0) {
+            return staleAuthorizedDevice;
+          }
+          return current;
+        },
+      },
+    },
+  });
+  const spy = vi
+    .spyOn(database, "getDatabase")
+    .mockReturnValueOnce(extendedDb as unknown as typeof db);
+  try {
+    const response = await player(concurrentDevice.token);
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.refreshSeconds).toBe(50);
+    expect(body.pageDirective).toBeUndefined();
+    expect(deviceReads).toBe(2);
+  } finally {
+    spy.mockRestore();
+  }
 });

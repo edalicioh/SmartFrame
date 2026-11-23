@@ -62,7 +62,9 @@ export async function POST(request: Request) {
           where: { id: device.id, tokenHash: device.tokenHash, revokedAt: null },
         });
         if (!currentDevice) throw new FrameError(401, "Dispositivo não autorizado.");
-        const version = await activeOnlineVersion(txClient, currentDevice);
+        const version = await activeOnlineVersion(txClient, currentDevice, {
+          consistentRead: false,
+        });
         if (!version) {
           throw new FrameError(
             409,
@@ -104,8 +106,20 @@ export async function POST(request: Request) {
         if (!changedVersion.count) throw new ConcurrentTaskUpdate("Published tasks changed.");
 
         const layout = await tx.layout.findUnique({ where: { id: version.layoutId } });
+        let shouldSyncDraft = Boolean(layout?.draft && layout.publishedVersionId === version.id);
+        if (layout?.draft && layout.key?.startsWith("online:")) {
+          // Legacy panels preserve Layout.publishedVersionId as fallback; compare against
+          // the newest LayoutVersion instead so cross-device publications still sync tasks.
+          const latestVersions = await tx.$queryRaw<Array<{ id: string }>>`
+            SELECT "id" FROM "LayoutVersion"
+            WHERE "layoutId" = ${layout.id}
+            ORDER BY "createdAt" DESC, "rowid" DESC
+            LIMIT 1
+          `;
+          shouldSyncDraft = latestVersions[0]?.id === version.id;
+        }
         // A device pinned to an older publication may update that version only.
-        if (layout?.draft && layout.publishedVersionId === version.id) {
+        if (layout?.draft && shouldSyncDraft) {
           let draftConfig: ReturnType<typeof readStoredOnlineDashboard> | null = null;
           try {
             draftConfig = readStoredOnlineDashboard(layout.draft);
@@ -130,7 +144,7 @@ export async function POST(request: Request) {
               where: {
                 id: layout.id,
                 householdId: device.householdId,
-                publishedVersionId: version.id,
+                publishedVersionId: layout.publishedVersionId,
                 draftRevision: layout.draftRevision,
               },
               data: {

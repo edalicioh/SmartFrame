@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HistoryGuard } from "@/components/online-editor/history-guard";
 import "./globals.css";
 import "./editor.css";
 
@@ -11,7 +12,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <HistoryGuard />
+        {children}
+      </body>
     </html>
   );
 }

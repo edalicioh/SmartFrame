@@ -8,7 +8,7 @@ import {
   filterPollSafeScheduleRules,
   readStoredOnlineDashboard,
 } from "@smartframe/contracts";
-import { activeOnlineVersion } from "@/lib/active-online-version";
+import { activeOnlineVersionWithDevice } from "@/lib/active-online-version";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,13 +16,14 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return frameResponse(async () => {
     const db = getDatabase();
-    const device = await authorizePlayer(db, request.headers.get("authorization"));
+    const authorizedDevice = await authorizePlayer(db, request.headers.get("authorization"));
     const params = new URL(request.url).searchParams;
-    if (params.has("deviceId") && params.get("deviceId") !== device.id)
+    if (params.has("deviceId") && params.get("deviceId") !== authorizedDevice.id)
       throw new FrameError(403, "Dispositivo não autorizado.");
-    const version = await activeOnlineVersion(db, device);
-    if (!version)
+    const resolved = await activeOnlineVersionWithDevice(db, authorizedDevice);
+    if (!resolved)
       throw new FrameError(409, "Este dispositivo ainda não possui uma configuração publicada.");
+    const { device, version } = resolved;
     const revision = `online:${version.id}`;
     const config = readStoredOnlineDashboard(version.config);
     const now = new Date();

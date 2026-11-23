@@ -3,7 +3,7 @@
 - Executor: **Luna-6**.
 - Revisor: **Sol-6.1**.
 - Dependência: fase 02 aprovada.
-- Situação: **planejada**.
+- Situação: **aceita pelo proprietário para entrega (escopo web concluído; limitação residual de fragmento registrada; validação física em tablet Android/APK pendente).** Consulte [execução](registros/fase-03-execucao.md) e [revisão](registros/fase-03-revisao.md).
 
 ## Objetivo
 
@@ -40,28 +40,28 @@ configurações locais, publicações enviadas e aplicações confirmadas.
 
 ### 03.1 — Barra de ações e confirmação do destino
 
-- [ ] Manter **Salvar rascunho** e **Publicar…** visíveis sem percorrer o formulário todo.
-- [ ] Publicar abre uma escolha explícita entre disponibilizar e exibir, com nome
+- [x] Manter **Salvar rascunho** e **Publicar…** visíveis sem percorrer o formulário todo.
+- [x] Publicar abre uma escolha explícita entre disponibilizar e exibir, com nome
       do painel, dispositivo de destino e explicação do efeito.
-- [ ] Se não houver dispositivo, explicar e oferecer acesso ao pareamento.
-- [ ] Nunca selecionar ou substituir silenciosamente o destino no momento de confirmar.
-- [ ] Durante operação, bloquear ações conflitantes e impedir envio duplicado.
-- [ ] Cancelar o diálogo não altera rascunho, permissões ou dispositivo.
-- [ ] Diálogo tem nome acessível, foco inicial adequado, Escape e devolução de foco;
+- [x] Se não houver dispositivo, explicar e oferecer acesso ao pareamento.
+- [x] Nunca selecionar ou substituir silenciosamente o destino no momento de confirmar.
+- [x] Durante operação, bloquear ações conflitantes e impedir envio duplicado.
+- [x] Cancelar o diálogo não altera rascunho, permissões ou dispositivo.
+- [x] Diálogo tem nome acessível, foco inicial adequado, Escape e devolução de foco;
       preferir `<dialog>` nativo, conferindo compatibilidade e comportamento real.
 
 ### 03.2 — Estados de rascunho e publicação
 
-- [ ] Mostrar separadamente “Alterações não salvas” e “Rascunho salvo”.
-- [ ] Mostrar “Nenhuma publicação enviada” quando não houver versão ativa no destino.
-- [ ] Mostrar “Aguardando confirmação” quando versão ativa enviada e aplicada diferirem.
-- [ ] Somente mostrar “Versão enviada confirmada” quando a revisão aplicada corresponder
+- [x] Mostrar separadamente “Alterações não salvas” e “Rascunho salvo”.
+- [x] Mostrar “Nenhuma publicação enviada” quando não houver versão ativa no destino.
+- [x] Mostrar “Aguardando confirmação” quando versão ativa enviada e aplicada diferirem.
+- [x] Somente mostrar “Versão enviada confirmada” quando a revisão aplicada corresponder
       à revisão ativa enviada ao dispositivo selecionado.
-- [ ] Usar `activePanelId` para distinguir o painel em edição do painel enviado.
-- [ ] Se editar outro painel, não associar a confirmação do painel ativo ao rascunho aberto.
-- [ ] Uma confirmação não prova que o rascunho atual está publicado: ele pode ter sido
+- [x] Usar `activePanelId` para distinguir o painel em edição do painel enviado.
+- [x] Se editar outro painel, não associar a confirmação do painel ativo ao rascunho aberto.
+- [x] Uma confirmação não prova que o rascunho atual está publicado: ele pode ter sido
       editado depois. Não afirmar equivalência sem dados que a comprovem.
-- [ ] `lastSeenAt` indica última comunicação; não inventar status online em tempo real
+- [x] `lastSeenAt` indica última comunicação; não inventar status online em tempo real
       ou prazo garantido de entrega.
 
 Preferir um helper puro com estados explícitos para essas combinações. Datas e IDs
@@ -69,28 +69,28 @@ de revisão podem ficar em detalhes; mensagens principais devem ser compreensív
 
 ### 03.3 — Falhas, concorrência e proteção de dados
 
-- [ ] Em conflito 409, manter configuração local e explicar a alteração concorrente.
-- [ ] Oferecer recarregar somente com confirmação de descarte quando houver mudanças.
-- [ ] Se salvar funcionar e publicar falhar, informar que o rascunho foi salvo, mas
+- [x] Em conflito 409, manter configuração local e explicar a alteração concorrente.
+- [x] Oferecer recarregar somente com confirmação de descarte quando houver mudanças.
+- [x] Se salvar funcionar e publicar falhar, informar que o rascunho foi salvo, mas
       a publicação falhou. Não anunciar publicação concluída.
-- [ ] Permitir nova tentativa consciente, sem ativar automaticamente após recuperação da rede.
-- [ ] Manter `expectedRevision` e não sobrescrever a versão mais recente à força.
-- [ ] Respostas atrasadas não podem atualizar o estado visual de outro painel/dispositivo.
-- [ ] Preservar proteção em trocar painel, duplicar, criar, excluir e sair da página.
-- [ ] Duplicar usa a última versão salva, conforme API; explicar isso com alterações pendentes.
-- [ ] Não permitir que polling substitua alterações locais não salvas.
+- [x] Permitir nova tentativa consciente, sem ativar automaticamente após recuperação da rede.
+- [x] Manter `expectedRevision` e não sobrescrever a versão mais recente à força.
+- [x] Respostas atrasadas não podem atualizar o estado visual de outro painel/dispositivo.
+- [x] Preservar proteção em trocar painel, duplicar, criar, excluir e sair da página.
+- [x] Duplicar usa a última versão salva, conforme API; explicar isso com alterações pendentes.
+- [x] Não permitir que polling substitua alterações locais não salvas.
 
 ### 03.4 — Pareamento e gestão de acesso
 
-- [ ] Agrupar gerar código, instruções, expiração e endereço do servidor.
-- [ ] Código expirado deve ser identificado; oferecer gerar novo, não prometer renovar o antigo.
-- [ ] Não confundir fechar o código na interface com revogá-lo no servidor.
-- [ ] Atualizar a lista após pareamento sem perder o painel em edição.
-- [ ] Listar painéis disponíveis no destino separadamente do painel enviado para exibição.
-- [ ] Remover acesso não equivale a excluir painel nem desativar uma versão ativa.
-- [ ] Preservar bloqueio existente para remover acesso ao painel ativo.
-- [ ] Desvincular exige confirmação nomeando o dispositivo e explicando o efeito.
-- [ ] Excluir painel em uso mostra o impedimento e a orientação retornada pela API.
+- [x] Agrupar gerar código, instruções, expiração e endereço do servidor.
+- [x] Código expirado deve ser identificado; oferecer gerar novo, não prometer renovar o antigo.
+- [x] Não confundir fechar o código na interface com revogá-lo no servidor.
+- [x] Atualizar a lista após pareamento sem perder o painel em edição.
+- [x] Listar painéis disponíveis no destino separadamente do painel enviado para exibição.
+- [x] Remover acesso não equivale a excluir painel nem desativar uma versão ativa.
+- [x] Preservar bloqueio existente para remover acesso ao painel ativo.
+- [x] Desvincular exige confirmação nomeando o dispositivo e explicando o efeito.
+- [x] Excluir painel em uso mostra o impedimento e a orientação retornada pela API.
 
 ## Critérios de aceite
 
@@ -126,12 +126,12 @@ validação de interface/contrato e deixar o teste físico pendente, sem simular
 
 ## Revisão do Sol-6.1
 
-- [ ] Inspecionar payloads, `activate`, `expectedRevision` e identidade do destino capturado.
-- [ ] Verificar comparações entre revisões e relação entre painel editado e ativo.
-- [ ] Revisar todos os caminhos de erro, inclusive sucesso parcial salvar/publicar.
-- [ ] Conferir isolamento entre famílias e ausência de tokens na prévia/logs.
-- [ ] Reproduzir confirmação/cancelamento e foco do diálogo.
-- [ ] Distinguir evidência automatizada, validação no navegador e teste físico do tablet.
+- [x] Inspecionar payloads, `activate`, `expectedRevision` e identidade do destino capturado.
+- [x] Verificar comparações entre revisões e relação entre painel editado e ativo.
+- [x] Revisar todos os caminhos de erro, inclusive sucesso parcial salvar/publicar.
+- [x] Conferir isolamento entre famílias e ausência de tokens na prévia/logs.
+- [x] Reproduzir confirmação/cancelamento e foco do diálogo.
+- [x] Distinguir evidência automatizada, validação no navegador e teste físico do tablet.
 
 ## Entrega e passagem
 

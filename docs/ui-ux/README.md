@@ -7,7 +7,7 @@ Planejar a melhoria da interface web, com prioridade para o editor de painéis e
 
 - Executor de todas as fases: **Luna-6**.
 - Revisor de todas as fases: **Sol-6.1**.
-- Situação atual: **fases 01 e 02 APROVADAS após correções e revisão; fase 03 não iniciada, aguardando comando do usuário**.
+- Situação atual: **fases 01 e 02 APROVADAS após correções e revisão; fase 03 aceita pelo proprietário para entrega (escopo web concluído; limitação residual de fragmento registrada; validação física em tablet Android/APK pendente)**.
 - Estes arquivos são instruções de execução, não evidências de entrega.
 - Os nomes dos modelos são os informados pelo usuário, não IDs de provedores
   validados. Antes de executar em uma ferramenta, resolver o modelo disponível;
@@ -19,7 +19,7 @@ Planejar a melhoria da interface web, com prioridade para o editor de painéis e
 | ----------------------------------------------------- | ------------------------------------------------- | ---------------- | -------- | ------- | --------- |
 | [01](01-organizacao-e-base-visual.md)                 | Organização do editor e base visual               | Nenhuma          | Luna-6   | Sol-6.1 | Aprovada |
 | [02](02-fotos-widgets-e-previa.md)                    | Fotos, widgets, aparência e prévia                | Fase 01 aprovada | Luna-6   | Sol-6.1 | Aprovada |
-| [03](03-publicacao-e-dispositivos.md)                 | Publicação segura e dispositivos                  | Fase 02 aprovada | Luna-6   | Sol-6.1 | Planejada |
+| [03](03-publicacao-e-dispositivos.md)                 | Publicação segura e dispositivos                  | Fase 02 aprovada | Luna-6   | Sol-6.1 | Aceita (web; físico pendente) |
 | [04](04-visao-geral-util.md)                          | Visão geral baseada em dados reais                | Fase 03 aprovada | Luna-6   | Sol-6.1 | Planejada |
 | [05](05-responsividade-acessibilidade-e-validacao.md) | Acabamento responsivo, acessibilidade e regressão | Fase 04 aprovada | Luna-6   | Sol-6.1 | Planejada |
 

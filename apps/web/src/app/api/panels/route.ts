@@ -125,7 +125,28 @@ export async function DELETE(request: Request) {
         where: { ...panelWhere(owner.householdId), id: body.id },
       });
       if (!panel) throw new FrameError(404, "Painel não encontrado.");
-      if (await tx.device.count({ where: { activePanelId: panel.id, revokedAt: null } }))
+      const legacyFallbackDeviceId =
+        panel.key?.startsWith("online:") && panel.publishedVersionId
+          ? panel.key.slice("online:".length)
+          : null;
+      const inUseCount = await tx.device.count({
+        where: {
+          revokedAt: null,
+          OR: [
+            { activePanelId: panel.id },
+            ...(legacyFallbackDeviceId
+              ? [
+                  {
+                    id: legacyFallbackDeviceId,
+                    householdId: owner.householdId,
+                    activePanelId: null,
+                  },
+                ]
+              : []),
+          ],
+        },
+      });
+      if (inUseCount)
         throw new FrameError(
           409,
           "Este painel está em uso. Escolha outro painel para os dispositivos antes de excluí-lo.",

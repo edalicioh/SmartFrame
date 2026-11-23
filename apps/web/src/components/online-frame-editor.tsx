@@ -2,9 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocalWidgetEditor } from "./local-widget-editor";
+import { EditorActionBar } from "./online-editor/action-bar";
 import { AutomationsEditor } from "./online-editor/automations-editor";
 import { ControlDeckEditor } from "./online-editor/control-deck-editor";
+import { DeviceManager } from "./online-editor/device-manager";
+import {
+  isRestoringTraverseNavigation,
+  registerTraverseGuard,
+  stripUrlFragment,
+} from "./online-editor/history-guard";
 import { PhotoLibrary } from "./online-editor/photo-library";
+import { PublishDialog } from "./online-editor/publish-dialog";
+import { useUnsavedDraft } from "./online-editor/unsaved-draft-context";
 import { ValidatedNumberField } from "./online-editor/validated-number-field";
 import {
   addPhotoSelection,
@@ -17,6 +26,20 @@ import {
   clearNumericIssuesForDisabledWidgets,
   clearNumericIssuesForHiddenWidgets,
 } from "@/lib/online-editor/numeric-issues";
+import {
+  deriveDraftStatus,
+  derivePublicationState,
+  EditorApiError,
+  formatDeviceDisplayName,
+  formatLastCommunication,
+  formatPanelDisplayName,
+  formatPartialPublishFailure,
+  isConflictError,
+  isPairingExpired,
+  type LegacyFallbackStatus,
+  type PublishMode,
+  type PublishTarget,
+} from "@/lib/online-editor/publication";
 import {
   appearancePresets,
   applyPanelTemplate,
@@ -679,8 +702,13 @@ function EditorSectionNavigation({
 
 async function api(path: string, options?: RequestInit) {
   const response = await fetch(path, { ...options, cache: "no-store" });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? "Não foi possível concluir a operação.");
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new EditorApiError(
+      typeof data.error === "string" ? data.error : "Não foi possível concluir a operação.",
+      response.status,
+    );
+  }
   return data;
 }
 
@@ -692,6 +720,12 @@ export function OnlineFrameEditor() {
   const [panels, setPanels] = useState<Panel[]>([]);
   const [access, setAccess] = useState<PanelAccess[]>([]);
   const [accessDevice, setAccessDevice] = useState("");
+  const [accessError, setAccessError] = useState("");
+  const [legacyFallback, setLegacyFallback] = useState<{
+    deviceId: string;
+    status: "loading" | "ready" | "error";
+    publishedRevision: string | null;
+  } | null>(null);
   const [panelId, setPanelId] = useState("");
   const [state, setState] = useState<PanelState | null>(null);
   const [config, setConfig] = useState<OnlineDashboard>(defaultOnlineDashboard);
@@ -701,12 +735,20 @@ export function OnlineFrameEditor() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [conflict, setConflict] = useState<{ panelId: string; message: string } | null>(null);
   const [listStatus, setListStatus] = useState({
     devices: "loading" as ListStatus,
     panels: "loading" as ListStatus,
     photos: "loading" as ListStatus,
   });
   const [pairing, setPairing] = useState<Pairing | null>(null);
+  const [devicesAreaOpen, setDevicesAreaOpen] = useState(false);
+  const [publishDialog, setPublishDialog] = useState<{
+    open: boolean;
+    target: PublishTarget | null;
+    mode: PublishMode | null;
+    error: string;
+  }>({ open: false, target: null, mode: null, error: "" });
   const [photoPollExpired, setPhotoPollExpired] = useState(false);
   const [photoPollRetry, setPhotoPollRetry] = useState(0);
   const [widgetData, setWidgetData] = useState<WidgetData | null>(null);
@@ -720,22 +762,190 @@ export function OnlineFrameEditor() {
   const [activePageId, setActivePageId] = useState("");
   const photoInput = useRef<HTMLInputElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
+  const publishButtonRef = useRef<HTMLButtonElement>(null);
+  const publishReturnFocusRef = useRef<HTMLElement | null>(null);
+  const postCloseFocusRef = useRef<HTMLElement | null>(null);
+  const pendingFocusAfterPublishRef = useRef<HTMLElement | null>(null);
+  const deviceSelectRef = useRef<HTMLSelectElement>(null);
+  const pairingButtonRef = useRef<HTMLButtonElement>(null);
   const operation = useRef(false);
   const selectedId = useRef(panelId);
-  const selectedDevice = devices.find((device) => device.id === deviceId);
-  const activePanel = panels.find((panel) => panel.id === selectedDevice?.activePanelId);
-  const publishedRevision = selectedDevice?.activePanelVersionId
-    ? `online:${selectedDevice.activePanelVersionId}`
+  const selectedDeviceIdRef = useRef(deviceId);
+  const dirtyRef = useRef(dirty);
+  const publishDialogOpenRef = useRef(publishDialog.open);
+  const conflictRef = useRef(conflict);
+  const panelStateSeqRef = useRef(0);
+  const devicesRequestSeq = useRef(0);
+  const accessRequestSeq = useRef(0);
+  const legacyFallbackSeqRef = useRef(0);
+  const accessDeviceRef = useRef(accessDevice);
+  useEffect(() => {
+    selectedId.current = panelId;
+  }, [panelId]);
+  useEffect(() => {
+    selectedDeviceIdRef.current = deviceId;
+  }, [deviceId]);
+  useEffect(() => {
+    accessDeviceRef.current = accessDevice;
+  }, [accessDevice]);
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+  useEffect(() => {
+    publishDialogOpenRef.current = publishDialog.open;
+  }, [publishDialog.open]);
+  useEffect(() => {
+    conflictRef.current = conflict;
+  }, [conflict]);
+  const unsavedDraft = useUnsavedDraft();
+  const signingOut = Boolean(unsavedDraft?.signingOut);
+  const signingOutRef = useRef(signingOut);
+  useEffect(() => {
+    signingOutRef.current = signingOut;
+  }, [signingOut]);
+  const effectiveBusy = busy || (signingOut ? "Saindo da conta…" : "");
+  useEffect(() => {
+    if (publishDialog.open || effectiveBusy || loading) return;
+    const target = pendingFocusAfterPublishRef.current;
+    if (!target) return;
+    pendingFocusAfterPublishRef.current = null;
+    if (target.isConnected && !(target as HTMLButtonElement).disabled) {
+      target.focus();
+    }
+  }, [publishDialog.open, effectiveBusy, loading]);
+  const setGlobalUnsavedDraft = unsavedDraft?.setHasUnsavedDraft;
+  const isSignOutRedirectAuthorized = unsavedDraft?.isSignOutRedirectAuthorized;
+  const selectedDevice = devices.find((device) => device.id === deviceId) ?? null;
+  const selectedDeviceLabel = selectedDevice
+    ? formatDeviceDisplayName(selectedDevice, devices)
     : null;
+  const activePanel = panels.find((panel) => panel.id === selectedDevice?.activePanelId) ?? null;
+  const editingPanelLabel = state ? formatPanelDisplayName(state, panels) : null;
+  const activePanelLabel = activePanel ? formatPanelDisplayName(activePanel, panels) : null;
+
+  useEffect(() => {
+    setGlobalUnsavedDraft?.(dirty);
+  }, [dirty, setGlobalUnsavedDraft]);
+
+  useEffect(
+    () => () => {
+      setGlobalUnsavedDraft?.(false);
+    },
+    [setGlobalUnsavedDraft],
+  );
 
   useEffect(() => {
     if (!dirty) return;
+    const editorDocumentUrl = stripUrlFragment(window.location.href);
+    const exitMessage = "Há alterações não salvas. Sair desta página e descartar as alterações?";
+    let confirmedClientLink = false;
+    let confirmedTraverseByNavigateApi = false;
+    let clientLinkTimer: number | null = null;
+    const confirmExit = () => window.confirm(exitMessage);
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
     };
+    const guardClientNavigation = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest("a[href]");
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if (anchor.hasAttribute("download") || (anchor.target && anchor.target !== "_self")) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      if (stripUrlFragment(anchor.href) === stripUrlFragment(window.location.href)) return;
+      if (!confirmExit()) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      confirmedClientLink = true;
+      if (clientLinkTimer !== null) window.clearTimeout(clientLinkTimer);
+      clientLinkTimer = window.setTimeout(() => {
+        confirmedClientLink = false;
+        clientLinkTimer = null;
+      }, 1000);
+    };
+
+    type BrowserNavigationEntry = { index?: number };
+    type BrowserNavigateEvent = Event & {
+      navigationType?: string;
+      cancelable: boolean;
+      destination?: { url?: string; index?: number; getState?: () => unknown };
+    };
+    type BrowserNavigation = EventTarget & {
+      currentEntry?: BrowserNavigationEntry | null;
+      addEventListener(type: "navigate", listener: (event: BrowserNavigateEvent) => void): void;
+      removeEventListener(type: "navigate", listener: (event: BrowserNavigateEvent) => void): void;
+    };
+    const navigationApi = (window as Window & { navigation?: BrowserNavigation }).navigation;
+
+    const guardNavigate = (event: BrowserNavigateEvent) => {
+      if (!dirtyRef.current) return;
+      if (isRestoringTraverseNavigation(event.destination)) return;
+      if (
+        event.destination?.url &&
+        stripUrlFragment(event.destination.url) === stripUrlFragment(window.location.href)
+      ) {
+        return;
+      }
+      if (
+        event.navigationType === "replace" &&
+        isSignOutRedirectAuthorized?.(event.destination?.url)
+      ) {
+        return;
+      }
+      if (!event.cancelable) return;
+      if (confirmedClientLink && event.navigationType !== "traverse") {
+        confirmedClientLink = false;
+        if (clientLinkTimer !== null) {
+          window.clearTimeout(clientLinkTimer);
+          clientLinkTimer = null;
+        }
+        return;
+      }
+      if (!confirmExit()) {
+        event.preventDefault();
+      } else if (event.navigationType === "traverse") {
+        confirmedTraverseByNavigateApi = true;
+      }
+    };
+
+    registerTraverseGuard((targetHref) => {
+      if (!dirtyRef.current) return true;
+      if (stripUrlFragment(targetHref) === editorDocumentUrl) return true;
+      if (confirmedTraverseByNavigateApi) {
+        confirmedTraverseByNavigateApi = false;
+        return true;
+      }
+      return confirmExit();
+    });
+
     window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
+    document.addEventListener("click", guardClientNavigation, true);
+    if (navigationApi) {
+      navigationApi.addEventListener("navigate", guardNavigate);
+    }
+    return () => {
+      registerTraverseGuard(null);
+      if (clientLinkTimer !== null) window.clearTimeout(clientLinkTimer);
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("click", guardClientNavigation, true);
+      if (navigationApi) {
+        navigationApi.removeEventListener("navigate", guardNavigate);
+      }
+    };
+  }, [dirty, isSignOutRedirectAuthorized]);
 
   const resolvedPage = useMemo(
     () => resolveActivePageConfig(config, activePageId || undefined),
@@ -829,10 +1039,43 @@ export function OnlineFrameEditor() {
     sendPreview();
   }, [sendPreview]);
 
-  const refreshDevices = useCallback(async () => {
-    const result = await api("/api/devices");
-    setDevices(result.data ?? []);
-    setListStatus((current) => ({ ...current, devices: "ready" }));
+  const refreshDevices = useCallback(async (allowDuringOperation = true) => {
+    const seq = ++devicesRequestSeq.current;
+    try {
+      const result = await api("/api/devices");
+      if (seq !== devicesRequestSeq.current) {
+        return { ok: false as const, stale: true as const, error: "" };
+      }
+      if (!allowDuringOperation && operation.current) {
+        return { ok: false as const, stale: true as const, error: "" };
+      }
+      const nextDevices: Device[] = result.data ?? [];
+      setDevices(nextDevices);
+      setListStatus((current) => ({ ...current, devices: "ready" }));
+      if (
+        selectedDeviceIdRef.current &&
+        !nextDevices.some((item) => item.id === selectedDeviceIdRef.current)
+      ) {
+        selectedDeviceIdRef.current = "";
+        legacyFallbackSeqRef.current += 1;
+        setDeviceId("");
+        setAccess([]);
+        setAccessDevice("");
+        setAccessError("");
+        setLegacyFallback(null);
+      }
+      return { ok: true as const, stale: false as const, devices: nextDevices };
+    } catch (failure: unknown) {
+      if (seq !== devicesRequestSeq.current) {
+        return { ok: false as const, stale: true as const, error: "" };
+      }
+      return {
+        ok: false as const,
+        stale: false as const,
+        error:
+          failure instanceof Error ? failure.message : "Não foi possível carregar dispositivos.",
+      };
+    }
   }, []);
   const refreshPanels = useCallback(async () => {
     const result = await api("/api/panels");
@@ -846,28 +1089,147 @@ export function OnlineFrameEditor() {
     return (result.photos ?? []) as Photo[];
   }, []);
 
-  const refreshAccess = useCallback(async (id: string) => {
-    const result = await api(`/api/devices/panels?deviceId=${encodeURIComponent(id)}`);
-    return result.access as PanelAccess[];
+  const fetchDeviceAccess = useCallback(async (id: string) => {
+    const seq = ++accessRequestSeq.current;
+    try {
+      const result = await api(`/api/devices/panels?deviceId=${encodeURIComponent(id)}`);
+      if (seq !== accessRequestSeq.current || selectedDeviceIdRef.current !== id) {
+        return { current: false as const };
+      }
+      return {
+        current: true as const,
+        ok: true as const,
+        items: (result.access as PanelAccess[]) ?? [],
+      };
+    } catch (failure: unknown) {
+      if (seq !== accessRequestSeq.current || selectedDeviceIdRef.current !== id) {
+        return { current: false as const };
+      }
+      return {
+        current: true as const,
+        ok: false as const,
+        error:
+          failure instanceof Error ? failure.message : "Não foi possível carregar permissões.",
+      };
+    }
   }, []);
+
+  const applyDeviceAccessOutcome = useCallback(
+    (
+      id: string,
+      outcome: Awaited<ReturnType<typeof fetchDeviceAccess>>,
+      isActive: () => boolean = () => true,
+    ): boolean => {
+      if (!isActive() || !outcome.current || selectedDeviceIdRef.current !== id) return false;
+      if (outcome.ok) {
+        accessDeviceRef.current = id;
+        setAccess(outcome.items);
+        setAccessDevice(id);
+        setAccessError("");
+        return true;
+      }
+      setAccessError(outcome.error);
+      return false;
+    },
+    [],
+  );
+
+  const syncDeviceAccess = useCallback(
+    async (id: string, isActive: () => boolean = () => true): Promise<boolean> => {
+      const outcome = await fetchDeviceAccess(id);
+      return applyDeviceAccessOutcome(id, outcome, isActive);
+    },
+    [fetchDeviceAccess, applyDeviceAccessOutcome],
+  );
+
+  const fetchLegacyFallback = useCallback(async (id: string) => {
+    const seq = ++legacyFallbackSeqRef.current;
+    try {
+      const result = await api(`/api/online-frame?deviceId=${encodeURIComponent(id)}`);
+      if (seq !== legacyFallbackSeqRef.current || selectedDeviceIdRef.current !== id) {
+        return { current: false as const };
+      }
+      const publishedRevision =
+        typeof result?.publishedRevision === "string" && result.publishedRevision.length > 0
+          ? result.publishedRevision
+          : null;
+      return {
+        current: true as const,
+        ok: true as const,
+        publishedRevision,
+      };
+    } catch {
+      if (seq !== legacyFallbackSeqRef.current || selectedDeviceIdRef.current !== id) {
+        return { current: false as const };
+      }
+      return { current: true as const, ok: false as const };
+    }
+  }, []);
+
+  const applyLegacyFallbackOutcome = useCallback(
+    (
+      id: string,
+      outcome: Awaited<ReturnType<typeof fetchLegacyFallback>>,
+      isActive: () => boolean = () => true,
+    ) => {
+      if (!isActive() || !outcome.current || selectedDeviceIdRef.current !== id) return;
+      if (outcome.ok) {
+        setLegacyFallback({
+          deviceId: id,
+          status: "ready",
+          publishedRevision: outcome.publishedRevision,
+        });
+        return;
+      }
+      setLegacyFallback((current) =>
+        current && current.deviceId === id && current.status === "ready"
+          ? current
+          : { deviceId: id, status: "error", publishedRevision: null },
+      );
+    },
+    [],
+  );
+
+  const syncLegacyFallback = useCallback(
+    async (id: string, isActive: () => boolean = () => true): Promise<void> => {
+      const outcome = await fetchLegacyFallback(id);
+      applyLegacyFallbackOutcome(id, outcome, isActive);
+    },
+    [fetchLegacyFallback, applyLegacyFallbackOutcome],
+  );
 
   useEffect(() => {
     if (!deviceId) return;
     let active = true;
-    refreshAccess(deviceId)
-      .then((items) => {
-        if (active) {
-          setAccess(items);
-          setAccessDevice(deviceId);
-        }
-      })
-      .catch((failure) => {
-        if (active) setError(failure.message);
-      });
+    void fetchDeviceAccess(deviceId).then((outcome) => {
+      applyDeviceAccessOutcome(deviceId, outcome, () => active);
+    });
     return () => {
       active = false;
     };
-  }, [deviceId, refreshAccess]);
+  }, [deviceId, fetchDeviceAccess, applyDeviceAccessOutcome]);
+
+  const needsLegacyFallbackCheck = Boolean(selectedDevice && !selectedDevice.activePanelId);
+  const selectedDeviceKey = selectedDevice?.id ?? "";
+
+  useEffect(() => {
+    if (!selectedDeviceKey || !needsLegacyFallbackCheck) {
+      legacyFallbackSeqRef.current += 1;
+      return;
+    }
+    let active = true;
+    void fetchLegacyFallback(selectedDeviceKey).then((outcome) => {
+      applyLegacyFallbackOutcome(selectedDeviceKey, outcome, () => active);
+    });
+    return () => {
+      active = false;
+    };
+  }, [
+    selectedDeviceKey,
+    needsLegacyFallbackCheck,
+    fetchLegacyFallback,
+    applyLegacyFallbackOutcome,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -875,17 +1237,18 @@ export function OnlineFrameEditor() {
       key: keyof typeof listStatus,
       request: () => Promise<T>,
       apply: (data: T) => void,
+      isCurrent: () => boolean = () => true,
     ) => {
       setListStatus((current) => ({ ...current, [key]: "loading" }));
       request()
         .then((data) => {
-          if (active) {
+          if (active && isCurrent()) {
             apply(data);
             setListStatus((current) => ({ ...current, [key]: "ready" }));
           }
         })
         .catch((failure: unknown) => {
-          if (active) {
+          if (active && isCurrent()) {
             setListStatus((current) => ({ ...current, [key]: "error" }));
             setError(
               failure instanceof Error ? failure.message : "Não foi possível carregar os dados.",
@@ -893,10 +1256,12 @@ export function OnlineFrameEditor() {
           }
         });
     };
+    const devicesSeq = ++devicesRequestSeq.current;
     load(
       "devices",
       () => api("/api/devices"),
       (result) => setDevices(result.data ?? []),
+      () => devicesSeq === devicesRequestSeq.current,
     );
     load(
       "photos",
@@ -916,6 +1281,7 @@ export function OnlineFrameEditor() {
   useEffect(() => {
     if (!panelId) return;
     let active = true;
+    const seq = ++panelStateSeqRef.current;
     // Loading and clearing old device data must happen before its response can render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
@@ -923,13 +1289,13 @@ export function OnlineFrameEditor() {
     setError("");
     api(`/api/panels?id=${encodeURIComponent(panelId)}`)
       .then((next: PanelState) => {
-        if (!active || selectedId.current !== panelId) return;
+        if (!active || seq !== panelStateSeqRef.current || selectedId.current !== panelId) return;
         setState(next);
         setConfig(next.config);
         setDirty(false);
       })
       .catch((failure) => {
-        if (active) setError(failure.message);
+        if (active && seq === panelStateSeqRef.current) setError(failure.message);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -943,8 +1309,13 @@ export function OnlineFrameEditor() {
     if (!pairing) return;
     let active = true;
     const timer = window.setInterval(() => {
-      refreshDevices().catch((failure) => {
-        if (active) setError(failure.message);
+      if (isPairingExpired(pairing)) {
+        window.clearInterval(timer);
+        return;
+      }
+      if (operation.current) return;
+      void refreshDevices(false).then((res) => {
+        if (active && !res.ok && !res.stale) setError(res.error);
       });
     }, 5000);
     return () => {
@@ -958,22 +1329,43 @@ export function OnlineFrameEditor() {
     let active = true;
     const timer = window.setInterval(async () => {
       if (!active || operation.current) return;
+      const targetPanelId = panelId;
+      const seq = ++panelStateSeqRef.current;
       try {
-        const latest: PanelState = await api(`/api/panels?id=${encodeURIComponent(panelId)}`);
-        await refreshDevices();
-        if (!active || selectedId.current !== panelId) return;
+        const latest: PanelState = await api(`/api/panels?id=${encodeURIComponent(targetPanelId)}`);
+        if (!active || seq !== panelStateSeqRef.current || selectedId.current !== targetPanelId) {
+          return;
+        }
+        if (!operation.current) {
+          await refreshDevices(false);
+        }
+        if (!active || seq !== panelStateSeqRef.current || selectedId.current !== targetPanelId) {
+          return;
+        }
+        const canReplaceDraft =
+          !dirtyRef.current &&
+          !operation.current &&
+          !publishDialogOpenRef.current &&
+          conflictRef.current?.panelId !== targetPanelId;
         setState((current) =>
-          current && current.id === panelId
+          current && current.id === targetPanelId
             ? {
                 ...current,
                 name: latest.name,
-                ...(!dirty && !operation.current
+                ...(canReplaceDraft
                   ? { draftRevision: latest.draftRevision, config: latest.config }
                   : {}),
               }
             : current,
         );
-        if (!dirty && !operation.current) setConfig(latest.config);
+        setPanels((current) =>
+          current.some((item) => item.id === targetPanelId && item.name !== latest.name)
+            ? current.map((item) =>
+                item.id === targetPanelId ? { ...item, name: latest.name } : item,
+              )
+            : current,
+        );
+        if (canReplaceDraft) setConfig(latest.config);
       } catch {
         /* Keep the last known device status on transient errors. */
       }
@@ -1029,6 +1421,7 @@ export function OnlineFrameEditor() {
   }, [hasPendingPhotos, photoPollRetry, refreshPhotos]);
 
   function change(next: OnlineDashboard) {
+    if (signingOutRef.current) return;
     const arranged = ensureGridLayoutValid(next);
     setConfig(arranged);
     // Widgets whose numeric fields unmount when disabled must not keep
@@ -1225,30 +1618,43 @@ export function OnlineFrameEditor() {
   }
 
   function chooseDevice(nextId: string) {
-    if (operation.current || loading) return;
+    if (operation.current || loading || signingOutRef.current) return;
+    if (nextId !== selectedDeviceIdRef.current) {
+      accessRequestSeq.current += 1;
+      legacyFallbackSeqRef.current += 1;
+      accessDeviceRef.current = "";
+      setAccess([]);
+      setAccessDevice("");
+      setAccessError("");
+      setLegacyFallback(null);
+    }
+    selectedDeviceIdRef.current = nextId;
     setDeviceId(nextId);
   }
   function choosePanel(nextId: string) {
-    if (operation.current || loading) return;
+    if (operation.current || loading || signingOutRef.current) return;
     if (dirty && !window.confirm("Há alterações não salvas. Descartar para trocar de painel?"))
       return;
+    panelStateSeqRef.current += 1;
     selectedId.current = nextId;
     setPanelId(nextId);
     setActivePageId("");
     setNumericIssues({});
+    setConflict(null);
     setError("");
+    setNotice("");
     setState(null);
     setDirty(false);
   }
 
   async function managePanel(action: "create" | "duplicate" | "rename" | "delete") {
-    if (operation.current || loading) return;
+    if (operation.current || loading || signingOutRef.current) return;
     if (
       (action === "create" || action === "duplicate" || action === "delete") &&
       dirty &&
       !window.confirm(
         action === "duplicate"
-          ? "Há alterações não salvas. Descartá-las e duplicar a última versão salva?"
+          ? "Há alterações não salvas no rascunho atual. Duplicar copia apenas a última versão salva no servidor e descartará as alterações não salvas. Continuar?"
           : "Há alterações não salvas. Descartá-las?",
       )
     )
@@ -1271,6 +1677,7 @@ export function OnlineFrameEditor() {
     setBusy("Atualizando painéis…");
     setError("");
     try {
+      panelStateSeqRef.current += 1;
       const method = action === "rename" ? "PATCH" : action === "delete" ? "DELETE" : "POST";
       const body =
         action === "rename"
@@ -1284,12 +1691,14 @@ export function OnlineFrameEditor() {
         body: JSON.stringify(body),
       });
       await refreshPanels();
+      panelStateSeqRef.current += 1;
       if (action === "rename") setState((current) => (current ? { ...current, name } : current));
       else {
         const nextId = action === "delete" ? "" : result.id;
         selectedId.current = nextId;
         setPanelId(nextId);
         setNumericIssues({});
+        setConflict(null);
         setError("");
         setState(null);
         setDirty(false);
@@ -1309,78 +1718,314 @@ export function OnlineFrameEditor() {
     }
   }
 
-  async function save(publish: boolean, activate = true) {
-    if (!state || !panelId || (publish && !deviceId) || operation.current) return;
+  function validateDraftForPersistence():
+    | { ok: true; data: OnlineDashboard }
+    | { ok: false; message: string } {
     if (Object.keys(numericIssues).length) {
-      setError(
-        `Corrija os campos numéricos: ${Object.keys(numericIssues)
+      return {
+        ok: false,
+        message: `Corrija os campos numéricos: ${Object.keys(numericIssues)
           .map((id) => id.replaceAll(".", " "))
           .join(", ")}.`,
-      );
-      return;
+      };
     }
     const parsed = onlineDashboardSchema.safeParse(config);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      setError(
-        `Confira as configurações antes de salvar: ${issue.path.join(" → ")} — ${issue.message}.`,
-      );
+      return {
+        ok: false,
+        message: `Confira as configurações antes de salvar: ${issue.path.join(" → ")} — ${issue.message}.`,
+      };
+    }
+    return { ok: true, data: parsed.data };
+  }
+
+  async function reloadCurrentPanel() {
+    if (!panelId || operation.current || loading || signingOutRef.current) return;
+    if (
+      dirty &&
+      !window.confirm(
+        "Há alterações não salvas que serão descartadas ao recarregar a versão mais recente do servidor. Deseja descartar e recarregar?",
+      )
+    ) {
       return;
     }
+    const targetPanelId = panelId;
+    const seq = ++panelStateSeqRef.current;
     operation.current = true;
-    setBusy(publish ? "Publicando…" : "Salvando…");
+    setBusy("Recarregando painel…");
     setError("");
-    setNotice("");
     try {
-      let revision = state.draftRevision;
-      const savedConfig = parsed.data;
-      if (dirty || revision === 0) {
-        const result = await api("/api/panels", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: panelId, config: savedConfig, expectedRevision: revision }),
-        });
-        revision = result.draftRevision;
-        setState((current) =>
-          current?.id === panelId
-            ? { ...current, draftRevision: revision, config: savedConfig }
-            : current,
-        );
-        setDirty(false);
-      }
-      if (publish) {
-        await api("/api/panels/publish", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ panelId, deviceId, expectedRevision: revision, activate }),
-        });
-        await refreshDevices();
-        setAccess(await refreshAccess(deviceId));
-        setAccessDevice(deviceId);
-      }
-      setState((current) =>
-        current?.id === panelId
-          ? { ...current, config: savedConfig, draftRevision: revision }
-          : current,
-      );
+      const latest: PanelState = await api(`/api/panels?id=${encodeURIComponent(targetPanelId)}`);
+      if (selectedId.current !== targetPanelId) return;
+      panelStateSeqRef.current = Math.max(panelStateSeqRef.current, seq + 1);
+      setState(latest);
+      setConfig(latest.config);
       setDirty(false);
-      setNotice(
-        publish
-          ? activate
-            ? "Publicado. Aguardando confirmação de aplicação pelo dispositivo."
-            : "Publicação disponibilizada para este dispositivo, sem alterar o painel exibido."
-          : "Rascunho salvo; o dispositivo não foi alterado.",
-      );
+      setNumericIssues({});
+      setConflict(null);
+      setPublishDialog((current) => ({ ...current, error: "" }));
+      setNotice(`Painel recarregado na revisão r${latest.draftRevision}.`);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Falha ao salvar.");
+      setError(failure instanceof Error ? failure.message : "Falha ao recarregar o painel.");
     } finally {
       operation.current = false;
       setBusy("");
     }
   }
 
+  async function saveDraft() {
+    if (!state || !panelId || operation.current || signingOutRef.current) return;
+    const targetPanelId = panelId;
+    if (!dirty && state.draftRevision > 0 && conflictRef.current?.panelId === targetPanelId) {
+      setError(conflictRef.current.message);
+      return;
+    }
+    const validation = validateDraftForPersistence();
+    if (!validation.ok) {
+      setError(validation.message);
+      return;
+    }
+    const savedConfig = validation.data;
+    const expectedRevision = state.draftRevision;
+    operation.current = true;
+    setBusy("Salvando rascunho…");
+    setError("");
+    setNotice("");
+    try {
+      let revision = expectedRevision;
+      if (dirty || revision === 0) {
+        const result = await api("/api/panels", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: targetPanelId, config: savedConfig, expectedRevision }),
+        });
+        revision = result.draftRevision;
+      }
+      if (selectedId.current !== targetPanelId) return;
+      panelStateSeqRef.current += 1;
+      setState((current) =>
+        current?.id === targetPanelId
+          ? { ...current, config: savedConfig, draftRevision: revision }
+          : current,
+      );
+      setDirty(false);
+      setConflict((current) => (current?.panelId === targetPanelId ? null : current));
+      setNotice("Rascunho salvo; o dispositivo não foi alterado.");
+    } catch (failure) {
+      if (selectedId.current !== targetPanelId) return;
+      if (isConflictError(failure)) {
+        const conflictMsg =
+          "Este painel foi alterado em outra sessão ou dispositivo (conflito de revisão). Suas alterações locais foram preservadas; recarregue o painel para ver a versão mais recente antes de salvar novamente.";
+        setConflict({ panelId: targetPanelId, message: conflictMsg });
+        setError(conflictMsg);
+      } else {
+        setError(failure instanceof Error ? failure.message : "Falha ao salvar rascunho.");
+      }
+    } finally {
+      operation.current = false;
+      setBusy("");
+    }
+  }
+
+  async function confirmPublish(target: PublishTarget, mode: PublishMode) {
+    if (!state || !target.deviceId || operation.current || signingOutRef.current) return;
+    if (
+      target.panelId !== selectedId.current ||
+      target.deviceId !== selectedDeviceIdRef.current ||
+      target.draftRevision !== state.draftRevision
+    ) {
+      const mismatch =
+        "O painel, sua revisão ou o dispositivo selecionado mudou antes da confirmação. Feche e abra Publicar… novamente.";
+      setPublishDialog((current) => ({ ...current, error: mismatch }));
+      setError(mismatch);
+      return;
+    }
+    const validation = validateDraftForPersistence();
+    if (!validation.ok) {
+      setPublishDialog((current) => ({ ...current, error: validation.message }));
+      setError(validation.message);
+      return;
+    }
+
+    const activate = mode === "activate";
+    const targetPanelId = target.panelId;
+    const targetDeviceId = target.deviceId;
+    const targetDeviceName = target.deviceName ?? "dispositivo";
+    const savedConfig = validation.data;
+
+    operation.current = true;
+    setBusy(activate ? "Enviando para exibição…" : "Disponibilizando no dispositivo…");
+    setError("");
+    setNotice("");
+    setPublishDialog((current) => ({ ...current, error: "" }));
+
+    let revision = target.draftRevision;
+    let savedInStep = false;
+
+    try {
+      if (dirty || revision === 0) {
+        const result = await api("/api/panels", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: targetPanelId,
+            config: savedConfig,
+            expectedRevision: revision,
+          }),
+        });
+        revision = result.draftRevision;
+        savedInStep = true;
+        if (selectedId.current !== targetPanelId) return;
+        panelStateSeqRef.current += 1;
+        setState((current) =>
+          current?.id === targetPanelId
+            ? { ...current, draftRevision: revision, config: savedConfig }
+            : current,
+        );
+        setPublishDialog((current) =>
+          current.target && current.target.panelId === targetPanelId
+            ? { ...current, target: { ...current.target, draftRevision: revision } }
+            : current,
+        );
+        setDirty(false);
+        setConflict((current) => (current?.panelId === targetPanelId ? null : current));
+      }
+
+      const publishResult = await api("/api/panels/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          panelId: targetPanelId,
+          deviceId: targetDeviceId,
+          expectedRevision: revision,
+          activate,
+        }),
+      });
+
+      if (selectedId.current !== targetPanelId) return;
+
+      if (selectedDeviceIdRef.current === targetDeviceId) {
+        accessRequestSeq.current += 1;
+        legacyFallbackSeqRef.current += 1;
+      }
+
+      const publishedVersionId =
+        typeof publishResult?.revision === "string" && publishResult.revision.startsWith("online:")
+          ? publishResult.revision.slice("online:".length)
+          : null;
+
+      if (activate && publishedVersionId) {
+        devicesRequestSeq.current += 1;
+        setDevices((current) =>
+          current.map((item) =>
+            item.id === targetDeviceId
+              ? {
+                  ...item,
+                  activePanelId: targetPanelId,
+                  activePanelVersionId: publishedVersionId,
+                }
+              : item,
+          ),
+        );
+      }
+      if (
+        publishedVersionId &&
+        selectedDeviceIdRef.current === targetDeviceId &&
+        accessDeviceRef.current === targetDeviceId
+      ) {
+        setAccess((current) => {
+          const rest = current.filter((entry) => entry.panelId !== targetPanelId);
+          return [...rest, { panelId: targetPanelId, versionId: publishedVersionId }];
+        });
+        setAccessError("");
+      }
+
+      setConflict((current) => (current?.panelId === targetPanelId ? null : current));
+      pendingFocusAfterPublishRef.current = publishReturnFocusRef.current;
+      setPublishDialog({ open: false, target: null, mode: null, error: "" });
+      setNotice(
+        activate
+          ? `Publicação enviada para exibição em "${targetDeviceName}". Aguardando confirmação de aplicação pelo dispositivo.`
+          : `Publicação disponibilizada em "${targetDeviceName}", sem alterar o painel exibido.`,
+      );
+
+      const devicesRes = await refreshDevices();
+      if (selectedDeviceIdRef.current === targetDeviceId) {
+        await syncDeviceAccess(targetDeviceId);
+        const refreshedTarget = devicesRes.ok
+          ? devicesRes.devices.find((item) => item.id === targetDeviceId)
+          : undefined;
+        if (refreshedTarget && !refreshedTarget.activePanelId) {
+          await syncLegacyFallback(targetDeviceId);
+        }
+      }
+    } catch (failure) {
+      if (selectedId.current !== targetPanelId) return;
+      if (savedInStep) {
+        const partial = formatPartialPublishFailure({
+          savedRevision: revision,
+          deviceName: targetDeviceName,
+          failure,
+        });
+        if (partial.isConflict) {
+          setConflict({ panelId: targetPanelId, message: partial.message });
+          setPublishDialog((current) => ({ ...current, error: "" }));
+        } else {
+          setPublishDialog((current) => ({ ...current, error: partial.message }));
+        }
+        setError(partial.message);
+        if (partial.uncertainOutcome) {
+          await refreshDevices();
+        }
+      } else if (isConflictError(failure)) {
+        const conflictMsg =
+          "Este painel foi alterado em outra sessão ou dispositivo antes da publicação (conflito de revisão). Suas alterações locais foram preservadas; recarregue o painel antes de publicar novamente.";
+        setConflict({ panelId: targetPanelId, message: conflictMsg });
+        setPublishDialog((current) => ({ ...current, error: "" }));
+        setError(conflictMsg);
+      } else {
+        const msg =
+          failure instanceof EditorApiError && failure.status >= 400 && failure.status < 500
+            ? failure.message
+            : `Falha sem confirmação ao publicar para "${targetDeviceName}": ${failure instanceof Error ? failure.message : "erro de rede"}. Atualize os dispositivos para conferir o estado antes de tentar novamente.`;
+        setPublishDialog((current) => ({ ...current, error: msg }));
+        setError(msg);
+        if (!(failure instanceof EditorApiError && failure.status >= 400 && failure.status < 500)) {
+          await refreshDevices();
+        }
+      }
+    } finally {
+      operation.current = false;
+      setBusy("");
+    }
+  }
+
+  function openPublishDialog(
+    initialMode: PublishMode | null = null,
+    triggerElement: HTMLElement | null = null,
+  ) {
+    if (!state || operation.current || loading || signingOutRef.current) return;
+    publishReturnFocusRef.current = triggerElement ?? publishButtonRef.current;
+    postCloseFocusRef.current = null;
+    const currentDevice = devices.find((device) => device.id === deviceId) ?? null;
+    setPublishDialog({
+      open: true,
+      target: {
+        panelId: state.id,
+        panelName: editingPanelLabel ?? state.name,
+        draftRevision: state.draftRevision,
+        deviceId: currentDevice ? currentDevice.id : null,
+        deviceName: currentDevice ? formatDeviceDisplayName(currentDevice, devices) : null,
+      },
+      mode: initialMode,
+      error: "",
+    });
+  }
+
   async function removeAccess(id: string) {
-    if (operation.current || !deviceId) return;
+    if (operation.current || !deviceId || signingOutRef.current) return;
+    const targetDeviceId = deviceId;
     operation.current = true;
     setBusy("Atualizando permissões…");
     setError("");
@@ -1388,10 +2033,10 @@ export function OnlineFrameEditor() {
       await api("/api/devices/panels", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId, panelId: id }),
+        body: JSON.stringify({ deviceId: targetDeviceId, panelId: id }),
       });
-      setAccess(await refreshAccess(deviceId));
-      setNotice("Painel removido das opções deste dispositivo.");
+      await syncDeviceAccess(targetDeviceId);
+      setNotice("Acesso removido das opções deste dispositivo; o painel e exibições ativas não foram alterados.");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Falha ao atualizar permissões.");
     } finally {
@@ -1401,7 +2046,7 @@ export function OnlineFrameEditor() {
   }
 
   async function upload(files: FileList | null) {
-    if (!files || operation.current) return;
+    if (!files || operation.current || signingOutRef.current) return;
     operation.current = true;
     const batch = Array.from(files);
     setPhotoUploadStatus(`Enviando ${batch.length} ${batch.length === 1 ? "foto" : "fotos"}…`);
@@ -1449,7 +2094,7 @@ export function OnlineFrameEditor() {
   }
 
   async function pair() {
-    if (operation.current) return;
+    if (operation.current || signingOutRef.current) return;
     operation.current = true;
     setBusy("Gerando código…");
     try {
@@ -1462,18 +2107,34 @@ export function OnlineFrameEditor() {
     }
   }
 
-  async function revoke(device: Device) {
-    if (operation.current || !window.confirm(`Desvincular ${device.name}?`)) return;
+  async function revoke(device: Device): Promise<{ ok: boolean; error?: string }> {
+    if (operation.current || signingOutRef.current)
+      return { ok: false, error: "Há outra operação em andamento." };
     operation.current = true;
     setBusy("Desvinculando…");
+    setError("");
     try {
-      await api(`/api/devices/${device.id}`, { method: "DELETE" });
+      devicesRequestSeq.current += 1;
+      await api(`/api/devices/${encodeURIComponent(device.id)}`, { method: "DELETE" });
+      devicesRequestSeq.current += 1;
       setDevices((current) => current.filter((item) => item.id !== device.id));
-      if (device.id === deviceId) {
+      if (selectedDeviceIdRef.current === device.id) {
+        selectedDeviceIdRef.current = "";
+        accessRequestSeq.current += 1;
+        legacyFallbackSeqRef.current += 1;
+        accessDeviceRef.current = "";
         setDeviceId("");
+        setAccess([]);
+        setAccessDevice("");
+        setAccessError("");
+        setLegacyFallback(null);
       }
+      setNotice(`Dispositivo "${formatDeviceDisplayName(device, devices)}" desvinculado; credenciais revogadas.`);
+      return { ok: true };
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Falha ao desvincular.");
+      const message = failure instanceof Error ? failure.message : "Falha ao desvincular.";
+      setError(message);
+      return { ok: false, error: message };
     } finally {
       operation.current = false;
       setBusy("");
@@ -1515,7 +2176,7 @@ export function OnlineFrameEditor() {
         : "Ordem atualizada.",
     );
   };
-  const controlsDisabled = !!busy || loading || !state;
+  const controlsDisabled = !!effectiveBusy || loading || !state;
   const widgetChecked = (key: DashboardWidgetKey) =>
     config.pages && config.pages.length > 0
       ? resolvedPage.enabledWidgets.includes(key)
@@ -1529,16 +2190,60 @@ export function OnlineFrameEditor() {
       resolvedPage.enabledWidgets.includes(key),
     );
   const selectedPhotoIds = config.widgets.photos.photoIds;
+  const readyPhotoIdSet = useMemo(() => new Set(readyPhotos.map((photo) => photo.id)), [readyPhotos]);
+  const unreadyPhotoCount = useMemo(
+    () => selectedPhotoIds.filter((id) => !readyPhotoIdSet.has(id)).length,
+    [selectedPhotoIds, readyPhotoIdSet],
+  );
+  const draftStatus = deriveDraftStatus({
+    hasPanel: Boolean(state),
+    dirty,
+    draftRevision: state?.draftRevision ?? null,
+  });
+  const activeConflictMessage =
+    conflict && conflict.panelId === state?.id ? conflict.message : null;
+  const resolvedLegacyFallback: LegacyFallbackStatus = !selectedDevice
+    ? { status: "idle", publishedRevision: null }
+    : selectedDevice.activePanelId
+      ? { status: "idle", publishedRevision: null }
+      : legacyFallback && legacyFallback.deviceId === selectedDevice.id
+        ? { status: legacyFallback.status, publishedRevision: legacyFallback.publishedRevision }
+        : { status: "loading", publishedRevision: null };
+  const publicationState = derivePublicationState({
+    editingPanelId: state?.id ?? null,
+    editingPanelName: editingPanelLabel ?? state?.name ?? null,
+    dirty,
+    selectedDevice,
+    activePanelName: activePanelLabel ?? activePanel?.name ?? null,
+    availablePanels:
+      selectedDevice && accessDevice === selectedDevice.id && !accessError ? access : [],
+    accessLoaded: Boolean(selectedDevice && accessDevice === selectedDevice.id && !accessError),
+    legacyFallback: resolvedLegacyFallback,
+  });
+  const validationForDialog = useMemo(() => {
+    if (!state) return null;
+    if (Object.keys(numericIssues).length) {
+      return `Corrija os campos numéricos: ${Object.keys(numericIssues)
+        .map((id) => id.replaceAll(".", " "))
+        .join(", ")}.`;
+    }
+    const parsed = onlineDashboardSchema.safeParse(config);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return `Confira as configurações antes de publicar: ${issue.path.join(" → ")} — ${issue.message}.`;
+    }
+    return null;
+  }, [state, numericIssues, config]);
   const numericError = Object.keys(numericIssues).length
     ? `Corrija os campos numéricos: ${Object.keys(numericIssues)
         .map((id) => id.replaceAll(".", " "))
         .join(", ")}.`
     : "";
-  const feedbackError =
-    numericError ||
-    (error.startsWith("Corrija o campo ") || error.startsWith("Corrija os campos numéricos:")
+  const operationError =
+    error.startsWith("Corrija o campo ") || error.startsWith("Corrija os campos numéricos:")
       ? ""
-      : error);
+      : error;
+  const feedbackError = [operationError, numericError].filter(Boolean).join(" ");
 
   return (
     <main className="online-editor">
@@ -1550,23 +2255,21 @@ export function OnlineFrameEditor() {
         </div>
         <div className="online-editor-heading-actions">
           <span className={`online-draft-status${dirty ? " is-dirty" : ""}`}>
-            {dirty
-              ? "Alterações não salvas"
-              : state
-                ? `Rascunho r${state.draftRevision} salvo`
-                : "Selecione ou crie um painel"}
+            {draftStatus.label}
+            {draftStatus.detail ? ` · ${draftStatus.detail}` : ""}
           </span>
           <label>
             Dispositivo
             <select
-              disabled={!!busy || loading}
+              ref={deviceSelectRef}
+              disabled={!!effectiveBusy || loading}
               value={deviceId}
               onChange={(event) => chooseDevice(event.target.value)}
             >
               <option value="">Selecione um dispositivo</option>
               {devices.map((device) => (
                 <option key={device.id} value={device.id}>
-                  {device.name}
+                  {formatDeviceDisplayName(device, devices)}
                 </option>
               ))}
             </select>
@@ -1577,21 +2280,21 @@ export function OnlineFrameEditor() {
         <label>
           Painel em edição
           <select
-            disabled={!!busy || loading}
+            disabled={!!effectiveBusy || loading}
             value={panelId}
             onChange={(event) => choosePanel(event.target.value)}
           >
             <option value="">Selecione um painel</option>
             {panels.map((panel) => (
               <option key={panel.id} value={panel.id}>
-                {panel.name}
+                {formatPanelDisplayName(panel, panels)}
               </option>
             ))}
           </select>
         </label>
         <button
           className="online-primary"
-          disabled={!!busy || loading}
+          disabled={!!effectiveBusy || loading}
           onClick={() => void managePanel("create")}
         >
           Criar painel
@@ -1600,134 +2303,92 @@ export function OnlineFrameEditor() {
           <summary>Ações do painel</summary>
           <div>
             <button
-              disabled={!!busy || loading || !state}
+              disabled={!!effectiveBusy || loading || !state}
               onClick={() => void managePanel("duplicate")}
             >
               Duplicar
             </button>
             <button
-              disabled={!!busy || loading || !state}
+              disabled={!!effectiveBusy || loading || !state}
               onClick={() => void managePanel("rename")}
             >
               Renomear
             </button>
             <button
               className="online-danger"
-              disabled={!!busy || loading || !state}
+              disabled={!!effectiveBusy || loading || !state}
               onClick={() => void managePanel("delete")}
             >
               Excluir
             </button>
+            {dirty && state && (
+              <small className="online-secondary-hint">
+                Duplicar usa a última versão salva no servidor.
+              </small>
+            )}
           </div>
         </details>
       </div>
-      <details className="online-secondary-area">
-        <summary>Dispositivos, permissões e pareamento</summary>
-        {selectedDevice && (
-          <p className="online-device-status">
-            Dispositivo: <strong>{selectedDevice.name}</strong> · Painel enviado:{" "}
-            <strong>{activePanel?.name ?? "Nenhum"}</strong>
-          </p>
-        )}
-        {selectedDevice && (
-          <section className="online-callout" aria-label="Painéis disponíveis no dispositivo">
-            <h2>Painéis disponíveis neste dispositivo</h2>
-            <p>
-              Somente publicações disponibilizadas aqui podem ser escolhidas no tablet. Rascunhos
-              não ficam acessíveis.
-            </p>
-            {accessDevice !== deviceId ? (
-              <p>Carregando permissões…</p>
-            ) : (
-              <ul>
-                {panels.map((panel) => {
-                  const allowed = access.some((item) => item.panelId === panel.id);
-                  return (
-                    <li key={panel.id}>
-                      {panel.name} — {allowed ? "disponível" : "não disponível"}
-                      {selectedDevice.activePanelId === panel.id
-                        ? " (painel enviado)"
-                        : allowed && (
-                            <button disabled={!!busy} onClick={() => void removeAccess(panel.id)}>
-                              Remover acesso
-                            </button>
-                          )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <p>
-              Selecione um painel em edição e disponibilize a versão atual sem trocar a tela do
-              tablet.
-            </p>
-            <button
-              disabled={!!busy || loading || !state || accessDevice !== deviceId}
-              onClick={() => void save(true, false)}
-            >
-              Disponibilizar painel em edição
-            </button>
-          </section>
-        )}
-        {listStatus.devices === "loading" && (
-          <p className="online-empty">Carregando dispositivos…</p>
-        )}
-        {listStatus.devices === "error" && (
-          <div className="online-error">
-            Não foi possível carregar dispositivos.{" "}
-            <button
-              onClick={() => {
-                setError("");
-                setListStatus((s) => ({ ...s, devices: "loading" }));
-                void refreshDevices().catch((failure) => {
-                  setError(failure.message);
-                  setListStatus((s) => ({ ...s, devices: "error" }));
-                });
-              }}
-            >
-              Tentar novamente
-            </button>
-          </div>
-        )}
-        {listStatus.devices === "ready" && !devices.length && (
-          <div className="online-callout">
-            Nenhum dispositivo vinculado. Você já pode criar painéis; vincule um dispositivo para
-            exibi-los.
-            <button disabled={!!busy} onClick={() => void pair()}>
-              Vincular dispositivo
-            </button>
-          </div>
-        )}
-        {pairing && (
-          <div className="online-callout">
-            Código <strong>{pairing.code}</strong> · expira{" "}
-            {new Date(pairing.expiresAt).toLocaleTimeString("pt-BR")} · Servidor:{" "}
-            <strong>{pairing.serverURL}</strong>
-            <button disabled={!!busy} onClick={() => setPairing(null)}>
-              Fechar
-            </button>
-          </div>
-        )}
-        {devices.length > 0 && (
-          <div className="online-device-actions">
-            <button disabled={!!busy} onClick={() => void pair()}>
-              Gerar código para novo dispositivo
-            </button>
-            {deviceId && (
-              <button
-                disabled={!!busy}
-                className="online-danger"
-                onClick={() => {
-                  const device = devices.find((item) => item.id === deviceId);
-                  if (device) void revoke(device);
-                }}
-              >
-                Desvincular selecionado
-              </button>
-            )}
-          </div>
-        )}
-      </details>
+      <DeviceManager
+        open={devicesAreaOpen}
+        onToggleOpen={setDevicesAreaOpen}
+        devices={devices}
+        devicesStatus={listStatus.devices}
+        selectedDevice={selectedDevice}
+        panels={panels}
+        editingPanel={state ? { id: state.id, name: editingPanelLabel ?? state.name } : null}
+        access={access}
+        accessDeviceId={accessDevice}
+        accessError={accessError}
+        legacyFallback={resolvedLegacyFallback}
+        pairing={pairing}
+        busy={effectiveBusy}
+        loadingPanel={loading}
+        pairingButtonRef={pairingButtonRef}
+        onRetryDevices={() => {
+          setError("");
+          setListStatus((s) => ({ ...s, devices: "loading" }));
+          void refreshDevices().then((res) => {
+            if (!res.ok && !res.stale) {
+              setError(res.error);
+              setListStatus((s) => ({ ...s, devices: "error" }));
+            }
+          });
+        }}
+        onRefreshDevices={() => {
+          setError("");
+          const currentDevice = selectedDeviceIdRef.current;
+          setLegacyFallback((current) =>
+            current && current.deviceId === currentDevice && current.status === "error"
+              ? null
+              : current,
+          );
+          void refreshDevices().then((res) => {
+            if (!res.ok) {
+              if (!res.stale) setError(res.error);
+              return;
+            }
+            if (!currentDevice || selectedDeviceIdRef.current !== currentDevice) {
+              return;
+            }
+            const updatedDevice = res.devices.find((item) => item.id === currentDevice);
+            if (!updatedDevice) return;
+            void syncDeviceAccess(currentDevice);
+            if (!updatedDevice.activePanelId) {
+              void syncLegacyFallback(currentDevice);
+            }
+          });
+        }}
+        onRetryAccess={(id) => {
+          setAccessError("");
+          void syncDeviceAccess(id);
+        }}
+        onOpenPublishAvailable={(trigger) => openPublishDialog("available", trigger ?? null)}
+        onRemoveAccess={(id) => void removeAccess(id)}
+        onGeneratePairing={() => void pair()}
+        onDismissPairing={() => setPairing(null)}
+        onRevokeDevice={revoke}
+      />
       <EditorFeedback error={feedbackError} notice={notice} />
       {listStatus.panels === "loading" && <p className="online-empty">Carregando painéis…</p>}
       {listStatus.panels === "error" && (
@@ -1759,7 +2420,21 @@ export function OnlineFrameEditor() {
           O painel não pôde ser carregado. Verifique a conexão e selecione novamente para tentar.
         </p>
       ) : (
-        <div className="online-grid">
+        <>
+          <EditorActionBar
+            panelName={editingPanelLabel ?? state.name}
+            deviceName={selectedDeviceLabel}
+            draftStatus={draftStatus}
+            publicationState={publicationState}
+            conflictMessage={activeConflictMessage}
+            busy={effectiveBusy}
+            controlsDisabled={controlsDisabled}
+            publishButtonRef={publishButtonRef}
+            onSaveDraft={() => void saveDraft()}
+            onOpenPublish={() => openPublishDialog(null)}
+            onReloadPanel={() => void reloadCurrentPanel()}
+          />
+          <div className="online-grid">
           <div className="mobile-preview-switch" role="group" aria-label="Alternar área do editor">
             <button
               type="button"
@@ -1777,7 +2452,7 @@ export function OnlineFrameEditor() {
             </button>
           </div>
           <section className={`online-controls mobile-pane-${mobilePane}`}>
-            {busy && <p className="online-busy">{busy}</p>}
+            {effectiveBusy && <p className="online-busy">{effectiveBusy}</p>}
             <EditorSectionNavigation value={editorSection} onChange={setEditorSection} />
             <div className="online-editor-section" hidden={editorSection !== "photos"}>
               <fieldset disabled={controlsDisabled}>
@@ -1914,7 +2589,7 @@ export function OnlineFrameEditor() {
                 <div className="online-callout">
                   O processamento continua pendente após 90 segundos.
                   <button
-                    disabled={!!busy}
+                    disabled={!!effectiveBusy}
                     onClick={() => {
                       setPhotoPollExpired(false);
                       setPhotoPollRetry((retry) => retry + 1);
@@ -3072,22 +3747,6 @@ export function OnlineFrameEditor() {
                 onError={setError}
               />
             </div>
-            <div className="online-save">
-              <button disabled={controlsDisabled} onClick={() => void save(false)}>
-                Salvar painel
-              </button>
-              <button
-                disabled={
-                  controlsDisabled ||
-                  !deviceId ||
-                  !selectedPhotoIds.every((id) => readyPhotos.some((photo) => photo.id === id))
-                }
-                onClick={() => void save(true)}
-              >
-                Exibir neste dispositivo
-              </button>
-              {dirty && <small>Alterações não salvas</small>}
-            </div>
           </section>
           <section className={`online-preview mobile-pane-${mobilePane}`}>
             <header>
@@ -3101,24 +3760,63 @@ export function OnlineFrameEditor() {
               title="Prévia do rascunho do painel"
               className={`draft-preview ${config.orientation}`}
             />
-            <p>
-              Rascunho r{state.draftRevision} · Enviado ao dispositivo {publishedRevision ?? "—"} ·
-              Aplicado {selectedDevice?.appliedRevision ?? "—"}
+            <p className="online-preview-status">
+              <strong>{draftStatus.label}</strong> · {publicationState.label}
             </p>
             <small>A prévia é aproximada e pode não reproduzir exatamente todos os tablets.</small>
-            {selectedDevice?.lastSeenAt && (
-              <small>
-                Visto por último: {new Date(selectedDevice.lastSeenAt).toLocaleString("pt-BR")}
+            {selectedDevice && (
+              <small className="online-preview-meta">
+                {formatLastCommunication(selectedDevice.lastSeenAt)}
               </small>
             )}
-            {publishedRevision && selectedDevice?.appliedRevision !== publishedRevision && (
-              <p>Publicação enviada; aguardando confirmação do dispositivo conectado.</p>
-            )}
-            {publishedRevision && selectedDevice?.appliedRevision === publishedRevision && (
-              <p>O dispositivo confirmou a versão enviada.</p>
-            )}
+            <details className="online-status-details">
+              <summary>Detalhes técnicos de revisão</summary>
+              <p>
+                Rascunho <code>r{state.draftRevision}</code> · Enviado ao dispositivo{" "}
+                <code>{publicationState.sentRevision ?? "—"}</code> · Aplicado{" "}
+                <code>{publicationState.appliedRevision ?? "—"}</code>
+              </p>
+            </details>
           </section>
-        </div>
+          </div>
+          <PublishDialog
+            open={publishDialog.open}
+            target={publishDialog.target}
+            mode={publishDialog.mode}
+            onModeChange={(nextMode) =>
+              setPublishDialog((current) => ({ ...current, mode: nextMode }))
+            }
+            dirty={dirty}
+            draftRevision={state.draftRevision}
+            hasDevices={devices.length > 0}
+            unreadyPhotoCount={unreadyPhotoCount}
+            validationError={validationForDialog}
+            conflictMessage={activeConflictMessage}
+            busy={effectiveBusy}
+            dialogError={publishDialog.error}
+            returnFocusElementRef={publishReturnFocusRef}
+            postCloseFocusRef={postCloseFocusRef}
+            onClose={() =>
+              setPublishDialog((current) => ({ ...current, open: false, error: "" }))
+            }
+            onConfirm={(target, mode) => void confirmPublish(target, mode)}
+            onGoToPairing={() => {
+              setDevicesAreaOpen(true);
+              postCloseFocusRef.current = pairingButtonRef.current;
+              setPublishDialog((current) => ({ ...current, open: false, error: "" }));
+              requestAnimationFrame(() => {
+                pairingButtonRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+              });
+            }}
+            onFocusDeviceSelect={() => {
+              postCloseFocusRef.current = deviceSelectRef.current;
+              setPublishDialog((current) => ({ ...current, open: false, error: "" }));
+              requestAnimationFrame(() => {
+                deviceSelectRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+              });
+            }}
+          />
+        </>
       )}
     </main>
   );

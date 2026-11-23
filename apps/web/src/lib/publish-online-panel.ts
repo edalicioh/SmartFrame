@@ -77,6 +77,16 @@ export async function publishOnlinePanel(db: PrismaClient, input: Publication) {
         400,
         "Todas as fotos selecionadas devem estar prontas, válidas e pertencer à residência.",
       );
+    const activate =
+      "legacy" in input
+        ? device.activePanelId === null || device.activePanelId === panel.id
+        : input.activate;
+    // Preserve the legacy fallback target when publishing a legacy panel to a
+    // different device or when only making it available on an unactivated device.
+    const isLegacyOwnerDevice = panel.key === `online:${device.id}`;
+    const keepLegacyPublishedPointer =
+      Boolean(panel.key?.startsWith("online:")) &&
+      (!isLegacyOwnerDevice || (!activate && device.activePanelId === null));
     const version = await tx.layoutVersion.create({
       data: { layoutId: panel.id, config: configWithBindingRevisions },
     });
@@ -86,7 +96,9 @@ export async function publishOnlinePanel(db: PrismaClient, input: Publication) {
         householdId: input.householdId,
         draftRevision: input.expectedRevision,
       },
-      data: { publishedVersionId: version.id },
+      data: {
+        publishedVersionId: keepLegacyPublishedPointer ? panel.publishedVersionId : version.id,
+      },
     });
     if (!updated.count)
       throw new FrameError(409, "O painel foi alterado. Atualize e tente novamente.");
@@ -95,11 +107,6 @@ export async function publishOnlinePanel(db: PrismaClient, input: Publication) {
       create: { deviceId: device.id, panelId: panel.id, versionId: version.id },
       update: { versionId: version.id },
     });
-    // Compatibility publishing must not replace a different panel chosen in the new editor.
-    const activate =
-      "legacy" in input
-        ? device.activePanelId === null || device.activePanelId === panel.id
-        : input.activate;
     if (activate)
       await tx.device.update({
         where: { id: device.id },
