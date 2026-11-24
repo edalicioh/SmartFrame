@@ -24,7 +24,7 @@ export function isLocalPanelRequest(headers: Pick<Headers, "get">, baseURL: stri
 export function localPanelRedirect(
   headers: Pick<Headers, "get">,
   baseURL: string,
-  pathname: "/" | "/layouts" = "/",
+  pathname = "/",
 ) {
   try {
     const origin = new URL(baseURL);
@@ -39,7 +39,12 @@ export function localPanelRedirect(
     if (!host || host === origin.host.toLowerCase()) return null;
     const aliases = loopbacks.map((name) => name + (origin.port ? ":" + origin.port : ""));
     if (!aliases.includes(host)) return null;
-    return new URL(pathname, origin.origin).href;
+    const candidatePath =
+      pathname.startsWith("/") && !pathname.startsWith("//") && !pathname.startsWith("/\\")
+        ? pathname
+        : "/";
+    const resolved = new URL(candidatePath, origin.origin);
+    return resolved.origin === origin.origin ? resolved.href : origin.origin + "/";
   } catch {
     return null;
   }

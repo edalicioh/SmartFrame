@@ -7,7 +7,7 @@ Planejar a melhoria da interface web, com prioridade para o editor de painéis e
 
 - Executor de todas as fases: **Luna-6**.
 - Revisor de todas as fases: **Sol-6.1**.
-- Situação atual: **fases 01 e 02 APROVADAS após correções e revisão; fase 03 aceita pelo proprietário para entrega (escopo web concluído; limitação residual de fragmento registrada; validação física em tablet Android/APK pendente)**.
+- Situação atual: **fases 01 e 02 APROVADAS após correções e revisão; fase 03 aceita pelo proprietário para entrega (escopo web concluído; limitação residual de fragmento registrada); fase 04 APROVADA no Gate 1 (Codex `gpt-6.2-sol`, Rodada 6, `VERDICT: APPROVED`), com validação física em tablet Android/APK e leitor de tela pendentes; fase 05 planejada**.
 - Estes arquivos são instruções de execução, não evidências de entrega.
 - Os nomes dos modelos são os informados pelo usuário, não IDs de provedores
   validados. Antes de executar em uma ferramenta, resolver o modelo disponível;
@@ -20,7 +20,7 @@ Planejar a melhoria da interface web, com prioridade para o editor de painéis e
 | [01](01-organizacao-e-base-visual.md)                 | Organização do editor e base visual               | Nenhuma          | Luna-6   | Sol-6.1 | Aprovada |
 | [02](02-fotos-widgets-e-previa.md)                    | Fotos, widgets, aparência e prévia                | Fase 01 aprovada | Luna-6   | Sol-6.1 | Aprovada |
 | [03](03-publicacao-e-dispositivos.md)                 | Publicação segura e dispositivos                  | Fase 02 aprovada | Luna-6   | Sol-6.1 | Aceita (web; físico pendente) |
-| [04](04-visao-geral-util.md)                          | Visão geral baseada em dados reais                | Fase 03 aprovada | Luna-6   | Sol-6.1 | Planejada |
+| [04](04-visao-geral-util.md)                          | Visão geral baseada em dados reais                | Fase 03 aprovada | Luna-6   | Sol-6.1 | Aprovada (Gate 1 APPROVED; físico e leitor de tela pendentes) |
 | [05](05-responsividade-acessibilidade-e-validacao.md) | Acabamento responsivo, acessibilidade e regressão | Fase 04 aprovada | Luna-6   | Sol-6.1 | Planejada |
 
 Acessibilidade, responsividade e testes começam na fase 01. A fase 05 consolida e
@@ -35,8 +35,11 @@ audita o resultado; não autoriza adiar problemas conhecidos das fases anteriore
   regressiva, aniversários, tarefas e pomodoro. Eles devem continuar disponíveis.
 - `apps/web/src/app/globals.css` define a identidade verde da aplicação; o editor
   online em `editor.css` usa vários valores azuis independentes.
-- A página inicial tem contagens reais, mas seu bloco de dispositivos exibe conteúdo
-  fixo de apresentação mesmo quando existem dispositivos cadastrados.
+- No planejamento, a página inicial tinha contagens reais, mas o bloco de dispositivos
+  exibia conteúdo fixo de apresentação mesmo quando existiam dispositivos cadastrados.
+  A fase 04 substituiu esse bloco por um ponto de entrada operacional alimentado pelos
+  dados reais da família (dispositivos, painéis e fotos); o acabamento responsivo e a
+  auditoria de acessibilidade permanecem no escopo planejado da fase 05.
 - A publicação usa `expectedRevision` e separa ativação de disponibilização.
 - Os testes atuais usam Vitest em Node e testes próprios do player. Não foi
   identificada infraestrutura Playwright nem uma suíte DOM de componentes.

@@ -30,13 +30,13 @@ Acionados pelo `smartframe-orchestrator` (ou `smartframe`) via `invoke_subagent`
 
 Acionados pelo `smartframe-orchestrator` após a validação local (`smartframe-entrega-pipeline`):
 
-- `smartframe-codex-review`: executa code review externo via Codex CLI (`gpt-6.2-sol`) em loop de no máximo 3 rodadas (parada obrigatória até segunda ordem caso não aprove após a 3ª rodada).
+- `smartframe-codex-review`: executa code review externo via Codex CLI (`gpt-6.2-sol`) em loop contínuo até aprovação (parando apenas em bloqueio técnico externo ou decisão com o proprietário).
 - `smartframe-docs-changelog`: atualiza documentação (`docs/`, `README.md`) e `CHANGELOG.md` via OpenCode CLI com DeepSeek (`opencode/deepseek-v4.1-flash-free`, fallback `nvidia/deepseek-ai/deepseek-v4.1-flash`) somente após aprovação do Codex.
 
 ## Fluxo de entrega orquestrado
 
 1. **Implementação + Validação local** (`smartframe-*-dev` / `smartframe` + `smartframe-validacao` + revisores internos).
-2. **Gate 1 — Loop Codex (`gpt-6.2-sol`)** via `smartframe-codex-review` (máx. 3 rodadas; se falhar na 3ª, **para tudo até segunda ordem**).
+2. **Gate 1 — Loop Codex (`gpt-6.2-sol`)** via `smartframe-codex-review` (corrigindo, revalidando e resubmetendo até obter `APPROVED`).
 3. **Gate 2 — Documentação & `CHANGELOG.md`** via `smartframe-docs-changelog` (OpenCode DeepSeek, somente após aprovação do Gate 1).
 4. **Gate 3 — Commit & Monitoramento GitHub Actions** via `smartframe-release-ops` (`git push` para `main` requer autorização explícita conforme `AGENTS.md`, seguido de `gh run watch` / `gh run view` em `.github/workflows/deploy.yml`).
 
@@ -52,7 +52,7 @@ Acionados pelo `smartframe-orchestrator` após a validação local (`smartframe-
 Descobertas automaticamente em `.agents/skills/*/SKILL.md` (execute `/skills reload` na CLI se editar durante uma sessão aberta):
 
 - `smartframe-orquestracao`: regras de escolha entre `invoke_subagent`, `swarm` e `run_workflow` + particionamento seguro de arquivos no SmartFrame.
-- `smartframe-entrega-pipeline`: gates de entrega (loop Codex `gpt-6.2-sol` máx. 3x, OpenCode DeepSeek para docs/changelog e commit/monitoramento `gh`).
+- `smartframe-entrega-pipeline`: gates de entrega (loop Codex `gpt-6.2-sol` até `APPROVED`, OpenCode DeepSeek para docs/changelog e commit/monitoramento `gh`).
 - `smartframe-editor`: editor, contratos, publicação e widgets.
 - `smartframe-player-android`: dashboard, Android e conectividade.
 - `smartframe-dados`: SQLite, migrations, worker e preservação de dados.

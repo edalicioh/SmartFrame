@@ -34,6 +34,25 @@ pendentes aparecem explicitamente em **Limitações conhecidas**.
   `apps/web/src/lib/online-editor/publication.ts`.
 - Suítes de testes `tests/online-editor-publication.test.ts` (16 testes) e
   `tests/multiple-panels.test.ts` (10 testes).
+- Visão geral operacional em `/` (`apps/web/src/app/page.tsx`) com métricas enxutas
+  **Dispositivos**, **Painéis** e **Fotos na biblioteca** (sem **Álbuns** nem
+  **Roadmap**), cartões reais de dispositivos e painéis, lista recente de fotos e
+  orientação condicional pelos dados de toda a família.
+- Carregamento server-only da visão geral em `apps/web/src/lib/overview-data.ts`
+  dentro de `$transaction`, com consultas `IN` fatiadas em blocos de até 250
+  (`SQLITE_IN_CHUNK_SIZE`), filtro estrito por `householdId` e chaves elegíveis
+  (`panel:`/`online:`), validação de `LayoutVersion.layoutId === Layout.id` e
+  `devicePanelAccess`, sem ler `draft`, `config` ou `tokenHash`.
+- Helpers puros da visão geral em `apps/web/src/lib/online-editor/overview.ts`,
+  atalhos contextuais `/layouts?panelId=...&deviceId=...` e validação da seleção
+  inicial.
+- `GET /api/devices?includeId=<id>` para incluir um dispositivo selecionado fora do
+  limite de 100 e `GET /api/online-frame?summary=1` para acompanhar a confirmação
+  sem transferir `draft`/`config`.
+- Suporte a `searchParams` (`panelId`, `deviceId`) em `/layouts`, com preservação
+  segura de caminho e query no redirecionamento entre aliases locais.
+- Suítes `tests/online-editor-overview.test.ts` (13 testes), `tests/multiple-panels.test.ts`
+  (12 testes) e `tests/local-panel.test.ts` (5 testes).
 
 ### Changed
 
@@ -49,6 +68,23 @@ pendentes aparecem explicitamente em **Limitações conhecidas**.
   também à sincronização de nomes no polling de 15s.
 - Responsividade do editor, da barra de ações, da área de dispositivos e dos
   diálogos até 390 px de largura.
+- A página inicial deixou de exibir bloco fixo de apresentação: os cartões refletem
+  dispositivos reais (confirmação pela regra da fase 03, painel ativo ou legado
+  válido, última comunicação com fuso explícito e aviso de que não garante conexão
+  ao vivo) e painéis com os estados `Rascunho`, `Publicado`, `Disponibilizado` e
+  `N ativo`.
+- `formatLastCommunication` em `apps/web/src/lib/online-editor/publication.ts` usa
+  fuso explícito (`device.timezone` ou `America/Sao_Paulo`, com
+  `timeZoneName: "short"`).
+- Seleção inicial do editor aplicada uma única vez, sem reset em polling/refresh e
+  sem publicação automática; biblioteca de fotos independente com upload funcional
+  e aviso de timeout de 90 s quando não há painel (`!panelId`).
+- Contraste e foco visível em `apps/web/src/app/globals.css` e
+  `apps/web/src/app/editor.css` (>= 4,5:1 em texto, contagens, pílulas e link de
+  retorno; >= 3:1 no foco visível) e responsividade até `390×844`.
+- `scripts/smoke.ts` passa a verificar o rótulo **Dispositivos** e **Tablet
+  autorizado** em `/`, além de garantir ausência de dispositivo revogado e de outra
+  família.
 
 ### Fixed
 
@@ -66,6 +102,20 @@ pendentes aparecem explicitamente em **Limitações conhecidas**.
 - Confirmação de versão exige correspondência estrita entre `activePanelId` e
   `appliedRevision`, com estado dedicado para o fallback legado, evitando associar
   a confirmação de um painel ativo ao rascunho aberto de outro painel.
+- `GET /api/online-frame` filtra `Layout` por `householdId` e valida
+  `publishedVersion.layoutId === layout.id`, evitando leitura entre famílias e a
+  associação de versão publicada de outro painel.
+- Recarga de dispositivos no editor refaz a consulta com `?includeId=<target>`
+  quando o alvo muda durante a requisição (`shouldRetryDeviceListRefresh`), em vez
+  de limpar a seleção válida.
+- `localPanelRedirect` bloqueia destinos `//` e `/\` e valida
+  `resolved.origin === origin.origin`, preservando `pathname` e query no
+  redirecionamento entre aliases locais.
+- Aviso contextual após upload sem painel e botão **Atualizar fotos** após o
+  timeout permanecem disponíveis no modo de biblioteca independente.
+- Painel legado disponibilizado com `activate: false` continua **Publicado** após a
+  remoção do acesso, e o cartão soma a disponibilização adicional em outros
+  dispositivos (`extraAvailableDeviceCount`).
 
 ### Limitações conhecidas
 
@@ -83,3 +133,10 @@ pendentes aparecem explicitamente em **Limitações conhecidas**.
 - Validação com leitor de tela e teclado físico em navegador interativo **não
   executada** (os fluxos foram verificados via eventos CDP e foco DOM em Chromium
   headless).
+- Fase 04: a validação física em **tablet Android/APK** e o teste manual com
+  **leitor de tela** não foram executados neste ambiente; a aprovação do Gate 1
+  cobre o escopo web e as evidências em Chromium headless.
+- Fase 04: observação `[LOW]` não bloqueante do Gate 1 (Rodada 6) — o teste de carga
+  com 1.050 dispositivos em `tests/online-editor-overview.test.ts` exercita o
+  fatiamento das chaves legadas `online:*`; as demais consultas fatiadas foram
+  validadas em cenário independente em memória com 2.100 dispositivos sintéticos.

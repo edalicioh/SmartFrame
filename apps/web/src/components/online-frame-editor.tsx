@@ -27,6 +27,11 @@ import {
   clearNumericIssuesForHiddenWidgets,
 } from "@/lib/online-editor/numeric-issues";
 import {
+  resolveInitialDeviceSelection,
+  resolveInitialPanelSelection,
+  shouldRetryDeviceListRefresh,
+} from "@/lib/online-editor/overview";
+import {
   deriveDraftStatus,
   derivePublicationState,
   EditorApiError,
@@ -250,6 +255,7 @@ function ScopedAppearanceControls({
 type Device = {
   id: string;
   name: string;
+  timezone?: string | null;
   lastSeenAt: string | null;
   appliedRevision: string | null;
   activePanelId: string | null;
@@ -714,7 +720,13 @@ async function api(path: string, options?: RequestInit) {
 
 const pendingPhoto = (photo: Photo) => photo.status === "pending" || photo.status === "processing";
 
-export function OnlineFrameEditor() {
+export function OnlineFrameEditor({
+  initialPanelId = null,
+  initialDeviceId = null,
+}: {
+  initialPanelId?: string | null;
+  initialDeviceId?: string | null;
+} = {}) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [panels, setPanels] = useState<Panel[]>([]);
@@ -779,6 +791,14 @@ export function OnlineFrameEditor() {
   const accessRequestSeq = useRef(0);
   const legacyFallbackSeqRef = useRef(0);
   const accessDeviceRef = useRef(accessDevice);
+  const initialPanelIdRef = useRef(initialPanelId);
+  const initialDeviceIdRef = useRef(initialDeviceId);
+  const initialPanelAppliedRef = useRef(false);
+  const initialDeviceAppliedRef = useRef(false);
+  const initialFallbackNoticesRef = useRef<{ panel: string | null; device: string | null }>({
+    panel: null,
+    device: null,
+  });
   useEffect(() => {
     selectedId.current = panelId;
   }, [panelId]);
@@ -1039,49 +1059,132 @@ export function OnlineFrameEditor() {
     sendPreview();
   }, [sendPreview]);
 
-  const refreshDevices = useCallback(async (allowDuringOperation = true) => {
-    const seq = ++devicesRequestSeq.current;
-    try {
-      const result = await api("/api/devices");
-      if (seq !== devicesRequestSeq.current) {
-        return { ok: false as const, stale: true as const, error: "" };
-      }
-      if (!allowDuringOperation && operation.current) {
-        return { ok: false as const, stale: true as const, error: "" };
-      }
-      const nextDevices: Device[] = result.data ?? [];
-      setDevices(nextDevices);
-      setListStatus((current) => ({ ...current, devices: "ready" }));
-      if (
-        selectedDeviceIdRef.current &&
-        !nextDevices.some((item) => item.id === selectedDeviceIdRef.current)
-      ) {
-        selectedDeviceIdRef.current = "";
-        legacyFallbackSeqRef.current += 1;
-        setDeviceId("");
-        setAccess([]);
-        setAccessDevice("");
-        setAccessError("");
-        setLegacyFallback(null);
-      }
-      return { ok: true as const, stale: false as const, devices: nextDevices };
-    } catch (failure: unknown) {
-      if (seq !== devicesRequestSeq.current) {
-        return { ok: false as const, stale: true as const, error: "" };
-      }
-      return {
-        ok: false as const,
-        stale: false as const,
-        error:
-          failure instanceof Error ? failure.message : "Não foi possível carregar dispositivos.",
-      };
+  const applyInitialDeviceSelection = useCallback((nextDevices: Device[]) => {
+    if (initialDeviceAppliedRef.current) return;
+    initialDeviceAppliedRef.current = true;
+    const requestedDeviceId = initialDeviceIdRef.current;
+    if (!requestedDeviceId) return;
+    const resolved = resolveInitialDeviceSelection(requestedDeviceId, nextDevices);
+    if (resolved.deviceId && !selectedDeviceIdRef.current) {
+      selectedDeviceIdRef.current = resolved.deviceId;
+      setDeviceId(resolved.deviceId);
+      return;
+    }
+    if (resolved.notice) {
+      initialFallbackNoticesRef.current.device = resolved.notice;
+      setNotice(
+        [initialFallbackNoticesRef.current.panel, initialFallbackNoticesRef.current.device]
+          .filter(Boolean)
+          .join(" "),
+      );
     }
   }, []);
+
+  const applyInitialPanelSelection = useCallback((nextPanels: Panel[]) => {
+    if (initialPanelAppliedRef.current) return;
+    initialPanelAppliedRef.current = true;
+    const requestedPanelId = initialPanelIdRef.current;
+    if (!requestedPanelId) return;
+    const resolved = resolveInitialPanelSelection(requestedPanelId, nextPanels);
+    if (resolved.panelId && !selectedId.current) {
+      selectedId.current = resolved.panelId;
+      setPanelId(resolved.panelId);
+      return;
+    }
+    if (resolved.notice) {
+      initialFallbackNoticesRef.current.panel = resolved.notice;
+      setNotice(
+        [initialFallbackNoticesRef.current.panel, initialFallbackNoticesRef.current.device]
+          .filter(Boolean)
+          .join(" "),
+      );
+    }
+  }, []);
+
+  type RefreshDevicesResult =
+    | { ok: true; stale: false; devices: Device[] }
+    | { ok: false; stale: boolean; error: string };
+
+  const refreshDevices = useCallback(
+    async (allowDuringOperation = true): Promise<RefreshDevicesResult> => {
+      async function loadAttempt(retries: number): Promise<RefreshDevicesResult> {
+        const seq = ++devicesRequestSeq.current;
+        try {
+          const targetDeviceId =
+            selectedDeviceIdRef.current ||
+            (!initialDeviceAppliedRef.current ? initialDeviceIdRef.current : null);
+          const devicesPath = targetDeviceId
+            ? `/api/devices?includeId=${encodeURIComponent(targetDeviceId)}`
+            : "/api/devices";
+          const result = await api(devicesPath);
+          if (seq !== devicesRequestSeq.current) {
+            return { ok: false, stale: true, error: "" };
+          }
+          if (!allowDuringOperation && operation.current) {
+            return { ok: false, stale: true, error: "" };
+          }
+          const nextDevices: Device[] = result.data ?? [];
+          const currentTargetId =
+            selectedDeviceIdRef.current ||
+            (!initialDeviceAppliedRef.current ? initialDeviceIdRef.current : null);
+          if (
+            currentTargetId &&
+            currentTargetId !== targetDeviceId &&
+            !nextDevices.some((item) => item.id === currentTargetId)
+          ) {
+            if (
+              shouldRetryDeviceListRefresh({
+                requestedIncludeId: targetDeviceId,
+                currentTargetId,
+                receivedDeviceIds: nextDevices.map((item) => item.id),
+                retries,
+              })
+            ) {
+              return loadAttempt(retries + 1);
+            }
+            return { ok: false, stale: true, error: "" };
+          }
+          setDevices(nextDevices);
+          setListStatus((current) => ({ ...current, devices: "ready" }));
+          applyInitialDeviceSelection(nextDevices);
+          if (
+            selectedDeviceIdRef.current &&
+            !nextDevices.some((item) => item.id === selectedDeviceIdRef.current)
+          ) {
+            selectedDeviceIdRef.current = "";
+            legacyFallbackSeqRef.current += 1;
+            setDeviceId("");
+            setAccess([]);
+            setAccessDevice("");
+            setAccessError("");
+            setLegacyFallback(null);
+          }
+          return { ok: true, stale: false, devices: nextDevices };
+        } catch (failure: unknown) {
+          if (seq !== devicesRequestSeq.current) {
+            return { ok: false, stale: true, error: "" };
+          }
+          return {
+            ok: false,
+            stale: false,
+            error:
+              failure instanceof Error
+                ? failure.message
+                : "Não foi possível carregar dispositivos.",
+          };
+        }
+      }
+      return loadAttempt(0);
+    },
+    [applyInitialDeviceSelection],
+  );
   const refreshPanels = useCallback(async () => {
     const result = await api("/api/panels");
-    setPanels(result.panels ?? []);
+    const nextPanels: Panel[] = result.panels ?? [];
+    setPanels(nextPanels);
     setListStatus((current) => ({ ...current, panels: "ready" }));
-  }, []);
+    applyInitialPanelSelection(nextPanels);
+  }, [applyInitialPanelSelection]);
   const refreshPhotos = useCallback(async () => {
     const result = await api("/api/photos");
     setPhotos(result.photos ?? []);
@@ -1145,7 +1248,7 @@ export function OnlineFrameEditor() {
   const fetchLegacyFallback = useCallback(async (id: string) => {
     const seq = ++legacyFallbackSeqRef.current;
     try {
-      const result = await api(`/api/online-frame?deviceId=${encodeURIComponent(id)}`);
+      const result = await api(`/api/online-frame?deviceId=${encodeURIComponent(id)}&summary=1`);
       if (seq !== legacyFallbackSeqRef.current || selectedDeviceIdRef.current !== id) {
         return { current: false as const };
       }
@@ -1257,10 +1360,17 @@ export function OnlineFrameEditor() {
         });
     };
     const devicesSeq = ++devicesRequestSeq.current;
+    const initialDevicesPath = initialDeviceIdRef.current
+      ? `/api/devices?includeId=${encodeURIComponent(initialDeviceIdRef.current)}`
+      : "/api/devices";
     load(
       "devices",
-      () => api("/api/devices"),
-      (result) => setDevices(result.data ?? []),
+      () => api(initialDevicesPath),
+      (result) => {
+        const nextDevices: Device[] = result.data ?? [];
+        setDevices(nextDevices);
+        applyInitialDeviceSelection(nextDevices);
+      },
       () => devicesSeq === devicesRequestSeq.current,
     );
     load(
@@ -1271,12 +1381,16 @@ export function OnlineFrameEditor() {
     load(
       "panels",
       () => api("/api/panels"),
-      (result) => setPanels(result.panels ?? []),
+      (result) => {
+        const nextPanels: Panel[] = result.panels ?? [];
+        setPanels(nextPanels);
+        applyInitialPanelSelection(nextPanels);
+      },
     );
     return () => {
       active = false;
     };
-  }, []);
+  }, [applyInitialDeviceSelection, applyInitialPanelSelection]);
 
   useEffect(() => {
     if (!panelId) return;
@@ -2082,7 +2196,9 @@ export function OnlineFrameEditor() {
       if (successes) {
         await refreshPhotos().catch(() => undefined);
         setNotice(
-          `${successes} ${successes === 1 ? "foto enviada" : "fotos enviadas"}. Selecione as que estiverem prontas para incluí-las no rascunho.`,
+          selectedId.current
+            ? `${successes} ${successes === 1 ? "foto enviada" : "fotos enviadas"}. Selecione as que estiverem prontas para incluí-las no rascunho.`
+            : `${successes} ${successes === 1 ? "foto enviada" : "fotos enviadas"}. Crie ou selecione um painel acima para escolher quais fotos incluir no rascunho.`,
         );
       }
       if (failures.length) setError(`Alguns arquivos não foram enviados: ${failures.join("; ")}`);
@@ -2244,6 +2360,22 @@ export function OnlineFrameEditor() {
       ? ""
       : error;
   const feedbackError = [operationError, numericError].filter(Boolean).join(" ");
+  const photoPollExpiredCallout = photoPollExpired ? (
+    <div className="online-callout">
+      O processamento continua pendente após 90 segundos.
+      <button
+        type="button"
+        disabled={!!effectiveBusy}
+        onClick={() => {
+          setPhotoPollExpired(false);
+          setPhotoPollRetry((retry) => retry + 1);
+          void refreshPhotos().catch((failure) => setError(failure.message));
+        }}
+      >
+        Atualizar fotos
+      </button>
+    </div>
+  ) : null;
 
   return (
     <main className="online-editor">
@@ -2412,7 +2544,50 @@ export function OnlineFrameEditor() {
         <p className="online-empty">Nenhum painel criado. Use “Criar painel” para começar.</p>
       )}
       {!panelId ? (
-        <p className="online-empty">Crie ou selecione um painel para editar.</p>
+        <>
+          <p className="online-empty">Crie ou selecione um painel para editar.</p>
+          {listStatus.panels === "ready" && (
+            <section className="online-controls" aria-label="Biblioteca de fotos">
+              <fieldset disabled={!!effectiveBusy || loading}>
+                <legend>Biblioteca de fotos</legend>
+                {listStatus.photos === "loading" && (
+                  <p className="online-empty">Carregando fotos…</p>
+                )}
+                {listStatus.photos === "error" && (
+                  <p className="online-error">
+                    Não foi possível carregar fotos.{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError("");
+                        setListStatus((s) => ({ ...s, photos: "loading" }));
+                        void refreshPhotos().catch((failure) => {
+                          setError(failure.message);
+                          setListStatus((s) => ({ ...s, photos: "error" }));
+                        });
+                      }}
+                    >
+                      Tentar novamente
+                    </button>
+                  </p>
+                )}
+                <PhotoLibrary
+                  photos={photos}
+                  selectedIds={[]}
+                  allowSelection={false}
+                  disabled={!!effectiveBusy || loading}
+                  uploadBusy={photoUploadStatus}
+                  inputRef={photoInput}
+                  onUpload={(files) => void upload(files)}
+                  onToggle={() => undefined}
+                  onRemove={() => undefined}
+                  onMove={() => undefined}
+                />
+              </fieldset>
+              {photoPollExpiredCallout}
+            </section>
+          )}
+        </>
       ) : loading ? (
         <p className="online-empty">Carregando painel…</p>
       ) : !state ? (
@@ -2585,21 +2760,7 @@ export function OnlineFrameEditor() {
                   fundo.
                 </small>
               </fieldset>
-              {photoPollExpired && (
-                <div className="online-callout">
-                  O processamento continua pendente após 90 segundos.
-                  <button
-                    disabled={!!effectiveBusy}
-                    onClick={() => {
-                      setPhotoPollExpired(false);
-                      setPhotoPollRetry((retry) => retry + 1);
-                      void refreshPhotos().catch((failure) => setError(failure.message));
-                    }}
-                  >
-                    Atualizar fotos
-                  </button>
-                </div>
-              )}
+              {photoPollExpiredCallout}
             </div>
             <div className="online-editor-section" hidden={editorSection !== "widgets"}>
               <fieldset disabled={controlsDisabled}>
@@ -3766,7 +3927,7 @@ export function OnlineFrameEditor() {
             <small>A prévia é aproximada e pode não reproduzir exatamente todos os tablets.</small>
             {selectedDevice && (
               <small className="online-preview-meta">
-                {formatLastCommunication(selectedDevice.lastSeenAt)}
+                {formatLastCommunication(selectedDevice.lastSeenAt, selectedDevice.timezone)}
               </small>
             )}
             <details className="online-status-details">

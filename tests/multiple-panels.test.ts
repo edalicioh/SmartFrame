@@ -19,7 +19,11 @@ vi.mock("@smartframe/widgets", async (original) => ({
 
 import { GET, POST, PUT, PATCH, DELETE } from "../apps/web/src/app/api/panels/route";
 import { POST as publish } from "../apps/web/src/app/api/panels/publish/route";
-import { PUT as saveLegacy } from "../apps/web/src/app/api/online-frame/route";
+import {
+  GET as getLegacyFrame,
+  PUT as saveLegacy,
+} from "../apps/web/src/app/api/online-frame/route";
+import { GET as listDevices } from "../apps/web/src/app/api/devices/route";
 import { POST as publishLegacy } from "../apps/web/src/app/api/online-frame/publish/route";
 import { GET as playerConfig } from "../apps/web/src/app/api/player/config/route";
 import { GET as playerMedia } from "../apps/web/src/app/api/player/online-media/[id]/route";
@@ -803,5 +807,161 @@ it("drops a stale pageDirective when a concurrent panel publish clears targetPag
     expect(deviceReads).toBe(2);
   } finally {
     spy.mockRestore();
+  }
+});
+
+it("scopes /api/online-frame GET by household and omits draft in summary mode", async () => {
+  const pairing = await issuePairingCode(db, householdId, userId);
+  const owned = await redeemPairingCode(db, pairing.code, "Summary Device");
+  const foreignUser = randomUUID();
+  const foreign = await db.user.create({
+    data: {
+      id: foreignUser,
+      name: "Foreign Legacy Owner",
+      email: `${foreignUser}@test.local`,
+      household: { create: { name: "Foreign Legacy House" } },
+    },
+    include: { household: true },
+  });
+
+  try {
+    // Even if a layout with key online:<owned.deviceId> belongs to another household,
+    // GET /api/online-frame must never read or return its draft or version.
+    const foreignLayout = await db.layout.create({
+      data: {
+        householdId: foreign.household!.id,
+        key: `online:${owned.deviceId}`,
+        name: "Foreign Secret Legacy",
+        draft: { refreshSeconds: 59, widgets: { notes: { enabled: true, title: "Segredo", items: [] } } },
+        draftRevision: 3,
+      },
+    });
+    const foreignVersion = await db.layoutVersion.create({
+      data: { layoutId: foreignLayout.id, config: { refreshSeconds: 59 } },
+    });
+    await db.layout.update({
+      where: { id: foreignLayout.id },
+      data: { publishedVersionId: foreignVersion.id },
+    });
+
+    const summaryRes = await getLegacyFrame(
+      request("GET", undefined, `/api/online-frame?deviceId=${owned.deviceId}&summary=1`),
+    );
+    expect(summaryRes.status).toBe(200);
+    const summaryBody = await summaryRes.json();
+    expect(summaryBody).toEqual({
+      deviceId: owned.deviceId,
+      publishedRevision: null,
+      appliedRevision: null,
+      lastSeenAt: null,
+    });
+    expect("config" in summaryBody).toBe(false);
+    expect("draftRevision" in summaryBody).toBe(false);
+
+    const fullRes = await getLegacyFrame(
+      request("GET", undefined, `/api/online-frame?deviceId=${owned.deviceId}`),
+    );
+    expect(fullRes.status).toBe(200);
+    const fullBody = await fullRes.json();
+    expect(fullBody.publishedRevision).toBeNull();
+    expect(fullBody.draftRevision).toBe(0);
+    expect(fullBody.config.refreshSeconds).toBe(15);
+  } finally {
+    await db.household.deleteMany({ where: { ownerId: foreignUser } });
+    await db.user.deleteMany({ where: { id: foreignUser } });
+  }
+});
+
+it("resolves an explicitly requested non-revoked household device beyond the first 100 in /api/devices", async () => {
+  const bulkOwnerId = randomUUID();
+  const bulkUser = await db.user.create({
+    data: {
+      id: bulkOwnerId,
+      name: "Bulk Owner",
+      email: `${bulkOwnerId}@test.local`,
+      household: { create: { name: "Casa 101" } },
+    },
+    include: { household: true },
+  });
+  const bulkHouseholdId = bulkUser.household!.id;
+  const foreignBulkUserId = randomUUID();
+  const foreignBulk = await db.user.create({
+    data: {
+      id: foreignBulkUserId,
+      name: "Foreign Bulk",
+      email: `${foreignBulkUserId}@test.local`,
+      household: { create: { name: "Casa Alheia 101" } },
+    },
+    include: { household: true },
+  });
+
+  try {
+    const oldestDevice = await db.device.create({
+      data: {
+        householdId: bulkHouseholdId,
+        name: "Tablet 101 Mais Antigo",
+        createdAt: new Date("2025-01-01T00:00:00.000Z"),
+      },
+    });
+    const revokedOldDevice = await db.device.create({
+      data: {
+        householdId: bulkHouseholdId,
+        name: "Tablet 101 Revogado",
+        createdAt: new Date("2025-01-01T00:00:01.000Z"),
+        revokedAt: new Date(),
+      },
+    });
+    const foreignDevice = await db.device.create({
+      data: {
+        householdId: foreignBulk.household!.id,
+        name: "Tablet Estrangeiro",
+        createdAt: new Date("2025-01-01T00:00:02.000Z"),
+      },
+    });
+    await db.device.createMany({
+      data: Array.from({ length: 100 }, (_, index) => ({
+        householdId: bulkHouseholdId,
+        name: `Tablet Recente ${index + 1}`,
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)),
+      })),
+    });
+
+    panelAccess.mockResolvedValue({
+      household: { id: bulkHouseholdId },
+      user: { id: bulkOwnerId },
+    });
+
+    const withoutInclude = await (await listDevices(request("GET", undefined, "/api/devices"))).json();
+    expect(withoutInclude.data).toHaveLength(100);
+    expect(withoutInclude.data.some((d: { id: string }) => d.id === oldestDevice.id)).toBe(false);
+
+    const withValidInclude = await (
+      await listDevices(
+        request("GET", undefined, `/api/devices?includeId=${encodeURIComponent(oldestDevice.id)}`),
+      )
+    ).json();
+    expect(withValidInclude.data.some((d: { id: string }) => d.id === oldestDevice.id)).toBe(true);
+
+    const withRevokedInclude = await (
+      await listDevices(
+        request("GET", undefined, `/api/devices?includeId=${encodeURIComponent(revokedOldDevice.id)}`),
+      )
+    ).json();
+    expect(withRevokedInclude.data.some((d: { id: string }) => d.id === revokedOldDevice.id)).toBe(
+      false,
+    );
+
+    const withForeignInclude = await (
+      await listDevices(
+        request("GET", undefined, `/api/devices?includeId=${encodeURIComponent(foreignDevice.id)}`),
+      )
+    ).json();
+    expect(withForeignInclude.data.some((d: { id: string }) => d.id === foreignDevice.id)).toBe(
+      false,
+    );
+  } finally {
+    panelAccess.mockResolvedValue({ household: { id: householdId }, user: { id: userId } });
+    await db.household.deleteMany({ where: { ownerId: { in: [bulkOwnerId, foreignBulkUserId] } } });
+    await db.user.deleteMany({ where: { id: { in: [bulkOwnerId, foreignBulkUserId] } } });
   }
 });

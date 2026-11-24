@@ -192,7 +192,10 @@ try {
   assert.equal(dashboard.status, 200);
   const html = await dashboard.text();
   assert(html.includes("Smoke"));
-  assert(html.includes("Seus porta-retratos"));
+  assert(html.includes("Dispositivos"));
+  assert(html.includes("Tablet autorizado"));
+  assert(!html.includes("Tablet revogado"));
+  assert(!html.includes("Tablet privado de outra conta"));
   if (noLogin) assert(!html.includes("Sair da conta"));
 
   const adminHeaders = { cookie, Origin: baseURL, "Content-Type": "application/json" };

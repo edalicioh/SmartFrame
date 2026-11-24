@@ -22,6 +22,7 @@ export function PhotoLibrary({
   onToggle,
   onRemove,
   onMove,
+  allowSelection = true,
 }: {
   photos: LibraryPhoto[];
   selectedIds: string[];
@@ -32,6 +33,7 @@ export function PhotoLibrary({
   onToggle: (photo: LibraryPhoto, selected: boolean) => void;
   onRemove: (id: string) => void;
   onMove: (id: string, index: number, delta: number) => void;
+  allowSelection?: boolean;
 }) {
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(() => new Set());
   const itemRefs = useRef(new Map<string, HTMLElement>());
@@ -77,12 +79,18 @@ export function PhotoLibrary({
   }
   return (
     <>
-      <p className="photo-count">
-        {selectedIds.length} de 100 fotos selecionadas
-        {selectedIds.length >= 100
-          ? " — limite atingido; retire uma foto para selecionar outra."
-          : ""}
-      </p>
+      {allowSelection ? (
+        <p className="photo-count">
+          {selectedIds.length} de 100 fotos selecionadas
+          {selectedIds.length >= 100
+            ? " — limite atingido; retire uma foto para selecionar outra."
+            : ""}
+        </p>
+      ) : (
+        <p className="photo-count">
+          Crie ou selecione um painel acima para escolher quais fotos exibirá nele.
+        </p>
+      )}
       {uploadBusy && <p role="status">{uploadBusy}</p>}
       <label className="online-upload">
         Adicionar várias fotos (JPEG, PNG ou WebP; até 12 MB cada)
@@ -103,7 +111,7 @@ export function PhotoLibrary({
       <div className="online-photo-list">
         {photos.map((photo) => {
           const ready = photo.status === "ready";
-          const selected = selectedIds.includes(photo.id);
+          const selected = allowSelection && selectedIds.includes(photo.id);
           return (
             <article className="online-library-photo" key={photo.id} data-photo-id={photo.id}>
               {thumbnail(photo)}
@@ -116,15 +124,17 @@ export function PhotoLibrary({
                     : ""}
                 </small>
               </div>
-              <label className="online-toggle">
-                <input
-                  type="checkbox"
-                  disabled={disabled || !ready}
-                  checked={selected}
-                  onChange={(event) => onToggle(photo, event.target.checked)}
-                />
-                {selected ? "Selecionada" : "Selecionar"}
-              </label>
+              {allowSelection && (
+                <label className="online-toggle">
+                  <input
+                    type="checkbox"
+                    disabled={disabled || !ready}
+                    checked={selected}
+                    onChange={(event) => onToggle(photo, event.target.checked)}
+                  />
+                  {selected ? "Selecionada" : "Selecionar"}
+                </label>
+              )}
               {selected && (
                 <button type="button" disabled={disabled} onClick={() => onRemove(photo.id)}>
                   Retirar do painel
@@ -134,56 +144,58 @@ export function PhotoLibrary({
           );
         })}
       </div>
-      <div className="online-ordered-photos">
-        <h3>Ordem no painel</h3>
-        {selectedIds.map((id, index) => {
-          const photo = photos.find((item) => item.id === id);
-          if (!photo) return null;
-          return (
-            <article
-              className="online-photo ordered-photo"
-              key={id}
-              data-photo-id={id}
-              tabIndex={-1}
-              ref={(node) => {
-                if (node) itemRefs.current.set(id, node);
-                else itemRefs.current.delete(id);
-              }}
-            >
-              {thumbnail(photo, true)}
-              <span className="photo-order-name">
-                <b>{index + 1}.</b> {photo.filename}
-              </span>
-              <span>
-                <button
-                  ref={(node) => {
-                    if (node) actionRefs.current.set(`${id}:-1`, node);
-                    else actionRefs.current.delete(`${id}:-1`);
-                  }}
-                  type="button"
-                  disabled={disabled || index === 0}
-                  aria-label={`Mover ${photo.filename} para antes`}
-                  onClick={() => reorder(id, index, -1)}
-                >
-                  Mover para antes
-                </button>
-                <button
-                  ref={(node) => {
-                    if (node) actionRefs.current.set(`${id}:1`, node);
-                    else actionRefs.current.delete(`${id}:1`);
-                  }}
-                  type="button"
-                  disabled={disabled || index === selectedIds.length - 1}
-                  aria-label={`Mover ${photo.filename} para depois`}
-                  onClick={() => reorder(id, index, 1)}
-                >
-                  Mover para depois
-                </button>
-              </span>
-            </article>
-          );
-        })}
-      </div>
+      {allowSelection && (
+        <div className="online-ordered-photos">
+          <h3>Ordem no painel</h3>
+          {selectedIds.map((id, index) => {
+            const photo = photos.find((item) => item.id === id);
+            if (!photo) return null;
+            return (
+              <article
+                className="online-photo ordered-photo"
+                key={id}
+                data-photo-id={id}
+                tabIndex={-1}
+                ref={(node) => {
+                  if (node) itemRefs.current.set(id, node);
+                  else itemRefs.current.delete(id);
+                }}
+              >
+                {thumbnail(photo, true)}
+                <span className="photo-order-name">
+                  <b>{index + 1}.</b> {photo.filename}
+                </span>
+                <span>
+                  <button
+                    ref={(node) => {
+                      if (node) actionRefs.current.set(`${id}:-1`, node);
+                      else actionRefs.current.delete(`${id}:-1`);
+                    }}
+                    type="button"
+                    disabled={disabled || index === 0}
+                    aria-label={`Mover ${photo.filename} para antes`}
+                    onClick={() => reorder(id, index, -1)}
+                  >
+                    Mover para antes
+                  </button>
+                  <button
+                    ref={(node) => {
+                      if (node) actionRefs.current.set(`${id}:1`, node);
+                      else actionRefs.current.delete(`${id}:1`);
+                    }}
+                    type="button"
+                    disabled={disabled || index === selectedIds.length - 1}
+                    aria-label={`Mover ${photo.filename} para depois`}
+                    onClick={() => reorder(id, index, 1)}
+                  >
+                    Mover para depois
+                  </button>
+                </span>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }

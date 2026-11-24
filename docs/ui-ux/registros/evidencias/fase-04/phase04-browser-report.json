@@ -1,0 +1,265 @@
+{
+  "environment": {
+    "chromium": "chromium-1248",
+    "viewports": [
+      "1440x1000",
+      "390x844"
+    ]
+  },
+  "checks": [
+    {
+      "name": "login_screen_desktop",
+      "passed": true,
+      "details": {
+        "hasHeading": true,
+        "hasEmailInput": true,
+        "hasSubmit": true,
+        "overflow": false,
+        "scrollWidth": 1440,
+        "innerWidth": 1440
+      }
+    },
+    {
+      "name": "login_screen_mobile_390",
+      "passed": true,
+      "details": {
+        "hasHeading": true,
+        "hasMobileBrand": true,
+        "overflow": false,
+        "scrollWidth": 390,
+        "innerWidth": 390
+      }
+    },
+    {
+      "name": "empty_installation_and_contrast_desktop",
+      "passed": true,
+      "details": {
+        "hasWelcome": true,
+        "hasOptionalPhotos": true,
+        "hasPairStep": true,
+        "hasNoAlbums": true,
+        "hasNoRoadmap": true,
+        "hasNoStackProminence": true,
+        "hasInstPropria": true,
+        "navColor": "rgb(76, 88, 78)",
+        "navContrast": 7.46,
+        "countColor": "rgb(76, 88, 78)",
+        "countContrast": 7.46,
+        "pillColor": "rgb(63, 76, 65)",
+        "pillBg": "rgb(237, 242, 230)",
+        "pillContrast": 7.95,
+        "bannerFocus": {
+          "focused": true,
+          "outlineColor": "rgb(239, 242, 223)",
+          "bannerBackground": "rgb(44, 76, 57)",
+          "outlineStyle": "solid",
+          "outlineWidth": 3,
+          "outlineContrast": 8.38
+        },
+        "overflow": false,
+        "scrollWidth": 1425,
+        "innerWidth": 1440
+      }
+    },
+    {
+      "name": "empty_installation_mobile_390",
+      "passed": true,
+      "details": {
+        "overflow": false,
+        "scrollWidth": 390,
+        "innerWidth": 390,
+        "hasMobileSignOut": true,
+        "navLinks": [
+          "#overview",
+          "#devices",
+          "#panels",
+          "#library",
+          "/layouts"
+        ]
+      }
+    },
+    {
+      "name": "photos_without_panel_opens_standalone_library",
+      "passed": true,
+      "details": {
+        "distinguishesReady": true,
+        "listsRecentPhotos": true,
+        "libraryHref": "/layouts",
+        "standaloneUploadNotice": "1 foto enviada. Crie ou selecione um painel acima para escolher quais fotos incluir no rascunho.",
+        "uploadedFilenameVisible": true,
+        "avoidsPanelSelectionInstruction": true
+      }
+    },
+    {
+      "name": "panel_without_device_and_library_panel_shortcut",
+      "passed": true,
+      "details": {
+        "noEmptyHero": true,
+        "hasPanel": true,
+        "hasEmptyDevice": true,
+        "panelHref": "/layouts?panelId=cmwuoay0k0004oktoe2rytzqz",
+        "libraryHref": "/layouts?panelId=cmwuoay0k0004oktoe2rytzqz"
+      }
+    },
+    {
+      "name": "multiple_devices_and_isolation_desktop",
+      "passed": true,
+      "details": {
+        "hasConfirmed": true,
+        "hasPending": true,
+        "hasNone": true,
+        "hasAvailableNotActivePanel": true,
+        "hasDraftPanelBadge": true,
+        "hasTimezone": true,
+        "noForeign": true,
+        "noCredentials": true,
+        "overflow": false,
+        "confirmedHref": "/layouts?panelId=cmwuoay0k0004oktoe2rytzqz&deviceId=cmwuoay99000aoktofpc48wun"
+      }
+    },
+    {
+      "name": "keyboard_shortcut_and_return_desktop",
+      "passed": true,
+      "details": {
+        "shortcutFocused": {
+          "matchesTarget": true,
+          "outlineColor": "rgb(43, 89, 63)",
+          "surfaceColor": "rgb(251, 252, 250)",
+          "outlineStyle": "solid",
+          "outlineWidth": 3,
+          "outlineContrast": 7.84
+        },
+        "backFocused": {
+          "isBackLink": true,
+          "matchesFocusVisible": true,
+          "surfaceColor": "rgb(255, 255, 255)",
+          "text": {
+            "color": "rgb(74, 90, 78)",
+            "contrast": 7.33
+          },
+          "focusOutline": {
+            "color": "rgb(43, 89, 63)",
+            "style": "solid",
+            "width": 3,
+            "contrast": 8.07
+          }
+        }
+      }
+    },
+    {
+      "name": "keyboard_shortcut_and_return_mobile_390",
+      "passed": true,
+      "details": {
+        "shortcutFocused": {
+          "matchesTarget": true,
+          "outlineColor": "rgb(43, 89, 63)",
+          "surfaceColor": "rgb(251, 252, 250)",
+          "outlineStyle": "solid",
+          "outlineWidth": 3,
+          "outlineContrast": 7.84
+        },
+        "backFocused": {
+          "isBackLink": true,
+          "matchesFocusVisible": true,
+          "surfaceColor": "rgb(255, 255, 255)",
+          "text": {
+            "color": "rgb(74, 90, 78)",
+            "contrast": 7.33
+          },
+          "focusOutline": {
+            "color": "rgb(43, 89, 63)",
+            "style": "solid",
+            "width": 3,
+            "contrast": 8.07
+          }
+        }
+      }
+    },
+    {
+      "name": "url_selection_not_reset_by_refresh",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "invalid_url_params_safe_fallback",
+      "passed": true,
+      "details": {}
+    },
+    {
+      "name": "foreign_url_params_blocked_without_fetch_or_leak",
+      "passed": true,
+      "details": {
+        "requests": [
+          "GET /api/devices?includeId=cmwuoay9o000uoktoml0rg2qk",
+          "GET /api/photos",
+          "GET /api/panels",
+          "GET /api/photos/cmwuoaxii0002okto52daypfo/image"
+        ]
+      }
+    },
+    {
+      "name": "not_found_page_desktop_and_mobile",
+      "passed": true,
+      "details": {
+        "notFoundDesktop": {
+          "hasHeading": true,
+          "hasBackBtn": true,
+          "overflow": false
+        },
+        "notFoundMobile": {
+          "hasHeading": true,
+          "overflow": false
+        }
+      }
+    },
+    {
+      "name": "error_boundary_desktop_and_mobile",
+      "passed": true,
+      "details": {
+        "errorDesktop": {
+          "hasErrorTitle": true,
+          "hasRetryBtn": true,
+          "overflow": false
+        },
+        "errorMobile": {
+          "hasErrorTitle": true,
+          "overflow": false
+        },
+        "expectedServerErrorsCount": 1
+      }
+    },
+    {
+      "name": "local_mode_without_login",
+      "passed": true,
+      "details": {
+        "hasLocalIndicator": true,
+        "noSignOut": true,
+        "hasDevices": true
+      }
+    },
+    {
+      "name": "local_mode_alias_redirect_preserves_context",
+      "passed": true,
+      "details": {
+        "status": 307,
+        "location": "http://127.0.0.1:58056/layouts?panelId=cmwuoay0k0004oktoe2rytzqz&deviceId=cmwuoay99000aoktofpc48wun"
+      }
+    },
+    {
+      "name": "zero_unexpected_console_or_page_errors",
+      "passed": true,
+      "details": {
+        "consoleErrors": [],
+        "pageErrors": []
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "requestsSeen": [
+    "GET /api/devices?includeId=cmwuoay9o000uoktoml0rg2qk",
+    "GET /api/photos",
+    "GET /api/panels",
+    "GET /api/photos/cmwuoaxii0002okto52daypfo/image"
+  ]
+}

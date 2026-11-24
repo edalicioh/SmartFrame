@@ -1,6 +1,7 @@
 export type DeviceSummary = {
   id: string;
   name: string;
+  timezone?: string | null;
   lastSeenAt: string | null;
   appliedRevision: string | null;
   activePanelId: string | null;
@@ -571,11 +572,27 @@ export function isPairingExpired(
   return nowMs >= expiresAtMs;
 }
 
-export function formatLastCommunication(lastSeenAt: string | null): string {
+const DEFAULT_COMMUNICATION_TIME_ZONE = "America/Sao_Paulo";
+
+export function formatLastCommunication(
+  lastSeenAt: string | null,
+  timeZone?: string | null,
+): string {
   if (!lastSeenAt) return "Sem registro de comunicação";
   const parsed = new Date(lastSeenAt);
   if (Number.isNaN(parsed.getTime())) return "Sem registro de comunicação";
-  return `Última comunicação: ${parsed.toLocaleString("pt-BR")}`;
+  const candidateTimeZone = timeZone?.trim() || DEFAULT_COMMUNICATION_TIME_ZONE;
+  try {
+    return `Última comunicação: ${parsed.toLocaleString("pt-BR", {
+      timeZone: candidateTimeZone,
+      timeZoneName: "short",
+    })}`;
+  } catch {
+    return `Última comunicação: ${parsed.toLocaleString("pt-BR", {
+      timeZone: DEFAULT_COMMUNICATION_TIME_ZONE,
+      timeZoneName: "short",
+    })}`;
+  }
 }
 
 export function formatPartialPublishFailure(params: {

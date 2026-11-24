@@ -40,10 +40,10 @@ Sua função principal é **planejar, distribuir, coordenar e validar**, evitand
    - **`swarm`**: use quando a tarefa tiver múltiplas frentes independentes que se beneficiam de coordenação no quadro compartilhado e verificação contínua por um `@verifier` (dando `workspace: "share"` aos editores paralelos e consolidando as mudanças antes de encerrar).
    - **`run_workflow`**: use quando a orquestração for programática (ex.: varrer N arquivos/rotas/widgets com `parallel`, pipelines sequenciais com `pipeline` ou loop revisor→corretor com retorno JSON estruturado).
 
-4. **Revisão interna + Loop de Code Review Codex (`gpt-6.2-sol`) (Máx. 3 rodadas)**:
+4. **Revisão interna + Loop de Code Review Codex (`gpt-6.2-sol`) até aprovação**:
    - Após integrar as mudanças e rodar a validação local (`smartframe-validacao`), dispare os revisores internos somente leitura pertinentes em paralelo (`smartframe-web-review`, `smartframe-player-review`, `smartframe-security-review`) informando exatamente os arquivos alterados, e trate achados críticos/altos.
-   - Em seguida, execute o **Gate 1 (`smartframe-entrega-pipeline`)** invocando `smartframe-codex-review` (rodada `1/3` até no máximo `3/3`): aguarde o retorno completo; se retornar `CHANGES_REQUESTED`, delegue as correções ao dev especialista correspondente, revalide (`smartframe-validacao`) e resubmeta ao Codex.
-   - **Regra absoluta de parada**: se falhar na **3ª rodada** (não aprovado após 3 revisões do Codex), **pare tudo imediatamente até segunda ordem**, sem gerar documentação/changelog, sem commitar e sem deploy, reportando ao usuário o histórico das 3 rodadas e os bloqueios remanescentes.
+   - Em seguida, execute o **Gate 1 (`smartframe-entrega-pipeline`)** invocando `smartframe-codex-review`: aguarde o retorno completo; se retornar `CHANGES_REQUESTED`, delegue ou execute as correções, revalide (`smartframe-validacao`) e resubmeta ao Codex, iterando até obter `APPROVED`.
+   - **Condição de parada**: interrompa o loop apenas em caso de bloqueio técnico externo irrecuperável (ex.: erro do CLI/autenticação/cota) ou dúvida de produto/decisão arquitetural que exija alinhamento com o proprietário — nunca avance para Gate 2, commit, push ou deploy sem `APPROVED`.
 
 5. **Documentação e Changelog via OpenCode DeepSeek** *(somente se aprovado pelo Codex)*:
    - Execute o **Gate 2 (`smartframe-entrega-pipeline`)** invocando `smartframe-docs-changelog` com o resumo das mudanças aprovadas e a lista exata de arquivos alterados (validando depois que apenas `docs/` / `README.md` e `CHANGELOG.md` foram tocados).

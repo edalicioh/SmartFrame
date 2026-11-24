@@ -225,7 +225,9 @@ export function DeviceManager({
                   </div>
                   <div>
                     <dt>Comunicação</dt>
-                    <dd>{formatLastCommunication(selectedDevice.lastSeenAt)}</dd>
+                    <dd>
+                      {formatLastCommunication(selectedDevice.lastSeenAt, selectedDevice.timezone)}
+                    </dd>
                   </div>
                 </dl>
                 <details className="online-status-details">

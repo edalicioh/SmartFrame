@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { panelAccess } from "./panel-access";
 import { isAdminLoginDisabled, localPanelRedirect } from "@smartframe/auth";
 
-export async function requireAdministrator(pathname: "/" | "/layouts" = "/") {
+export async function requireAdministrator(pathname = "/") {
   const requestHeaders = await headers();
   if (isAdminLoginDisabled()) {
     const target = localPanelRedirect(requestHeaders, process.env.BETTER_AUTH_URL ?? "", pathname);

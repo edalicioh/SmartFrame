@@ -24,7 +24,7 @@ dispositivo identifica o destino, não é uma credencial nem autoriza chamadas B
 | GET    | `/api/photos`                     | Biblioteca de fotos disponível ao editor autenticado                         |
 | POST   | `/api/photos`                     | Multipart `photo`; processamento otimizado no recebimento                    |
 
-`GET /api/devices` retorna `activePanelId`, `activePanelVersionId` e `appliedRevision` para acompanhar a publicação. As rotas `/api/online-frame` permanecem disponíveis para compatibilidade com o fluxo anterior.
+`GET /api/devices` retorna `activePanelId`, `activePanelVersionId` e `appliedRevision` para acompanhar a publicação e aceita `?includeId=<id>` opcional (ver [Dispositivos](#dispositivos)). As rotas `/api/online-frame` permanecem disponíveis para compatibilidade com o fluxo anterior; `GET /api/online-frame?deviceId=ID&summary=1` devolve apenas o resumo de publicação, sem o rascunho.
 Na publicação, `activate` é opcional e vale `true` por padrão. Com `false`, a versão
 é disponibilizada para o dispositivo sem alterar o painel enviado. Publicar diretamente
 também disponibiliza a versão para trocas futuras. Cada dispositivo mantém sua própria
@@ -36,6 +36,16 @@ a nova publicação legada fica disponível apenas para uma escolha posterior.
 Configuração compartilhada e defaults estão em `packages/contracts/src/online-dashboard.ts`.
 O endpoint de upload gera imagem ajustada para caber em 1024×600 preservando
 proporção, via Sharp. Testes automatizados não substituem validação em aparelho real.
+
+### Consulta de compatibilidade `GET /api/online-frame`
+
+`GET /api/online-frame?deviceId=ID` mantém o contrato anterior e retorna `deviceId`,
+`config` (rascunho), `draftRevision`, `publishedRevision`, `appliedRevision` e `lastSeenAt`.
+
+- `deviceId` é obrigatório (`400` sem ele) e precisa pertencer à família autenticada e não estar revogado (`404` caso contrário).
+- `summary=1` (opcional) retorna apenas `deviceId`, `publishedRevision`, `appliedRevision` e `lastSeenAt`, sem ler nem devolver `draft`/`config`. É a forma usada pelo editor para acompanhar a confirmação sem transferir o rascunho.
+- A consulta filtra `Layout` e `LayoutVersion` pela família; `publishedRevision` só é retornado quando a versão publicada pertence ao próprio painel `online:<deviceId>`.
+- Respostas usam `Cache-Control: private, no-store`.
 
 ## Player online pareado
 
@@ -150,6 +160,7 @@ Exemplo de corpo de login:
 - Requer sessão administrativa válida.
 - Retorna apenas dispositivos não revogados da conta cujo proprietário é o usuário autenticado.
 - Máximo inicial de 100 registros, em ordem decrescente de criação.
+- `?includeId=<id>` (opcional) inclui o dispositivo indicado quando ele ficaria fora do limite inicial de 100. A inclusão é escopada à família e ignora dispositivos revogados; se o ID não corresponder a um dispositivo elegível, a resposta segue sem ele. O registro adicional é anexado ao final, podendo resultar em até 101 itens.
 - Não retorna hash de token nem credenciais.
 - `401`: não autenticado. `403`: usuário sem conta autorizada.
 - Resposta com `Cache-Control: private, no-store`.

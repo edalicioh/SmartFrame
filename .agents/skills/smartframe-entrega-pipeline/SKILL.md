@@ -1,6 +1,6 @@
 ---
 name: smartframe-entrega-pipeline
-description: Pipeline de entrega do SmartFrame após implementação: loop de code review via Codex (gpt-6.2-sol, máx. 3 rodadas com parada obrigatória), documentação e changelog via OpenCode DeepSeek, e commit/monitoramento do deploy no GitHub Actions.
+description: Pipeline de entrega do SmartFrame após implementação: loop contínuo de code review via Codex (gpt-6.2-sol) até aprovação, documentação e changelog via OpenCode DeepSeek, e commit/monitoramento do deploy no GitHub Actions.
 ---
 
 # Pipeline de Entrega — SmartFrame
@@ -14,9 +14,9 @@ Este pipeline padroniza os gates após a implementação e validação local par
 
 ---
 
-## Gate 1 — Code Review externo via Codex (`gpt-6.2-sol`) (Máximo 3 rodadas)
+## Gate 1 — Code Review externo via Codex (`gpt-6.2-sol`)
 
-Submeta as alterações ao Codex CLI (`codex-cli 0.169.0`) usando obrigatoriamente o modelo `gpt-6.2-sol` (delegue ao subagente `smartframe-codex-review`).
+Submeta as alterações ao Codex CLI (`codex-cli 0.171.0`) usando obrigatoriamente o modelo `gpt-6.2-sol` (delegue ao subagente `smartframe-codex-review`).
 
 ### Comandos verificados
 
@@ -30,18 +30,17 @@ Submeta as alterações ao Codex CLI (`codex-cli 0.169.0`) usando obrigatoriamen
   ```
   (ou `--base main` quando comparar contra a branch base; caso `codex exec review` recuse combinar flags com prompt customizado, use `codex exec -m gpt-6.2-sol -s read-only --ephemeral`).
 
-### Fluxo do loop (`rodada = 1` até `3`)
+### Fluxo do loop (`rodada = 1, 2, ...` até `APPROVED`)
 
 1. Submeta ao Codex (`gpt-6.2-sol`) e aguarde o retorno completo.
 2. **Se `APPROVED`** (sem achados bloqueantes): encerre o Gate 1 e avance para o Gate 2.
-3. **Se `CHANGES_REQUESTED` e `rodada < 3`**:
-   - Delegue as correções ao especialista adequado (`smartframe-web-dev`, `smartframe-player-dev`, `smartframe-dados-dev` ou `smartframe`).
-   - Reexecute os testes pertinentes (`smartframe-validacao`).
-   - Incremente `rodada` e resubmeta ao Codex.
-4. **Parada obrigatória (Circuit Breaker na 3ª rodada)**:
-   - Se após a **3ª rodada** o Codex ainda retornar `CHANGES_REQUESTED` (ou erro recorrente sem aprovação), **PARE TUDO IMEDIATAMENTE ATÉ SEGUNDA ORDEM**.
-   - **Proibido:** tentar 4ª rodada, gerar documentação/changelog, commitar, fazer push ou deploy.
-   - Entregue ao usuário o histórico resumido das 3 rodadas e os achados remanescentes com arquivo e linha, aguardando instruções.
+3. **Se `CHANGES_REQUESTED`**:
+   - Corrija todos os achados reportados (delegando ao especialista adequado — `smartframe-web-dev`, `smartframe-player-dev`, `smartframe-dados-dev` ou `smartframe` — quando usar subagentes).
+   - Reexecute as validações pertinentes (`smartframe-validacao`).
+   - Incremente `rodada` e resubmeta ao Codex, iterando continuamente até obter `APPROVED`.
+4. **Parada apenas em bloqueio real**:
+   - Pare e acione o coordenador/proprietário somente em caso de bloqueio técnico externo irrecuperável (ex.: erro recorrente de autenticação, cota ou falha do CLI `codex`) ou dúvida de produto/decisão arquitetural que exija resposta do proprietário.
+   - Enquanto houver achados técnicos corrigíveis, **não** interrompa em teto fixo de rodadas e não avance para Gate 2, commit, push ou deploy antes de obter `APPROVED`.
 
 ---
 

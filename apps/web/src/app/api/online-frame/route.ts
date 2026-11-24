@@ -10,28 +10,57 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return frameResponse(async () => {
     const owner = await administrator(request);
-    const deviceId = new URL(request.url).searchParams.get("deviceId");
+    const url = new URL(request.url);
+    const deviceId = url.searchParams.get("deviceId");
+    const summaryOnly = url.searchParams.get("summary") === "1";
     if (!deviceId) throw new FrameError(400, "deviceId obrigatório.");
     const db = getDatabase();
     const device = await db.device.findFirst({
       where: { id: deviceId, householdId: owner.householdId, revokedAt: null },
+      select: { id: true, appliedRevision: true, lastSeenAt: true },
     });
     if (!device) throw new FrameError(404, "Dispositivo não encontrado.");
-    const layout = await db.layout.findUnique({
-      where: { key: `online:${device.id}` },
-      include: { publishedVersion: true },
+    const layout = await db.layout.findFirst({
+      where: { key: `online:${device.id}`, householdId: owner.householdId },
+      select: summaryOnly
+        ? { id: true, publishedVersionId: true }
+        : { id: true, draft: true, draftRevision: true, publishedVersionId: true },
     });
+    const validPublishedVersion =
+      layout?.publishedVersionId
+        ? await db.layoutVersion.findFirst({
+            where: {
+              id: layout.publishedVersionId,
+              layoutId: layout.id,
+              layout: { householdId: owner.householdId },
+            },
+            select: { id: true },
+          })
+        : null;
+    const publishedRevision = validPublishedVersion ? `online:${validPublishedVersion.id}` : null;
+    const appliedRevision = device.appliedRevision?.startsWith("online:")
+      ? device.appliedRevision
+      : null;
+
+    if (summaryOnly) {
+      return Response.json(
+        {
+          deviceId,
+          publishedRevision,
+          appliedRevision,
+          lastSeenAt: device.lastSeenAt,
+        },
+        { headers: privateHeaders },
+      );
+    }
+
     return Response.json(
       {
         deviceId,
-        config: readStoredOnlineDashboard(layout?.draft ?? {}),
-        draftRevision: layout?.draftRevision ?? 0,
-        publishedRevision: layout?.publishedVersionId
-          ? `online:${layout.publishedVersionId}`
-          : null,
-        appliedRevision: device.appliedRevision?.startsWith("online:")
-          ? device.appliedRevision
-          : null,
+        config: readStoredOnlineDashboard((layout as { draft?: unknown } | null)?.draft ?? {}),
+        draftRevision: (layout as { draftRevision?: number } | null)?.draftRevision ?? 0,
+        publishedRevision,
+        appliedRevision,
         lastSeenAt: device.lastSeenAt,
       },
       { headers: privateHeaders },

@@ -16,7 +16,7 @@ description: Use ao decompor tarefas complexas do SmartFrame, distribuir frentes
 | Papel inédito fora da lista fixa | `define_subagent` + `invoke_subagent` | Escopo e restrições explícitas |
 | Decisão de produto/arquitetura ambígua | `ask_question` | Pergunte antes de distribuir trabalho |
 | Inspeção visual de editor ou player em execução | `invoke_subagent` (`browser`) | Quando houver servidor local/URL disponível |
-| Code review externo (Codex `gpt-6.2-sol`, máx. 3x) | `invoke_subagent` (`smartframe-codex-review`) | Gate 1 de `smartframe-entrega-pipeline` (parada obrigatória na 3ª falha) |
+| Code review externo (Codex `gpt-6.2-sol`) | `invoke_subagent` (`smartframe-codex-review`) | Gate 1 de `smartframe-entrega-pipeline` (iterar até `APPROVED`, parando só por bloqueio técnico/dúvida de produto) |
 | Documentação e `CHANGELOG.md` (OpenCode DeepSeek) | `invoke_subagent` (`smartframe-docs-changelog`) | Gate 2 de `smartframe-entrega-pipeline` (somente após `APPROVED` do Codex) |
 | Commit, push autorizado e monitoramento `gh` | `invoke_subagent` (`smartframe-release-ops`) | Gate 3 de `smartframe-entrega-pipeline` (respeitando `AGENTS.md`) |
 
@@ -35,7 +35,7 @@ Ao distribuir trabalho paralelo no SmartFrame, nunca atribua o mesmo arquivo a d
 - Se usar `swarm` com `workspace: "share"` ou `"branch"`, garanta que as alterações dos workers sejam trazidas para o workspace principal antes de executar `kill`.
 - Nunca presuma que um subagente rodou todos os testes; execute ou delegue a validação final seguindo `smartframe-validacao` (`npm run check`, `npm run test:player`, `vitest` direcionado) após a integração.
 - Para entregas completas (review externo → docs/changelog → commit/deploy), siga os 3 gates de `smartframe-entrega-pipeline`:
-  1. `smartframe-codex-review` (`gpt-6.2-sol`, máximo 3 rodadas; se falhar na 3ª, parar tudo até segunda ordem).
+  1. `smartframe-codex-review` (`gpt-6.2-sol`, iterando correções e revalidações até obter `APPROVED`; parar apenas em bloqueio técnico externo ou decisão com o proprietário).
   2. `smartframe-docs-changelog` (OpenCode DeepSeek, apenas se aprovado no Gate 1).
   3. `smartframe-release-ops` (commit e monitoramento `gh` de `.github/workflows/deploy.yml`, exigindo autorização explícita antes de `git push` para `main`).
 - Respeite rigorosamente `AGENTS.md`: não leia `.env`/segredos, não aplique migrations em banco real, não faça push/deploy/instalação de APK sem autorização explícita.

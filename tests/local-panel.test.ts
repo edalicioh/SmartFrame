@@ -55,6 +55,22 @@ describe("Painel local sem login", () => {
     expect(localPanelRedirect(new Headers({ host: "[::1]:3000" }), base, "/layouts")).toBe(
       base + "/layouts",
     );
+    expect(
+      localPanelRedirect(
+        new Headers({ host: "127.0.0.1:3000" }),
+        base,
+        "/layouts?panelId=p1&deviceId=d1",
+      ),
+    ).toBe(base + "/layouts?panelId=p1&deviceId=d1");
+    expect(localPanelRedirect(new Headers({ host: "127.0.0.1:3000" }), base, "//evil.test")).toBe(
+      base + "/",
+    );
+    expect(localPanelRedirect(new Headers({ host: "127.0.0.1:3000" }), base, "/\\evil.test")).toBe(
+      base + "/",
+    );
+    expect(
+      localPanelRedirect(new Headers({ host: "127.0.0.1:3000" }), base, "https://evil.test/layouts"),
+    ).toBe(base + "/");
     expect(localPanelRedirect(new Headers({ host: "localhost:3000" }), base)).toBeNull();
     // This does not authorize API reads or writes from an alias.
     expect(isLocalPanelRequest(new Headers({ host: "127.0.0.1:3000" }), base)).toBe(false);

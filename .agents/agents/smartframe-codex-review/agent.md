@@ -35,6 +35,6 @@ Atue como executor dedicado de **Code Review externo via Codex CLI** do SmartFra
 Retorne exatamente os blocos abaixo:
 
 - **VEREDITO**: `APPROVED` | `CHANGES_REQUESTED` | `ERROR`
-- **RODADA**: `<número da rodada recebida, ex.: 1/3>`
+- **RODADA**: `<número da rodada recebida, ex.: 1>`
 - **ACHADOS**: lista classificada por severidade (`crítico`, `alto`, `médio`, `baixo`), contendo caminho do arquivo, linha, descrição objetiva do problema e correção recomendada (ou `Nenhum achado bloqueante` quando `APPROVED`).
 - **COMANDO_EXECUTADO**: comando exato executado (sem segredos) e eventuais limitações/erros do CLI.
